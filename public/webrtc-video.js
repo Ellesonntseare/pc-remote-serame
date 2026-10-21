@@ -23,7 +23,7 @@
     peer(id,epoch){
       if(this.peers.has(id))return this.peers.get(id);const pc=new this.Peer(this.config),entry={pc,id,queue:Promise.resolve(),ice:[]};this.peers.set(id,entry);
       const track=this.stream?.getVideoTracks()[0];let transceiver;
-      if(this.publish){if(!track)throw Error('No screen video was selected.');const sender=pc.addTrack(track,this.stream);transceiver=pc.getTransceivers().find(t=>t.sender===sender);}
+      if(this.publish){if(!track)throw Error('No screen video was selected.');const sender=pc.addTrack(track,this.stream);transceiver=pc.getTransceivers().find(t=>t.sender===sender);if(transceiver)transceiver.direction='sendonly';}
       else transceiver=pc.addTransceiver('video',{direction:'recvonly'});
       const codecs=preferH264(this.capabilities()?.codecs||[]);if(codecs.length&&transceiver?.setCodecPreferences)try{transceiver.setCodecPreferences(codecs);}catch{}
       pc.onicecandidate=event=>{if(epoch===this.epoch)this.send({type:'candidate',id:this.publish?id:undefined,candidate:event.candidate?.toJSON?.()??event.candidate??null});};
