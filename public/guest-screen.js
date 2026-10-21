@@ -5,6 +5,30 @@
   dialog.innerHTML='<header class="guestScreenHead"><div><span class="guestEyebrow">A SHARED VIEW</span><h2 id="guestScreenTitle">Guest screens</h2></div><button type="button" data-close aria-label="Close shared screen">✕</button></header><p class="guestScreenHint"></p><div class="guestScreenSelect"><label for="guestScreenSelect">Sharing now</label><select id="guestScreenSelect" aria-label="Choose guest screen"></select></div><div class="guestScreenStage"><video muted playsinline hidden></video><img alt="Guest shared screen" hidden><canvas aria-label="Shared screen annotation surface"></canvas><div class="guestScreenEmpty">A little space to see things together.</div></div><div class="guestScreenTools"><div class="guestDrawTools" role="group" aria-label="Annotation tool"><button type="button" data-tool="laser" aria-pressed="true">◉ Laser</button><button type="button" data-tool="pen" aria-pressed="false">✎ Draw</button><button type="button" data-clear>Clear</button></div><button type="button" data-share class="guestShareStart">Share my screen ↗</button><button type="button" data-stop hidden>Stop sharing</button></div><p class="guestScreenStatus" role="status" aria-live="polite"></p>';
   document.body.append(dialog);
   const q=selector=>dialog.querySelector(selector),video=q('video'),image=q('img'),canvas=q('canvas'),stage=q('.guestScreenStage'),ctx=canvas.getContext('2d'),select=q('select'),empty=q('.guestScreenEmpty'),status=q('.guestScreenStatus');
+  const controls=document.createElement('section');controls.className='phoneControlTools';controls.hidden=true;
+  controls.innerHTML='<div class="phoneControlHead"><button type="button" data-request-control>Request phone control</button><span data-control-status role="status">View only</span></div><div data-phone-actions hidden><div class="phoneNavigation"><button type="button" data-phone-key="back">← Back</button><button type="button" data-phone-key="home">⌂ Home</button><button type="button" data-phone-key="recents">▣ Recent apps</button></div><div class="phoneText"><input type="text" maxlength="2000" placeholder="Text for the selected phone field" aria-label="Text for the selected phone field" autocomplete="off"><button type="button" data-phone-text>Set text</button></div><small>Tap or drag the live screen. Right-click for a long press. Set text replaces the selected field.</small></div><button type="button" data-phone-stop hidden>Stop control</button>';
+  q('.guestScreenTools').after(controls);
+  const controlTool=document.createElement('button');controlTool.type='button';controlTool.dataset.tool='control';controlTool.setAttribute('aria-pressed','false');controlTool.textContent='↖ Control';controlTool.hidden=true;q('.guestDrawTools').prepend(controlTool);
+  let control={state:'off',supported:false,canControl:false},capture=null,displayedGeneration=0,controlSeq=0,controlPending=null,controlTimeout=null,controlTouch=null;
+  function controlUI(){
+    controls.hidden=owner?!watching||!control.supported:!nativeSharing||control.state!=='active';
+    q('[data-request-control]').hidden=!owner;q('[data-phone-stop]').hidden=owner||control.state!=='active';
+    q('[data-request-control]').disabled=control.state==='pending';q('[data-request-control]').textContent=control.canControl?'Stop phone control':'Request phone control';
+    q('[data-phone-actions]').hidden=!owner||!control.canControl;controlTool.hidden=!owner||!control.canControl;
+    q('[data-control-status]').textContent=control.state==='pending'?'Waiting for approval on the phone':control.canControl?'Phone control active':control.state==='active'?'Phone control active':'View only';
+    for(const item of controls.querySelectorAll('[data-phone-key],[data-phone-text]'))item.disabled=!!controlPending;
+    if(!control.canControl&&tool==='control'){tool='laser';for(const item of dialog.querySelectorAll('[data-tool]'))item.setAttribute('aria-pressed',String(item.dataset.tool==='laser'));}
+  }
+  function resetControl(){clearTimeout(controlTimeout);controlTimeout=null;controlPending=null;controlTouch=null;control={state:'off',supported:false,canControl:false};capture=null;displayedGeneration=0;controlUI();}
+  function sendControl(command){
+    if(!owner||!watching||!control.canControl||!control.id||!capture||capture.generation!==displayedGeneration||controlPending)return;
+    const seq=++controlSeq;controlPending=seq;send({type:'control',id:control.id,seq,generation:capture.generation,command});controlUI();
+    controlTimeout=setTimeout(()=>{if(controlPending===seq){send({type:'control-stop'});resetControl();status.textContent='Phone action timed out. Request control again; actions are never replayed.';}},6500);
+  }
+  q('[data-request-control]').addEventListener('click',()=>{if(control.canControl){send({type:'control-stop'});resetControl();}else{send({type:'control-request'});q('[data-control-status]').textContent='Sending control request…';}});
+  q('[data-phone-stop]').addEventListener('click',()=>{nativeSend({type:'control-stop'});resetControl();});
+  for(const item of controls.querySelectorAll('[data-phone-key]'))item.addEventListener('click',()=>sendControl({action:item.dataset.phoneKey}));
+  q('[data-phone-text]').addEventListener('click',()=>sendControl({action:'text',text:controls.querySelector('input').value}));
   let socket=null,stream=null,timer=null,owner=false,watching=null,shares=[],marks=[],laser=null,tool='laser',dragging=false,lastPoint=null,lastSent=0,frameUrl=null,frameGeneration=0,dimensions=null,epoch=0,starting=false,sending=false,account='',pendingBlob=null,decoding=false,laserTimer=null,nativePending=false,nativeSharing=false;
   const nativeAvailable=()=>typeof window.PCRAndroid?.postMessage==='function';
   const nativeSend=value=>{try{window.PCRAndroid?.postMessage(JSON.stringify(value));}catch{}};
@@ -15,15 +39,18 @@
     if(value.type==='sharing'){nativePending=false;nativeSharing=true;starting=false;q('[data-share]').hidden=true;q('[data-stop]').hidden=false;status.textContent='Your entire phone screen is live with Serame. Press Home and open other apps; sharing continues. Stop here or in the Android notification.';}
     else if(value.type==='frame'&&nativeSharing&&typeof value.data==='string'&&value.data.length<=1400000&&/^[A-Za-z0-9+/]+=*$/.test(value.data)&&Number.isInteger(value.width)&&Number.isInteger(value.height)&&value.width>0&&value.height>0&&value.width<=1920&&value.height<=1920){dimensions={width:value.width,height:value.height};image.src='data:image/jpeg;base64,'+value.data;image.hidden=false;empty.hidden=true;draw();}
     else if(value.type==='mark'&&nativeSharing)applyMark(value);
+    else if(value.type==='control-state'&&nativeSharing){control={...value,canControl:false};controlUI();}
     else if(value.type==='stopped'){nativePending=false;nativeSharing=false;stop(value.message||'Phone screen sharing stopped.');}
   };
   function wipe(){marks=[];laser=null;draw();}
   function hideFrame(){frameGeneration++;pendingBlob=null;image.hidden=true;image.removeAttribute('src');if(frameUrl){URL.revokeObjectURL(frameUrl);frameUrl=null;}dimensions=null;empty.hidden=false;wipe();}
   function decodeFrame(){
     if(decoding||!pendingBlob||!owner||!watching)return;const blob=pendingBlob;pendingBlob=null;decoding=true;const generation=frameGeneration,current=socket,url=URL.createObjectURL(blob),decoded=new Image();
-    const done=()=>{decoding=false;decodeFrame();};decoded.onload=()=>{if(generation!==frameGeneration||socket!==current){URL.revokeObjectURL(url);done();return;}if(frameUrl)URL.revokeObjectURL(frameUrl);frameUrl=url;image.src=url;image.hidden=false;empty.hidden=true;dimensions={width:decoded.naturalWidth,height:decoded.naturalHeight};draw();done();};decoded.onerror=()=>{URL.revokeObjectURL(url);done();};decoded.src=url;
+    const captureVersion=capture?.generation||0;
+    const done=()=>{decoding=false;decodeFrame();};decoded.onload=()=>{if(generation!==frameGeneration||socket!==current){URL.revokeObjectURL(url);done();return;}if(frameUrl)URL.revokeObjectURL(frameUrl);frameUrl=url;image.src=url;image.hidden=false;empty.hidden=true;dimensions={width:decoded.naturalWidth,height:decoded.naturalHeight};displayedGeneration=captureVersion;draw();done();};decoded.onerror=()=>{URL.revokeObjectURL(url);done();};decoded.src=url;
   }
   function stop(message='Screen sharing is off.'){
+    if(owner&&control.canControl)send({type:'control-stop'});resetControl();
     if(nativePending||nativeSharing)nativeSend({type:'stop'});nativePending=false;nativeSharing=false;
     starting=false;clearTimeout(timer);timer=null;send({type:'stop'});const previous=stream;stream=null;for(const track of previous?.getTracks()||[])track.stop();video.srcObject=null;video.hidden=true;sending=false;q('[data-share]').disabled=false;q('[data-share]').hidden=owner;q('[data-stop]').hidden=true;hideFrame();status.textContent=message;
   }
@@ -36,11 +63,14 @@
       if(event.data instanceof Blob){if(!owner||!watching)return;pendingBlob=event.data;decodeFrame();return;}
       let value;try{value=JSON.parse(event.data);}catch{return;}
       if(value.type==='shares'&&owner){shares=value.shares||[];renderShares();}
-      else if(value.type==='watching'){watching=value.id;marks=value.marks||[];laser=null;status.textContent='Live guest screen · laser and drawings are shared.';draw();}
-      else if(value.type==='stopped'){watching=null;hideFrame();status.textContent='The guest stopped sharing.';}
+      else if(value.type==='watching'){watching=value.id;capture=value.capture||null;marks=value.marks||[];laser=null;status.textContent='Live guest screen · request phone control or draw together.';draw();}
+      else if(value.type==='capture'){capture=value;hideFrame();}
+      else if(value.type==='control-state'){control=value;if(value.state!=='active'){clearTimeout(controlTimeout);controlPending=null;}controlUI();if(value.message)status.textContent=value.message;}
+      else if(value.type==='control-result'&&value.seq===controlPending){clearTimeout(controlTimeout);controlPending=null;controlUI();status.textContent=value.ok?'Phone action completed.':value.message||'The phone could not perform that action.';}
+      else if(value.type==='stopped'){watching=null;resetControl();hideFrame();status.textContent='The guest stopped sharing.';}
       else if(value.type==='mark')applyMark(value);
     };
-    current.onclose=()=>{if(socket!==current)return;socket=null;if(stream||starting)stop('Sharing disconnected. Start again to reconnect.');if(owner){shares=[];watching=null;renderShares();hideFrame();status.textContent='Connection closed. Reopen Guest screens to reconnect.';}};
+    current.onclose=()=>{if(socket!==current)return;socket=null;resetControl();if(stream||starting)stop('Sharing disconnected. Start again to reconnect.');if(owner){shares=[];watching=null;renderShares();hideFrame();status.textContent='Connection closed. Reopen Guest screens to reconnect.';}};
     return new Promise((resolve,reject)=>{current.addEventListener('open',resolve,{once:true});current.addEventListener('error',()=>reject(Error('Could not connect to screen sharing.')),{once:true});});
   }
   function renderShares(){
@@ -50,7 +80,7 @@
     else{watching=null;hideFrame();}
     button.replaceChildren(document.createTextNode('Guest screens'+(shares.length?' · '+shares.length:'')));const description=document.createElement('span');description.textContent='View a guest’s shared screen and draw together';button.append(description);
   }
-  select.addEventListener('change',()=>{watching=select.value;hideFrame();send({type:'watch',id:watching});});
+  select.addEventListener('change',()=>{resetControl();watching=select.value;hideFrame();send({type:'watch',id:watching});});
   async function start(){
     if(starting||stream||nativeSharing||owner)return;const version=epoch;starting=true;q('[data-share]').disabled=true;
     if(nativeAvailable()){nativePending=true;q('[data-stop]').hidden=false;status.textContent='Approve sharing your entire phone screen in Android’s prompt. If asked, choose Entire screen.';nativeSend({type:'start'});return;}
@@ -81,11 +111,23 @@
   function applyMark(mark){if(mark.tool==='clear')marks=[];else if(mark.tool==='pen'){marks.push(mark);marks=marks.slice(-160);}else laser={...mark,at:Date.now()};draw();}
   function point(event){const rect=bounds();if(!rect)return null;const box=canvas.getBoundingClientRect(),x=(event.clientX-box.left-rect.x)/rect.w,y=(event.clientY-box.top-rect.y)/rect.h;return x>=0&&x<=1&&y>=0&&y<=1?{x,y}:null;}
   function mark(event,force=false){const p=point(event);if(!p||!(owner?watching:stream||nativeSharing))return;const now=Date.now();if(!force&&now-lastSent<35)return;lastSent=now;const value={type:'mark',tool,points:tool==='pen'&&lastPoint?[lastPoint,p]:[p,p],color:owner?'#66e6bc':'#82b7ff'};lastPoint=p;applyMark(value);send(value);}
+  canvas.addEventListener('pointerdown',event=>{
+    if(tool!=='control')return;event.preventDefault();event.stopImmediatePropagation();const p=point(event);if(!p||!control.canControl||controlPending||capture?.generation!==displayedGeneration)return;
+    controlTouch={point:p,at:performance.now(),button:event.button,id:event.pointerId};canvas.setPointerCapture(event.pointerId);
+  },true);
+  canvas.addEventListener('pointermove',event=>{if(tool==='control'){event.preventDefault();event.stopImmediatePropagation();}},true);
+  canvas.addEventListener('pointerup',event=>{
+    if(tool!=='control')return;event.preventDefault();event.stopImmediatePropagation();const start=controlTouch;controlTouch=null;const p=point(event);if(!start||start.id!==event.pointerId||!p)return;
+    const elapsed=performance.now()-start.at;
+    if(Math.hypot(p.x-start.point.x,p.y-start.point.y)>.015)sendControl({action:'swipe',points:[start.point,p],duration:Math.max(100,Math.min(1500,Math.round(elapsed)))});
+    else sendControl({action:start.button===2||elapsed>500?'longpress':'tap',points:[p]});
+  },true);
+  canvas.addEventListener('contextmenu',event=>{if(tool==='control')event.preventDefault();});canvas.addEventListener('pointercancel',()=>{controlTouch=null;});
   canvas.addEventListener('pointerdown',event=>{if(event.button!==0)return;dragging=true;lastPoint=null;canvas.setPointerCapture(event.pointerId);mark(event,true);});canvas.addEventListener('pointermove',event=>{if(dragging)mark(event);});const end=event=>{if(dragging)mark(event,true);dragging=false;lastPoint=null;};canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',()=>{dragging=false;lastPoint=null;});
   for(const item of dialog.querySelectorAll('[data-tool]'))item.addEventListener('click',()=>{tool=item.dataset.tool;for(const other of dialog.querySelectorAll('[data-tool]'))other.setAttribute('aria-pressed',String(other===item));});
   q('[data-clear]').addEventListener('click',()=>{const value={type:'mark',tool:'clear'};applyMark(value);send(value);});q('[data-share]').addEventListener('click',start);q('[data-stop]').addEventListener('click',()=>stop('You stopped screen sharing.'));q('[data-close]').addEventListener('click',()=>dialog.close());
   button.addEventListener('click',()=>{dialog.showModal();draw();if(owner)void connect().then(renderShares).catch(error=>{status.textContent=error.message;});});
-  dialog.addEventListener('close',()=>{if(!owner)stop();else{send({type:'watch',id:''});watching=null;hideFrame();}});
+  dialog.addEventListener('close',()=>{if(!owner)stop();else{send({type:'watch',id:''});watching=null;resetControl();hideFrame();}});
   new ResizeObserver(draw).observe(stage);window.addEventListener('pagehide',()=>{stop();socket?.close();});
   function authChanged(){const auth=window.PCRAuth||{},next=auth.signedIn?(auth.role==='owner'?'owner':'guest:'+auth.guestId):'';if(next===account)return;account=next;epoch++;stop();socket?.close();socket=null;dialog.close();shares=[];watching=null;owner=auth.role==='owner';button.hidden=!auth.signedIn;
     q('h2').textContent=owner?'Guest screens':nativeAvailable()?'Share your phone':'Share your screen';q('.guestScreenHint').textContent=owner?'Guests choose what to share. Use the laser or draw on this preview together.':nativeAvailable()?'Share your entire phone live, including Home and other apps. Android asks for your permission. Stop anytime from the sharing notification.':'Choose a screen or window for Serame to see. No microphone or remote control is shared. Laser marks and drawings appear on this preview.';q('.guestScreenSelect').hidden=!owner;q('[data-share]').hidden=owner;

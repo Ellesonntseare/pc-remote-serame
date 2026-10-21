@@ -22,16 +22,19 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 import kotlin.math.*
 
-/** Explicit, temporary guest screen sharing. No microphone, saved recording,
- * boot receiver, accessibility access, or restart after process death. */
+/** Explicit screen sharing; phone input needs separate local session consent. */
 class ScreenShareService : Service() {
     companion object {
         const val STOP = "za.co.pcremote.controller.STOP_SHARING"
+        const val STOP_CONTROL = "za.co.pcremote.controller.STOP_CONTROL"
         @Volatile var events: ((JSONObject) -> Unit)? = null
         @Volatile var previewEnabled = true
         @Volatile private var live: ScreenShareService? = null
         fun forwardMark(mark: JSONObject) { live?.socket?.send(mark.toString()) }
         fun stopSharing() { live?.finish("Screen sharing stopped.") }
+        fun stopPhoneControl() { live?.main?.post { live?.endControl() } }
+        fun pendingControl(): String? = live?.pendingControlId
+        fun respondControl(id: String, allow: Boolean) { live?.respond(id, allow) }
     }
     private val main = Handler(Looper.getMainLooper())
     private val workerThread = HandlerThread("GuestScreenCapture")
@@ -53,9 +56,60 @@ class ScreenShareService : Service() {
     private var consent: Intent? = null
     private var consentCode = 0
     private var projectionCallback: MediaProjection.Callback? = null
+    private val controlPolicy = PhoneControlPolicy { SystemClock.elapsedRealtime() }
+    private var pendingControlId: String? = null
+    private var controlId: String? = null
+    private var controlBusy = false
+    @Volatile private var captureGeneration = 0
+    @Volatile private var captureWidth = 0
+    @Volatile private var captureHeight = 0
+    private fun notification(): Notification {
+        val stop = PendingIntent.getService(this,1,Intent(this,ScreenShareService::class.java).setAction(STOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(this,2,Intent(this,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val title = if (pendingControlId != null) "Phone control request — tap to review" else if (controlId != null) "Serame is controlling this phone" else "Sharing your phone screen"
+        val builder=Notification.Builder(this,"screen-sharing").setSmallIcon(R.drawable.ic_remote).setContentTitle(title).setContentText("Entire screen is shared. You can stop anytime.").setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null,"Stop sharing",stop).build())
+        if (controlId != null || pendingControlId != null) {
+            val stopControl=PendingIntent.getService(this,3,Intent(this,ScreenShareService::class.java).setAction(STOP_CONTROL),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            builder.addAction(Notification.Action.Builder(null,"Stop control",stopControl).build())
+        }
+        return builder.build()
+    }
+    private fun updateNotification() { if (!ending) getSystemService(NotificationManager::class.java).notify(104,notification()) }
+    private fun endControl(notifyServer: Boolean = true) {
+        pendingControlId=null;controlId=null;controlPolicy.revoke();controlBusy=false
+        if(notifyServer)socket?.send("{\"type\":\"control-stop\"}")
+        emit(JSONObject().put("type","control-state").put("state","off"));updateNotification()
+    }
+    private fun respond(id: String, allow: Boolean) {
+        if (ending || pendingControlId != id || display == null) return
+        val approved=allow && PhoneControlService.instance != null
+        pendingControlId=null
+        if(approved){controlId=id;controlPolicy.grant(id);main.postDelayed({ if(controlId==id)endControl() },600000)}
+        socket?.send(JSONObject().put("type","control-response").put("id",id).put("approved",approved).toString());updateNotification()
+    }
+    private fun controlMessage(value: JSONObject) {
+        when(value.optString("type")) {
+            "control-request" -> {
+                val id=value.optString("id");if(!Regex("^[a-f0-9]{32}$").matches(id)||controlId!=null||pendingControlId!=null||display==null)return
+                pendingControlId=id;updateNotification();emit(value);main.postDelayed({if(pendingControlId==id){respond(id,false);endControl(false)}},120000)
+            }
+            "control-state" -> {if(value.optString("state")!="active"||value.optString("id")!=controlId)endControl(false) else emit(value)}
+            "control" -> {
+                val id=value.optString("id");val seq=value.optLong("seq",-1);val generation=value.optInt("generation",-1)
+                val payload=value.optJSONObject("command")?:return;val points=payload.optJSONArray("points")
+                val command=PhoneCommand(payload.optString("action"),if(points==null)emptyList() else (0 until points.length()).map { val p=points.getJSONObject(it);PhonePoint(p.getDouble("x"),p.getDouble("y")) },payload.optInt("duration",0),payload.optString("text",""))
+                fun result(ok: Boolean,message: String){socket?.send(JSONObject().put("type","control-result").put("id",id).put("seq",seq).put("ok",ok).put("message",message).toString())}
+                val input=PhoneControlService.instance
+                if(ending||controlBusy||id!=controlId||input==null||!controlPolicy.accept(id,seq,generation,captureGeneration,command)){result(false,"Phone control is unavailable or the display changed.");return}
+                controlBusy=true
+                input.perform(command,captureWidth,captureHeight,{!ending&&controlId==id&&controlPolicy.active(id)&&captureGeneration==generation}){ok,message->controlBusy=false;result(ok,message)}
+            }
+        }
+    }
     override fun onCreate() { super.onCreate(); workerThread.start(); worker = Handler(workerThread.looper); live = this }
     override fun onBind(intent: Intent?) = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == STOP_CONTROL) { endControl(); return START_NOT_STICKY }
         if (intent == null || intent.action == STOP) { finish("Screen sharing stopped."); return START_NOT_STICKY }
         if (socket != null) return START_NOT_STICKY
         val origin = intent.getStringExtra("origin")?.let(TrustedOrigin::normalize)
@@ -67,10 +121,7 @@ class ScreenShareService : Service() {
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("screen-sharing", "Screen sharing", NotificationManager.IMPORTANCE_LOW))
-        val stop = PendingIntent.getService(this, 1, Intent(this, ScreenShareService::class.java).setAction(STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val open = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notification = Notification.Builder(this, "screen-sharing").setSmallIcon(R.drawable.ic_remote).setContentTitle("Sharing your phone screen")
-            .setContentText("Entire phone screen is live. Tap Stop sharing to end.").setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null, "Stop sharing", stop).build()).build()
+        val notification = notification()
         if (Build.VERSION.SDK_INT >= 29) startForeground(104, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) else startForeground(104, notification)
         val url = origin.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/guest-screen"
         val request = Request.Builder().url(url).header("Origin", origin).header("Cookie", cookie).build()
@@ -81,9 +132,10 @@ class ScreenShareService : Service() {
                 try {
                     val value = JSONObject(text)
                     when (value.optString("type")) {
-                        "ready" -> if (value.optString("role") == "guest") webSocket.send("{\"type\":\"start\"}") else finish("Use an approved guest account to share this phone.")
+                        "ready" -> if (value.optString("role") == "guest") webSocket.send("{\"type\":\"start\",\"controlSupported\":true}") else finish("Use an approved guest account to share this phone.")
                         "sharing" -> if (!ready) { ready = true; worker.post { beginProjection() } }
                         "mark" -> emit(value)
+                        "control-request", "control-state", "control" -> main.post { try { controlMessage(value) } catch (_: Exception) { endControl() } }
                     }
                 } catch (_: Exception) { finish("Screen sharing could not start.") }
             }
@@ -132,6 +184,8 @@ class ScreenShareService : Service() {
         return max(2, (width * scale).roundToInt() / 2 * 2) to max(2, (height * scale).roundToInt() / 2 * 2)
     }
     private fun configureReader(width: Int, height: Int) {
+        captureWidth=width;captureHeight=height;captureGeneration++
+        socket?.send(JSONObject().put("type","capture").put("generation",captureGeneration).put("width",width).put("height",height).toString())
         val size = dimensions(width, height); imageWidth = size.first; imageHeight = size.second
         reader = ImageReader.newInstance(imageWidth, imageHeight, PixelFormat.RGBA_8888, 2).also { capture -> capture.setOnImageAvailableListener({ readFrame(it) }, worker) }
     }
@@ -165,10 +219,11 @@ class ScreenShareService : Service() {
     private fun emit(value: JSONObject) { main.post { events?.invoke(value) } }
     private fun finish(message: String) {
         if (ending) return
-        ending = true; emit(JSONObject().put("type", "stopped").put("message", message)); main.post { stopSelf() }
+        ending = true; main.post { endControl();emit(JSONObject().put("type", "stopped").put("message", message));stopSelf() }
     }
     override fun onTaskRemoved(rootIntent: Intent?) { finish("Screen sharing stopped."); super.onTaskRemoved(rootIntent) }
     override fun onDestroy() {
+        endControl()
         ending = true; if (live === this) live = null
         socket?.send("{\"type\":\"stop\"}"); socket?.close(1000, "Sharing stopped"); socket = null
         worker.post {

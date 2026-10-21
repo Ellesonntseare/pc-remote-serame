@@ -2,6 +2,7 @@ package za.co.pcremote.controller
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,6 +11,7 @@ import android.media.projection.MediaProjectionManager
 import android.media.projection.MediaProjectionConfig
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -38,6 +40,7 @@ class MainActivity : Activity() {
     private var shareReply: JavaScriptReplyProxy? = null
     private var pendingProjection = false
     private var bridgeInstalled = false
+    private var controlDialog: AlertDialog? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,7 +66,12 @@ class MainActivity : Activity() {
             connectTo("http://$ip:$port")
         }
         findViewById<Button>(R.id.connectWebsite).setOnClickListener { connectTo("https://remote.teamtrader.co.za") }
-        ScreenShareService.events = { value -> runCatching { shareReply?.postMessage(value.toString()) }; Unit }
+        ScreenShareService.events = { value ->
+            runCatching { shareReply?.postMessage(value.toString()) }
+            if(value.optString("type")=="control-request")showControlRequest()
+            if(value.optString("type")=="control-state" && value.optString("state")=="off"){controlDialog?.dismiss();controlDialog=null}
+            Unit
+        }
         // Allow the user-initiated Keyboard button in the WebView to focus
         // its visible textarea and summon the Android IME normally.
         web.isFocusable = true
@@ -120,6 +128,7 @@ class MainActivity : Activity() {
                     }
                     "stop" -> { pendingProjection = false; ScreenShareService.stopSharing() }
                     "mark" -> ScreenShareService.forwardMark(value)
+                    "control-stop" -> ScreenShareService.stopPhoneControl()
                 }
             } catch (_: Exception) { reply.postMessage("{\"type\":\"stopped\",\"message\":\"Could not start phone sharing.\"}") }
         }
@@ -180,6 +189,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        controlDialog?.dismiss();controlDialog=null
         pendingProjection = false; ScreenShareService.stopSharing(); ScreenShareService.events = null; shareReply = null
         web.stopLoading()
         web.destroy()
@@ -197,4 +207,20 @@ class MainActivity : Activity() {
         ScreenShareService.previewEnabled = false
         super.onStop()
     }
+
+    private fun showControlRequest() {
+        val id=ScreenShareService.pendingControl()?:return
+        if(!hasWindowFocus() || isFinishing || controlDialog?.isShowing==true)return
+        val enabled=PhoneControlService.instance!=null
+        controlDialog=AlertDialog.Builder(this).setTitle("Allow Serame to control this phone?")
+            .setMessage(if(enabled)"Allow taps, swipes, Back, Home and replacing text in selected fields for this session (up to 10 minutes). Stop control anytime from the sharing notification." else "Phone control needs the PC Remote phone control Accessibility service. Enable it in Android settings, then return here and approve this request. Screen sharing can continue without control.")
+            .setNegativeButton("Decline"){_,_->ScreenShareService.respondControl(id,false);controlDialog=null}
+            .setPositiveButton(if(enabled)"Allow control" else "Open settings"){_,_->
+                controlDialog=null
+                if(enabled)ScreenShareService.respondControl(id,true) else startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }.setOnCancelListener{ScreenShareService.respondControl(id,false);controlDialog=null}.create()
+        controlDialog?.show()
+    }
+    override fun onResume() { super.onResume();web.postDelayed({showControlRequest()},400) }
+    override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus);if(hasFocus)web.post{showControlRequest()} }
 }

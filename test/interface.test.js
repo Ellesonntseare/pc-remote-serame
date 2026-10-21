@@ -4,6 +4,17 @@ async function until(predicate){const end=Date.now()+5000;while(Date.now()<end){
 async function fixture(t){const dir=await fs.mkdtemp(path.join(__dirname,'.transfer-check-')),errors=[],windows=[];const app=createApp({password:'serame',disableAgent:true,disableActions:true,transferDirectory:dir});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
   async function page(options={}){const jar=new CookieJar(),console=new VirtualConsole();console.on('jsdomError',error=>{if(!error.message.includes('Could not parse CSS stylesheet'))errors.push(error.message);});const dom=await JSDOM.fromURL(base,{runScripts:'dangerously',resources:'usable',pretendToBeVisual:true,cookieJar:jar,virtualConsole:console,beforeParse(window){
     if(options.android)window.PCRAndroid={postMessage:value=>options.android.push(JSON.parse(value))};
+    if(options.sockets){
+      class Socket extends window.EventTarget {
+        static OPEN=1;static CONNECTING=0;
+        constructor(url){super();this.url=url;this.readyState=1;this.bufferedAmount=0;this.sent=[];options.sockets.push(this);queueMicrotask(()=>this.dispatchEvent(new window.Event('open')));}
+        send(value){this.sent.push(JSON.parse(value));}close(){this.readyState=3;this.onclose?.();}
+        emit(value){this.onmessage?.({data:value instanceof window.Blob?value:JSON.stringify(value)});}
+      }
+      window.WebSocket=Socket;window.URL.createObjectURL=()=> 'blob:test';window.URL.revokeObjectURL=()=>{};
+      window.Image=class{naturalWidth=540;naturalHeight=960;set src(value){queueMicrotask(()=>this.onload?.());}};
+      window.HTMLCanvasElement.prototype.setPointerCapture=function(){};
+    }
     window.TextEncoder=TextEncoder;window.TextDecoder=TextDecoder;window.AbortController=AbortController;window.ResizeObserver=class{observe(){}unobserve(){}disconnect(){}};
     window.matchMedia=query=>({matches:!!options.phone&&query==='(any-pointer: coarse)',addEventListener(){},removeEventListener(){}});
     if(options.phone){const viewport=new window.EventTarget();Object.assign(viewport,{height:800,width:390,offsetTop:0,scale:1});window.visualViewport=viewport;}
@@ -29,7 +40,21 @@ test('Android guest sharing asks the native app for consent, accepts a live prev
   phone.PCRAndroid.onmessage({data:JSON.stringify({type:'sharing'})});phone.PCRAndroid.onmessage({data:JSON.stringify({type:'frame',data:'AAAA',width:540,height:960})});assert.equal(phone.document.querySelector('#guestScreenDialog img').hidden,false);
   Object.defineProperty(phone.document,'hidden',{configurable:true,value:true});phone.document.dispatchEvent(new phone.Event('visibilitychange'));assert.equal(messages.at(-1).type,'start','switching apps must not send a native stop');
   Object.defineProperty(phone.document,'hidden',{configurable:true,value:false});phone.document.dispatchEvent(new phone.Event('visibilitychange'));assert.match(phone.document.querySelector('.guestScreenStatus').textContent,/entire phone screen is live/);
+  phone.PCRAndroid.onmessage({data:JSON.stringify({type:'control-state',state:'active'})});assert.equal(phone.document.querySelector('[data-phone-stop]').hidden,false);phone.document.querySelector('[data-phone-stop]').click();assert.equal(messages.at(-1).type,'control-stop');
   phone.eval('showPair()');assert.equal(messages.at(-1).type,'stop');assert.equal(phone.document.querySelector('#guestScreenDialog').open,false);
+});
+
+test('PC phone controls stay view-only until approval and send one action at a time for the displayed capture',async t=>{
+  const f=await fixture(t),sockets=[],window=await f.page({sockets}),doc=window.document;await login(window,'serame');await until(()=>window.PCRAuth?.signedIn&&sockets.length);
+  const socket=sockets.find(s=>s.url.includes('/api/guest-screen'));doc.querySelector('.guestScreenHome').click();socket.emit({type:'shares',shares:[{id:'phone'}]});socket.emit({type:'watching',id:'phone',marks:[],capture:{generation:1,width:1080,height:1920}});socket.emit({type:'control-state',state:'off',supported:true,canControl:false});
+  doc.querySelector('[data-phone-key="home"]').click();assert.equal(socket.sent.some(v=>v.type==='control'),false);
+  doc.querySelector('[data-request-control]').click();assert.equal(socket.sent.at(-1).type,'control-request');socket.emit({type:'control-state',state:'pending',supported:true});assert.equal(doc.querySelector('[data-request-control]').disabled,true);
+  socket.emit({type:'control-state',state:'active',supported:true,canControl:true,id:'a'.repeat(32)});socket.emit(new window.Blob(['frame']));await new Promise(r=>setTimeout(r,20));
+  doc.querySelector('[data-phone-key="home"]').click();assert.equal(socket.sent.at(-1).command.action,'home');assert.equal(socket.sent.at(-1).generation,1);const seq=socket.sent.at(-1).seq;
+  doc.querySelector('[data-phone-key="back"]').click();assert.equal(socket.sent.at(-1).seq,seq,'buttons block overlapping actions');socket.emit({type:'control-result',seq,ok:true});
+  socket.emit({type:'capture',generation:2,width:1920,height:1080});doc.querySelector('[data-phone-key="back"]').click();assert.equal(socket.sent.at(-1).seq,seq,'old images cannot send new-display actions');
+  socket.emit(new window.Blob(['rotated']));await new Promise(r=>setTimeout(r,20));doc.querySelector('[data-phone-key="back"]').click();assert.equal(socket.sent.at(-1).generation,2);
+  doc.querySelector('#guestScreenDialog [data-close]').click();assert.equal(socket.sent.at(-1).type,'watch');assert.equal(socket.sent.at(-1).id,'');
 });
 test('guest waits for owner approval, privacy defaults hide sensitive panels, and owner snippets never cross into guest UI',async t=>{
   const f=await fixture(t),owner=await f.page(),guest=await f.page();await login(owner,'serame');await until(()=>owner.PCRAuth?.signedIn);owner.localStorage.setItem('pcr_clipboard_history_v1',JSON.stringify([{text:'Owner private sample',source:'test',time:Date.now(),pinned:true}]));

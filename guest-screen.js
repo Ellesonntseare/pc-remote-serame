@@ -1,5 +1,6 @@
 'use strict';
 const {WebSocketServer,WebSocket}=require('ws');
+const {createPhoneControl}=require('./phone-control');
 function jpegSize(bytes){
   if(bytes.length<20||bytes.readUInt16BE(0)!==0xffd8||bytes.readUInt16BE(bytes.length-2)!==0xffd9)return null;
   let at=2;
@@ -11,9 +12,10 @@ function createGuestScreen({sessions,auth,sessionExpiry}){
   const wss=new WebSocketServer({noServer:true,maxPayload:1024*1024,perMessageDeflate:false}),peers=new Set();
   const send=(peer,data)=>{if(peer.ws.readyState===WebSocket.OPEN&&peer.ws.bufferedAmount<512*1024)peer.ws.send(typeof data==='string'||Buffer.isBuffer(data)?data:JSON.stringify(data));};
   const sharing=id=>Array.from(peers).find(p=>!p.owner&&p.id===id&&p.sharing);
+  const control=createPhoneControl({send,peers,sharing});
   const shareList=()=>Array.from(peers).filter(p=>!p.owner&&p.sharing).map(p=>({id:p.id,device:p.device}));
   function announce(){const shares=shareList();for(const peer of peers)if(peer.owner)send(peer,{type:'shares',shares});}
-  function stopShare(peer){peer.frame=null;if(!peer.sharing)return;peer.sharing=false;peer.marks=[];for(const watcher of peers)if(watcher.owner&&watcher.watching===peer.id){watcher.watching=null;send(watcher,{type:'stopped'});}announce();}
+  function stopShare(peer){control.end(peer);peer.frame=null;peer.capture=null;if(!peer.sharing)return;peer.sharing=false;peer.marks=[];for(const watcher of peers)if(watcher.owner&&watcher.watching===peer.id){watcher.watching=null;send(watcher,{type:'stopped'});}announce();}
   function upgrade(req,socket,head,token){
     wss.handleUpgrade(req,socket,head,ws=>{
       const session=sessions.get(token);if(!session){ws.close(1008,'Session ended');return;}
@@ -32,9 +34,10 @@ function createGuestScreen({sessions,auth,sessionExpiry}){
           for(const watcher of peers)if(watcher.owner&&watcher.watching===peer.id)send(watcher,bytes);return;
         }
         let body;try{if(bytes.length>16000)throw Error();body=JSON.parse(bytes.toString());if(!body||typeof body!=='object')throw Error();}catch{ws.close(1008,'Invalid sharing message');return;}
-        if(body.type==='start'&&!peer.owner){peer.sharing=true;peer.marks=[];peer.frame=null;peer.lastFrame=0;announce();send(peer,{type:'sharing'});return;}
+        if(body.type==='start'&&!peer.owner){control.end(peer);peer.sharing=true;peer.controlSupported=body.controlSupported===true;peer.capture=null;peer.marks=[];peer.frame=null;peer.lastFrame=0;announce();send(peer,{type:'sharing'});return;}
         if(body.type==='stop'&&!peer.owner){stopShare(peer);return;}
-        if(body.type==='watch'&&peer.owner){const target=sharing(body.id);peer.watching=target?.id||null;send(peer,target?{type:'watching',id:target.id,marks:target.marks}:{type:'stopped'});if(target?.frame)send(peer,target.frame);return;}
+        if(body.type==='watch'&&peer.owner){const target=sharing(body.id);if(peer.watching!==target?.id)control.detach(peer);peer.watching=target?.id||null;send(peer,target?{type:'watching',id:target.id,marks:target.marks,capture:target.capture}:{type:'stopped'});if(target){send(peer,control.state(target,peer));if(target.frame)send(peer,target.frame);}return;}
+        if(control.handle(peer,body))return;
         if(body.type==='mark'&&validMark(body)){
           const target=peer.owner?sharing(peer.watching):peer.sharing?peer:null;if(!target)return;
           const mark={type:'mark',tool:body.tool,points:body.tool==='clear'?[]:body.points.map(({x,y})=>({x,y})),color:peer.owner?'#66e6bc':'#82b7ff'};
@@ -42,10 +45,10 @@ function createGuestScreen({sessions,auth,sessionExpiry}){
           for(const other of peers)if(other!==peer&&(other===target||other.owner&&other.watching===target.id))send(other,mark);
         }
       });
-      ws.on('close',()=>{stopShare(peer);peers.delete(peer);clearInterval(heartbeat);expiry();});
+      ws.on('close',()=>{control.detach(peer);stopShare(peer);peers.delete(peer);clearInterval(heartbeat);expiry();});
     });
   }
-  function revoke(token){for(const peer of peers)if(!token||peer.token===token){stopShare(peer);peer.ws.close(1001,'Session ended');const timer=setTimeout(()=>peer.ws.terminate(),300);timer.unref();}}
+  function revoke(token){for(const peer of peers)if(!token||peer.token===token){control.detach(peer);stopShare(peer);peer.ws.close(1001,'Session ended');const timer=setTimeout(()=>peer.ws.terminate(),300);timer.unref();}}
   return {upgrade,revoke,close(){revoke();wss.close();}};
 }
 module.exports={createGuestScreen,jpegSize,validMark};

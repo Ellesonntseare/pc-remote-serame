@@ -12,6 +12,10 @@
         android:icon="@drawable/ic_remote"
         android:theme="@style/Theme.PCRemote">
         <service android:name=".ScreenShareService" android:exported="false" android:foregroundServiceType="mediaProjection" />
+        <service android:name=".PhoneControlService" android:exported="true" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:label="@string/phone_control_name">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/phone_control_accessibility" />
+        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"
