@@ -1,0 +1,5 @@
+.desktopKeyboardHint{display:none;flex-shrink:0;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;color:#aab9d3;background:#0d1524;font:12px/1.4 system-ui,sans-serif;border-bottom:1px solid #27334a}
+.desktopKeyboardHint button{flex-shrink:0;border:1px solid #485c80;border-radius:9px;background:#192943;color:#eef4ff;padding:7px 10px;font:inherit;cursor:pointer}
+.desktopKeyboardHint[data-active=true]{color:#bcefd8}
+#rsc:focus{outline:2px solid #5c8cff;outline-offset:-2px}
+@media(min-width:900px) and (pointer:fine){.desktopKeyboardHint{display:flex}.rsbar button,.screenTools button{cursor:pointer}}

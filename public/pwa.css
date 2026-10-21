@@ -1,0 +1,9 @@
+#installPhone{display:block;width:100%;margin:0 0 14px;padding:13px 16px;border:1px solid #6888db66;border-radius:15px;background:linear-gradient(135deg,#243b6b,#18243e);color:#eef3ff;font:700 13px system-ui,sans-serif;cursor:pointer}
+#installPhone:disabled{opacity:.65;cursor:wait}
+#installPhone:focus-visible,#installHelp button:focus-visible{outline:2px solid #9cb5ff;outline-offset:3px}
+#installPhone[hidden]{display:none}
+#installHelp{width:min(410px,calc(100% - 32px));max-height:80vh;overflow:auto;margin:auto;padding:24px;border:1px solid #34435b;border-radius:22px;background:#111a2a;color:#eef3ff;box-shadow:0 20px 70px #0009;font:14px/1.6 system-ui,sans-serif}
+#installHelp::backdrop{background:#03050ac9;backdrop-filter:blur(8px)}
+#installHelp h2{font-size:21px;margin:0 0 12px}
+#installHelp p{color:#b8c4dc;margin:10px 0}
+#installHelp button{width:100%;margin-top:12px;padding:11px;border:0;border-radius:11px;background:#507bff;color:#fff;font:700 14px system-ui,sans-serif;cursor:pointer}

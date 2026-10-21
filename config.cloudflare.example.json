@@ -1,0 +1,6 @@
+{
+  "screen": true,
+  "requirePin": false,
+  "delaySeconds": 10,
+  "tunnelHostname": "remote.teamtrader.co.za"
+}
