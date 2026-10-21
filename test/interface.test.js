@@ -5,8 +5,9 @@ async function fixture(t){const dir=await fs.mkdtemp(path.join(__dirname,'.trans
   async function page(options={}){const jar=new CookieJar(),console=new VirtualConsole();console.on('jsdomError',error=>{if(!error.message.includes('Could not parse CSS stylesheet'))errors.push(error.message);});const dom=await JSDOM.fromURL(base,{runScripts:'dangerously',resources:'usable',pretendToBeVisual:true,cookieJar:jar,virtualConsole:console,beforeParse(window){
     if(options.android)window.PCRAndroid={postMessage:value=>options.android.push(JSON.parse(value))};
     window.TextEncoder=TextEncoder;window.TextDecoder=TextDecoder;window.AbortController=AbortController;window.ResizeObserver=class{observe(){}unobserve(){}disconnect(){}};
-    window.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
-    window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){if(!this.open)return;this.open=false;this.dispatchEvent(new window.Event('close'));};
+    window.matchMedia=query=>({matches:!!options.phone&&query==='(any-pointer: coarse)',addEventListener(){},removeEventListener(){}});
+    if(options.phone){const viewport=new window.EventTarget();Object.assign(viewport,{height:800,width:390,offsetTop:0,scale:1});window.visualViewport=viewport;}
+    window.HTMLDialogElement.prototype.showModal=function(){this.returnFocus=window.document.activeElement;this.open=true;this.querySelector('button,input,textarea')?.focus();};window.HTMLDialogElement.prototype.close=function(){if(!this.open)return;this.open=false;this.returnFocus?.focus();this.dispatchEvent(new window.Event('close'));};
     const context={clearRect(){},drawImage(){},setTransform(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},arc(){},fill(){},save(){},restore(){},strokeRect(){},fillRect(){}};window.HTMLCanvasElement.prototype.getContext=()=>context;
     window.fetch=async(route,options={})=>{const url=new URL(route,base),headers={...options.headers,Cookie:await jar.getCookieString(url.href)};const response=await fetch(url,{...options,headers});for(const value of response.headers.getSetCookie())await jar.setCookie(value,url.href);return response;};
     window.navigator.clipboard={writeText:async()=>{},readText:async()=>''};window.HTMLMediaElement.prototype.pause=function(){};window.HTMLMediaElement.prototype.load=function(){};
@@ -26,6 +27,8 @@ test('Android guest sharing asks the native app for consent, accepts a live prev
   const f=await fixture(t),owner=await f.page(),messages=[],phone=await f.page({android:messages});await login(owner,'serame');await until(()=>owner.PCRAuth?.signedIn);await login(phone,'guest');await until(()=>owner.document.querySelector('.guestRequestCard'));owner.document.querySelector('.guestApprove').click();await until(()=>phone.PCRAuth?.role==='guest');
   phone.document.querySelector('.guestScreenHome').click();phone.document.querySelector('#guestScreenDialog [data-share]').click();assert.deepEqual(messages,[{type:'start'}]);assert.equal(phone.document.querySelector('#guestScreenDialog [data-stop]').hidden,false);
   phone.PCRAndroid.onmessage({data:JSON.stringify({type:'sharing'})});phone.PCRAndroid.onmessage({data:JSON.stringify({type:'frame',data:'AAAA',width:540,height:960})});assert.equal(phone.document.querySelector('#guestScreenDialog img').hidden,false);
+  Object.defineProperty(phone.document,'hidden',{configurable:true,value:true});phone.document.dispatchEvent(new phone.Event('visibilitychange'));assert.equal(messages.at(-1).type,'start','switching apps must not send a native stop');
+  Object.defineProperty(phone.document,'hidden',{configurable:true,value:false});phone.document.dispatchEvent(new phone.Event('visibilitychange'));assert.match(phone.document.querySelector('.guestScreenStatus').textContent,/entire phone screen is live/);
   phone.eval('showPair()');assert.equal(messages.at(-1).type,'stop');assert.equal(phone.document.querySelector('#guestScreenDialog').open,false);
 });
 test('guest waits for owner approval, privacy defaults hide sensitive panels, and owner snippets never cross into guest UI',async t=>{
@@ -36,4 +39,37 @@ test('guest waits for owner approval, privacy defaults hide sensitive panels, an
   assert.equal(guest.document.getElementById('name').textContent,'Shared PC');assert.equal(guest.document.querySelector('.guestScreenHome').hidden,false);assert.equal(guest.document.getElementById('guestManageButton').hidden,true);
   // A role switch in the same browser must not render the owner's saved text.
   guest.localStorage.setItem('pcr_clipboard_history_v1',owner.localStorage.getItem('pcr_clipboard_history_v1'));guest.dispatchEvent(new guest.CustomEvent('pcr:auth',{detail:guest.PCRAuth}));assert.equal(guest.document.getElementById('clipboardHistoryList').textContent.includes('Owner private sample'),false);
+});
+
+test('phone keyboard toggle, Android-style dismissal and remote touches keep the editor closed without losing drafts',async t=>{
+  const f=await fixture(t),window=await f.page({phone:true}),doc=window.document,viewport=window.visualViewport;
+  const pin=doc.getElementById('pin');pin.focus();await login(window,'serame');await until(()=>window.PCRAuth?.signedIn);assert.notEqual(doc.activeElement,pin,'login releases the password field');
+  window.eval("rs.on=1;rs.m={w:1920,h:1080};$('rs').classList.remove('hide');liveTyping=false;rsUpdateTypingUI()");
+  const input=doc.getElementById('typeText'),button=doc.getElementById('rsKeyboard');
+  const resize=height=>{viewport.height=height;viewport.dispatchEvent(new window.Event('resize'));};
+  for(let cycle=0;cycle<3;cycle++){
+    button.click();input.value='preserved draft';assert.equal(doc.activeElement,input);assert.equal(input.readOnly,false);
+    resize(760);assert.equal(doc.activeElement,input,'browser chrome movement does not dismiss typing');
+    resize(490);assert.equal(doc.activeElement,input,'opening the IME never clears focus');
+    resize(800);assert.notEqual(doc.activeElement,input);assert.equal(input.readOnly,true);assert.equal(input.inputMode,'none');assert.equal(input.value,'preserved draft');assert.equal(button.getAttribute('aria-expanded'),'false');
+    resize(780);resize(800);assert.notEqual(doc.activeElement,input,'later viewport changes do not reopen the IME');
+  }
+  button.click();button.click();assert.equal(input.readOnly,true);assert.notEqual(doc.activeElement,input);
+  button.click();doc.getElementById('rsv').dispatchEvent(new window.Event('pointerdown',{bubbles:true}));assert.equal(input.readOnly,true);assert.notEqual(doc.activeElement,input);
+  button.click();input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(input.readOnly,true);assert.equal(input.value,'preserved draft');
+});
+
+test('orientation and zoom do not close phone typing, and Files never restores a text editor',async t=>{
+  const f=await fixture(t),window=await f.page({phone:true}),doc=window.document,viewport=window.visualViewport;
+  await login(window,'serame');await until(()=>window.PCRAuth?.signedIn);
+  window.eval("rs.on=1;rs.m={w:1920,h:1080};$('rs').classList.remove('hide');liveTyping=false;rsUpdateTypingUI()");
+  const input=doc.getElementById('typeText');doc.getElementById('rsKeyboard').click();
+  viewport.height=490;viewport.dispatchEvent(new window.Event('resize'));
+  viewport.width=800;viewport.height=390;viewport.dispatchEvent(new window.Event('resize'));assert.equal(doc.activeElement,input,'rotation is not keyboard dismissal');
+  viewport.scale=1.5;viewport.height=250;viewport.dispatchEvent(new window.Event('resize'));assert.equal(doc.activeElement,input,'pinch zoom does not blur an editor');
+  const files=doc.querySelector('[data-files-button]');files.click();assert.equal(input.readOnly,true);assert.notEqual(doc.activeElement,input);
+  const note=doc.getElementById('filesNote');doc.getElementById('textTab').click();note.focus();note.value='copied text';doc.getElementById('filesClose').click();assert.equal(doc.activeElement,files);assert.equal(note.value,'copied text');assert.equal(input.readOnly,true);
+  files.click();doc.getElementById('textTab').click();note.focus();
+  let rejectPaste;window.navigator.clipboard.readText=()=>new Promise((resolve,reject)=>{rejectPaste=reject;});doc.getElementById('clipboardPaste').click();doc.getElementById('filesClose').click();rejectPaste(Error('Dismissed'));
+  await new Promise(r=>setTimeout(r,20));assert.equal(doc.activeElement,files,'late clipboard errors never focus a closed dialog');
 });

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.projection.MediaProjectionManager
+import android.media.projection.MediaProjectionConfig
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -128,7 +129,13 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     private fun requestProjection() {
         if (!pendingProjection || !isAllowed(web.url ?: "")) return
-        startActivityForResult(getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent(), 502)
+        val manager = getSystemService(MediaProjectionManager::class.java)
+        // Android 14 otherwise defaults to an app-only chooser. Request the
+        // complete display so Home, other apps and rotation remain in the stream.
+        val request = if (Build.VERSION.SDK_INT >= 34)
+            manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
+        else manager.createScreenCaptureIntent()
+        startActivityForResult(request, 502)
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -177,5 +184,17 @@ class MainActivity : Activity() {
         web.stopLoading()
         web.destroy()
         super.onDestroy()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ScreenShareService.previewEnabled = true
+    }
+
+    override fun onStop() {
+        // Only the in-app thumbnail pauses. The foreground service owns both
+        // capture and the network connection while the user opens other apps.
+        ScreenShareService.previewEnabled = false
+        super.onStop()
     }
 }

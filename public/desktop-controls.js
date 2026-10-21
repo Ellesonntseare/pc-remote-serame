@@ -68,9 +68,8 @@
     if(event.key==='Enter'&&event.shiftKey){event.preventDefault();void rsQueueRemoteCommand('combo 16,13');return;}
     if(event.key==='Backspace'||event.key==='Enter'){
       event.preventDefault();void rsTypeKey(special[event.key]);
-      // The phone typing helper focuses its textarea. Desktop input stays on
-      // the canvas so subsequent hardware key events remain in this pipeline.
-      canvas.focus({preventScroll:true});return;
+      // Keep hardware keys on the canvas without touching the phone editor.
+      return;
     }
     if((vk!==null&&special[event.key])||/^F([1-9]|1\d|2[0-4])$/.test(event.key)){
       event.preventDefault();

@@ -2,6 +2,7 @@ package za.co.pcremote.controller
 
 import android.app.*
 import android.content.Intent
+import android.content.res.Configuration
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
@@ -27,6 +28,7 @@ class ScreenShareService : Service() {
     companion object {
         const val STOP = "za.co.pcremote.controller.STOP_SHARING"
         @Volatile var events: ((JSONObject) -> Unit)? = null
+        @Volatile var previewEnabled = true
         @Volatile private var live: ScreenShareService? = null
         fun forwardMark(mark: JSONObject) { live?.socket?.send(mark.toString()) }
         fun stopSharing() { live?.finish("Screen sharing stopped.") }
@@ -45,6 +47,7 @@ class ScreenShareService : Service() {
     private var imageHeight = 0
     private var lastFrame = 0L
     private var lastPreview = 0L
+    @Volatile private var framesSent = 0L
     @Volatile private var ending = false
     private var ready = false
     private var consent: Intent? = null
@@ -67,7 +70,7 @@ class ScreenShareService : Service() {
         val stop = PendingIntent.getService(this, 1, Intent(this, ScreenShareService::class.java).setAction(STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val open = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this, "screen-sharing").setSmallIcon(R.drawable.ic_remote).setContentTitle("Sharing your phone screen")
-            .setContentText("Visible to Serame until you stop sharing.").setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null, "Stop sharing", stop).build()).build()
+            .setContentText("Entire phone screen is live. Tap Stop sharing to end.").setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null, "Stop sharing", stop).build()).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(104, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) else startForeground(104, notification)
         val url = origin.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/guest-screen"
         val request = Request.Builder().url(url).header("Origin", origin).header("Cookie", cookie).build()
@@ -102,15 +105,26 @@ class ScreenShareService : Service() {
                 override fun onCapturedContentResize(width: Int, height: Int) { worker.post { if (!ending && display != null) resize(width, height) } }
             }
             current.registerCallback(projectionCallback!!, worker)
-            val windowManager = getSystemService(WindowManager::class.java)
-            val dimensions = if (Build.VERSION.SDK_INT >= 30) windowManager.maximumWindowMetrics.bounds.let { it.width() to it.height() } else {
-                val metrics = DisplayMetrics(); @Suppress("DEPRECATION") windowManager.defaultDisplay.getRealMetrics(metrics); metrics.widthPixels to metrics.heightPixels
-            }
+            val dimensions = screenDimensions()
             configureReader(dimensions.first, dimensions.second)
             display = current.createVirtualDisplay("PC Remote guest screen", imageWidth, imageHeight, resources.displayMetrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader!!.surface, null, worker)
             emit(JSONObject().put("type", "sharing"))
+            main.postDelayed({ if (!ending && framesSent == 0L) finish("No screen frames arrived. Stop sharing and approve the entire screen again.") }, 10000)
         } catch (_: Exception) { finish("Android could not start sharing. Grant screen-sharing permission and try again.") }
+    }
+    private fun screenDimensions(): Pair<Int, Int> {
+        val windowManager = getSystemService(WindowManager::class.java)
+        return if (Build.VERSION.SDK_INT >= 30) windowManager.maximumWindowMetrics.bounds.let { it.width() to it.height() } else {
+            val metrics = DisplayMetrics(); @Suppress("DEPRECATION") windowManager.defaultDisplay.getRealMetrics(metrics); metrics.widthPixels to metrics.heightPixels
+        }
+    }
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Before Android 14 there is no captured-content resize callback.
+        if (Build.VERSION.SDK_INT < 34) worker.post {
+            if (!ending && display != null) { val size = screenDimensions(); resize(size.first, size.second) }
+        }
     }
     private fun dimensions(width: Int, height: Int): Pair<Int, Int> {
         require(width > 0 && height > 0)
@@ -131,7 +145,7 @@ class ScreenShareService : Service() {
     private fun readFrame(capture: ImageReader) {
         val image = try { capture.acquireLatestImage() } catch (_: Exception) { null } ?: return
         image.use {
-            if (ending || socket == null || socket!!.queueSize() > 256 * 1024 || SystemClock.elapsedRealtime() - lastFrame < 166) return
+            if (ending || socket == null || socket!!.queueSize() > 256 * 1024 || SystemClock.elapsedRealtime() - lastFrame < 100) return
             try {
                 lastFrame = SystemClock.elapsedRealtime()
                 val plane = image.planes[0]; if (plane.pixelStride != 4) return
@@ -142,8 +156,9 @@ class ScreenShareService : Service() {
                 cropped!!.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(pixels))
                 val bytes = ByteArrayOutputStream().use { output -> cropped!!.compress(Bitmap.CompressFormat.JPEG, 65, output); output.toByteArray() }
                 if (bytes.size > 1024 * 1024) return
-                socket?.send(bytes.toByteString())
-                if (SystemClock.elapsedRealtime() - lastPreview >= 1000) { lastPreview = SystemClock.elapsedRealtime(); emit(JSONObject().put("type", "frame").put("data", Base64.encodeToString(bytes, Base64.NO_WRAP)).put("width", imageWidth).put("height", imageHeight)) }
+                if (socket?.send(bytes.toByteString()) != true) { finish("The sharing connection closed. Start sharing again."); return }
+                framesSent++
+                if (previewEnabled && SystemClock.elapsedRealtime() - lastPreview >= 1000) { lastPreview = SystemClock.elapsedRealtime(); emit(JSONObject().put("type", "frame").put("data", Base64.encodeToString(bytes, Base64.NO_WRAP)).put("width", imageWidth).put("height", imageHeight)) }
             } catch (_: Exception) { finish("Phone capture stopped. Start sharing again.") }
         }
     }

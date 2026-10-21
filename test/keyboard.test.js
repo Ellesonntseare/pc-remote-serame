@@ -13,12 +13,12 @@ assert.ok(start>=0&&end>start,'served keyboard implementation exists');
 function keyboard(){
   const nodes=new Map(),requests=[],timers=new Set();
   function node(id){
-    if(!nodes.has(id))nodes.set(id,{value:'',selectionStart:0,selectionEnd:0,textContent:'',dataset:{},listeners:{},classList:{add(){},remove(){},toggle(){}},setAttribute(){},focus(){},blur(){},addEventListener(name,fn){this.listeners[name]=fn;},setRangeText(text,start,end){this.value=this.value.slice(0,start)+text+this.value.slice(end);this.selectionStart=this.selectionEnd=start+text.length;}});
+    if(!nodes.has(id))nodes.set(id,{value:'',selectionStart:0,selectionEnd:0,textContent:'',dataset:{},listeners:{},focusCount:0,classList:{add(){},remove(){},toggle(){}},setAttribute(){},focus(){this.focusCount++;},blur(){},addEventListener(name,fn){this.listeners[name]=fn;},setRangeText(text,start,end){this.value=this.value.slice(0,start)+text+this.value.slice(end);this.selectionStart=this.selectionEnd=start+text.length;}});
     return nodes.get(id);
   }
   const context=vm.createContext({
     $:node,rs:{on:1,m:{w:1920,h:1080}},ls:()=>null,qb:0,qq:[],mouseDrag:false,g:null,flush(){},TextEncoder,Intl,AbortController,
-    btoa:value=>Buffer.from(value,'binary').toString('base64'),navigator:{},
+    btoa:value=>Buffer.from(value,'binary').toString('base64'),navigator:{},window:{},document:{addEventListener(){}},
     setTimeout(fn,ms){const timer=setTimeout(()=>{timers.delete(timer);fn();},ms);timers.add(timer);return timer;},
     clearTimeout(timer){timers.delete(timer);clearTimeout(timer);},
     api(url,options){
@@ -114,4 +114,23 @@ test('failed desktop shortcut preserves its captured text and cancels replay',as
   k.input('saved before navigation');const shortcut=k.run("rsQueueRemoteCommand('key 9')");k.input('new draft');
   await until(()=>k.requests.length===1);k.requests[0].reject();await until(()=>k.run('live.paused'));assert.equal(await shortcut,false);
   assert.equal(k.node('typeText').value,'saved before navigation\nnew draft');await pause(100);assert.equal(k.requests.length,1);
+});
+
+test('dismissed keyboard stays locked through delayed Enter acknowledgements and new-field resets',async t=>{
+  const k=keyboard();t.after(()=>k.dispose());const input=k.node('typeText');
+  k.run('rsKb()');assert.equal(input.readOnly,false);assert.equal(input.focusCount,1);
+  k.input('keep my draft');const enter=k.run('rsTypeKey(13)');
+  await until(()=>k.requests.length===1);k.run('rsTypeClose()');
+  assert.equal(input.readOnly,true);assert.equal(input.inputMode,'none');
+  k.requests[0].resolve();assert.equal(await enter,true);k.run('rsResetTypingContext()');
+  assert.equal(input.focusCount,1,'late input completion cannot reopen the editor');
+  k.run('rsToggleKeyboard()');assert.equal(input.readOnly,false);assert.equal(input.focusCount,2);
+  k.run('rsToggleKeyboard()');assert.equal(input.readOnly,true);assert.equal(input.focusCount,2);
+});
+
+test('hardware Enter and Backspace never focus the hidden phone textarea',async t=>{
+  const k=keyboard();t.after(()=>k.dispose());
+  k.input('hello');await k.run('rsTypeKey(8)');assert.equal(k.node('typeText').value,'hell');
+  const enter=k.run('rsTypeKey(13)');await until(()=>k.requests.length===1);k.requests[0].resolve();await enter;
+  assert.equal(k.node('typeText').focusCount,0);
 });

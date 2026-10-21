@@ -77,8 +77,17 @@
     try{const data=await api('/api/files');if(epoch!==authEpoch)return;if(!data.ok)throw Error(data.error||'Sign in again to see your files.');files=data.files;maxBytes=data.maxBytes;el('filesCount').textContent=data.total+' '+(data.total===1?'file':'files');el('filesFolderPath').textContent=window.PCRAuth?.role==='guest'?'Shared transfer folder':data.folder;render();}
     catch(e){status(e.message,true);el('filesCount').textContent='Files unavailable';}
   }
-  async function open(){previousFocus=document.activeElement;tab(!window.PCRCanAccess?.('upload')&&!window.PCRCanAccess?.('download'));if(!dialog.open)dialog.showModal();await refresh();}
-  function close(){if(preview.open)closePreview();dialog.close();previousFocus?.focus?.({preventScroll:true});}
+  async function open(event){
+    if(!dialog.open){
+      // Bottom controls can retain textarea focus. Restore the Files button,
+      // never that editor, when the dialog closes.
+      previousFocus=event?.currentTarget||home;
+      document.activeElement?.blur?.();rsTypeClose();
+      tab(!window.PCRCanAccess?.('upload')&&!window.PCRCanAccess?.('download'));dialog.showModal();
+    }
+    await refresh();
+  }
+  function close(){const wasOpen=dialog.open;if(preview.open)closePreview();dialog.close();if(wasOpen&&window.PCRAuth?.signedIn)previousFocus?.focus?.({preventScroll:true});}
   el('filesClose').addEventListener('click',close);el('filesRefresh').addEventListener('click',refresh);el('filesSearch').addEventListener('input',render);
   function tab(text){el('filesTab').setAttribute('aria-selected',String(!text));el('textTab').setAttribute('aria-selected',String(text));el('filesPane').hidden=text;el('textPane').hidden=!text;}
   el('filesTab').addEventListener('click',()=>tab(false));el('textTab').addEventListener('click',()=>tab(true));
@@ -132,9 +141,9 @@
   el('clipboardCopy').addEventListener('click',async()=>{
     const text=el('filesNote').value;
     try{if(!navigator.clipboard?.writeText)throw Error();await navigator.clipboard.writeText(text);rememberText(text,'Copied on this device');status('Copied. Paste it into any app on this device.');}
-    catch{el('filesNote').focus();el('filesNote').select();try{if(!document.execCommand('copy'))throw Error();rememberText(text,'Copied on this device');status('Copied to this device.');}catch{status('Text selected. Use Copy from your browser or phone menu.');}}
+    catch{if(!dialog.open)return;el('filesNote').select();try{if(!document.execCommand('copy'))throw Error();rememberText(text,'Copied on this device');status('Copied to this device.');}catch{status('Text selected. Use Copy from your browser or phone menu.');}}
   });
-  el('clipboardPaste').addEventListener('click',async()=>{try{el('filesNote').value=await navigator.clipboard.readText();status('Text pasted. Send it to the PC when ready.');}catch{el('filesNote').focus();status('Long-press this text field and choose Paste, or press Ctrl+V.');}});
+  el('clipboardPaste').addEventListener('click',async()=>{const epoch=authEpoch;try{const text=await navigator.clipboard.readText();if(epoch!==authEpoch||!dialog.open)return;el('filesNote').value=text;status('Text pasted. Send it to the PC when ready.');}catch{if(epoch===authEpoch&&dialog.open)status('Long-press this text field and choose Paste, or press Ctrl+V.');}});
   let authEpoch=0,account='';
   function accountChanged(){const next=window.PCRAuth?.signedIn?(window.PCRAuth.role==='owner'?'owner':'guest:'+window.PCRAuth.guestId):'';if(next===account)return;account=next;authEpoch++;if(batch){batch.cancelled=true;batch.xhr?.abort();}history=[];pending=[];files=[];fileCache.clear();el('filesNote').value='';el('filesSearch').value='';el('clipboardSearch').value='';el('filesFolderPath').textContent='';el('filesStatus').textContent='';if(next==='owner'){loadHistory();loadPending();}historySection.hidden=next!=='owner';renderHistory();renderPending();render();close();window.PCRGuestAccess?.applyPermissions();}
   window.addEventListener('pcr:auth',accountChanged);accountChanged();

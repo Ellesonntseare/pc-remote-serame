@@ -164,14 +164,14 @@
   <div class="rsbar"><b id="rsst">Connecting…</b><span><button id="rsq" onclick="rsQ()" title="Quality: Low, Med, High, or HD at the PC monitor’s native resolution" aria-label="Change screen quality, including HD">Med</button><button onclick="rsClose()">✕</button></span></div>
   <section id="typePanel" class="typePanel hide" aria-label="Type text on Windows">
     <div class="typeTop"><strong>Phone keyboard → Windows PC</strong><button type="button" id="typingMode" onclick="rsTypingMode()">Live typing: on</button><button type="button" onclick="rsTypeClose()" aria-label="Close typing panel">✕ Close</button></div>
-    <textarea id="typeText" rows="2" maxlength="16000" dir="auto" autocapitalize="sentences" autocomplete="off" spellcheck="false" placeholder="Type here with your phone keyboard…" aria-describedby="typeHint"></textarea>
+    <textarea id="typeText" rows="2" maxlength="16000" dir="auto" autocapitalize="sentences" autocomplete="off" spellcheck="false" inputmode="none" readonly placeholder="Type here with your phone keyboard…" aria-describedby="typeHint"></textarea>
     <p class="typeHelp" id="typeHint">Select a PC text field, then type here: changes are sent live. Turn live typing off to compose and paste a whole message. Use New field after moving the PC caret.</p>
     <div class="typeActions"><button type="button" class="sendText hide" id="sendText" onclick="rsSendText()">Paste into PC</button><button type="button" id="newField" onclick="rsNewField()">New field</button><button type="button" id="readClipboard" onclick="rsReadClipboard()">Paste from phone</button><button type="button" onclick="rsTypeKey(8)">⌫ Backspace</button><button type="button" onclick="rsTypeKey(13)">↵ Enter</button></div>
     <p id="typeStatus" role="status" aria-live="polite"></p>
   </section>
   <div class="rsview" id="rsv"><canvas id="rsc" tabindex="0" aria-label="Remote PC screen. Click to control it with your mouse and keyboard."></canvas></div>
   <div class="rskeys hide" id="rsk" onmousedown="event.preventDefault()"></div>
-  <div class="rsbar rsbot" onmousedown="event.preventDefault()"><button id="rsm" onclick="rsMode()" aria-pressed="true" title="Switch to Touch">Trackpad</button><button onclick="qc('click l')">Left</button><button onclick="qc('click r')">Right</button><button onclick="rsKb()">Keyboard</button><button id="keyToggle" onclick="rsToggleKeys()">Hide keys</button><button onclick="rsPrefsOpen()" aria-label="Customize controls">⚙ Controls</button></div>
+  <div class="rsbar rsbot" onmousedown="event.preventDefault()"><button id="rsm" onclick="rsMode()" aria-pressed="true" title="Switch to Touch">Trackpad</button><button onclick="qc('click l')">Left</button><button onclick="qc('click r')">Right</button><button id="rsKeyboard" onclick="rsToggleKeyboard()" aria-controls="typePanel" aria-expanded="false">Keyboard</button><button id="keyToggle" onclick="rsToggleKeys()">Hide keys</button><button onclick="rsPrefsOpen()" aria-label="Customize controls">⚙ Controls</button></div>
   <div id="rsSettings" class="hide" role="dialog" aria-label="Customize remote controls" aria-modal="true">
     <div class="controlSheet">
       <div class="controlHead"><div><h2>Customize controls</h2><p>Choose buttons, change their order and adjust touch movement. Saved on this phone.</p></div><button class="closeSettings" onclick="rsPrefsClose()" aria-label="Close settings">✕</button></div>
@@ -201,7 +201,7 @@ function concealPassword(){$('pin').type=passwordMode?'password':'text';$('passw
 $('passwordPeek').addEventListener('click',()=>{const visible=$('pin').type==='password';$('pin').type=visible?'text':'password';$('passwordPeek').setAttribute('aria-pressed',String(visible));$('passwordPeek').setAttribute('aria-label',visible?'Hide password':'Show password');});
 function configureLogin(d){passwordMode=d.requirePassword===true;concealPassword();$('passwordPeek').hidden=!passwordMode;$('loginTitle').textContent=passwordMode?'Welcome back.':'Connect to your PC';$('loginDescription').textContent=passwordMode?'Your PC, wherever you are. Sign in to continue.':'Enter the pairing PIN shown on your PC.';$('loginLabel').textContent=passwordMode?'Password':'Pairing PIN';$('pin').name=passwordMode?'password':'pin';$('pin').autocomplete=passwordMode?'current-password':'one-time-code';$('pin').inputMode=passwordMode?'text':'numeric';$('pin').maxLength=passwordMode?256:8;$('pin').placeholder=passwordMode?'Enter your password':'8-digit PIN';$('rememberChoice').hidden=!passwordMode;$('pairSubmit').textContent=passwordMode?'Sign in ↗':'Connect';}
 function showPair(error=''){paired=false;authGeneration++;if(rs.on)rsClose();concealPassword();window.PCRAuth={signedIn:false};window.dispatchEvent(new CustomEvent('pcr:auth',{detail:window.PCRAuth}));$('pairGate').classList.remove('hide');document.querySelector('.app').inert=true;document.body.style.overflow='hidden';$('pairError').textContent=error;connectionLight('Signed out');}
-function showConnected(d){paired=true;authGeneration++;window.PCRAuth={signedIn:true,role:d.role||'owner',permissions:d.permissions||{},guestId:d.guestId||'',guestEnabled:d.guestEnabled===true};window.dispatchEvent(new CustomEvent('pcr:auth',{detail:window.PCRAuth}));const wasHidden=!$('pairGate').classList.contains('hide');$('pairGate').classList.add('hide');const app=document.querySelector('.app');app.inert=false;if(wasHidden){app.classList.remove('pageArrive');requestAnimationFrame(()=>app.classList.add('pageArrive'));}document.body.style.overflow=rs.on?'hidden':'';connectionLight('Connected');if(d.name)$('name').textContent=d.name;$('screenBtn').classList.toggle('hide',!d.screen);window.PCRGuestAccess?.applyPermissions();poll();}
+function showConnected(d){paired=true;authGeneration++;$('pin').blur();window.PCRAuth={signedIn:true,role:d.role||'owner',permissions:d.permissions||{},guestId:d.guestId||'',guestEnabled:d.guestEnabled===true};window.dispatchEvent(new CustomEvent('pcr:auth',{detail:window.PCRAuth}));const wasHidden=!$('pairGate').classList.contains('hide');$('pairGate').classList.add('hide');const app=document.querySelector('.app');app.inert=false;if(wasHidden){app.classList.remove('pageArrive');requestAnimationFrame(()=>app.classList.add('pageArrive'));}document.body.style.overflow=rs.on?'hidden':'';connectionLight('Connected');if(d.name)$('name').textContent=d.name;$('screenBtn').classList.toggle('hide',!d.screen);window.PCRGuestAccess?.applyPermissions();poll();}
 async function init(){try{const d=await api('/api/ping');configureLogin(d);if(d.paired)showConnected(d);else if(!d.requirePin&&!d.requirePassword){const connected=await api('/api/pair',{method:'POST',body:'{}'});if(!connected.ok)throw new Error(connected.error);return init();}else showPair();}catch{showPair('PC is not reachable. Check that the Windows host is running.');}}
 $('pairForm').addEventListener('submit',async e=>{e.preventDefault();const b=$('pairSubmit');b.disabled=true;$('pairError').textContent='Connecting…';try{const body=passwordMode?{password:$('pin').value,remember:$('rememberMe').checked}:{pin:$('pin').value};const d=await api('/api/pair',{method:'POST',body:JSON.stringify(body)});if(d.pending){$('pin').value='';window.PCRGuestAccess?.wait();}else if(d.ok){$('pin').value='';init();}else $('pairError').textContent=d.error||'Sign-in failed';}catch{$('pairError').textContent='Cannot reach this PC';}finally{b.disabled=false;}});
 async function unpair(){rsClose();try{await api('/api/unpair',{method:'POST',body:'{}'});}catch{}showPair();}
@@ -392,6 +392,8 @@ V.addEventListener('wheel',e=>{e.preventDefault();if(rsCanPoint())qc('wheel '+Ma
 
 // Compose locally through IME, then transmit committed edits in order.
 let composing=false;
+let typingPanelOpen=false;
+function rsFocusTyping(){if(typingPanelOpen)$('typeText').focus({preventScroll:true});}
 let liveTyping=ls('pcr_live_typing')!=='false';
 const live={sent:'',paused:false,generation:0,timer:null,keys:[]};
 const graphemeSegmenter=typeof Intl.Segmenter==='function'?new Intl.Segmenter(undefined,{granularity:'grapheme'}):null;
@@ -430,7 +432,7 @@ function rsResetTypingContext(focus=true){
   clearTimeout(live.timer);live.timer=null;live.generation++;live.sent='';live.paused=false;
   $('typeText').value='';composing=false;
   rsTypeStatus('Live typing ready. Changes go to the selected PC field.');
-  if(focus)$('typeText').focus();
+  if(focus)rsFocusTyping();
 }
 function rsNewField(){
   if(typeBusy||qb||qq.length||live.keys.length){rsTypeStatus('Wait for the current input to finish before starting a new field.','pending');return;}
@@ -491,11 +493,18 @@ $('typeText').addEventListener('beforeinput',e=>{
 });
 function rsKb(){
   window.PCRScreenTools?.restoreControls();
+  typingPanelOpen=true;$('typeText').readOnly=false;$('typeText').inputMode='text';
+  $('rsKeyboard').setAttribute('aria-expanded','true');
   $('rs').classList.add('typing');$('typePanel').classList.remove('hide');rsUpdateTypingUI();
   if(!live.paused)rsTypeStatus(liveTyping?'Live typing ready. Select a PC field before typing.':'Compose here, then tap Paste into PC.');
-  $('typeText').focus();
+  rsFocusTyping();
 }
+function rsToggleKeyboard(){if(typingPanelOpen)rsTypeClose();else rsKb();}
 function rsTypeClose(){
+  // Lock before blur: a delayed key or dialog focus restoration must never
+  // summon the phone IME again after the user has dismissed this panel.
+  typingPanelOpen=false;$('typeText').readOnly=true;$('typeText').inputMode='none';
+  $('rsKeyboard').setAttribute('aria-expanded','false');
   $('rs').classList.remove('typing');$('typeText').blur();$('typePanel').classList.add('hide');
   // Some phone IMEs omit compositionend on blur; commit the visible snapshot
   // rather than leaving all pointer controls blocked by hidden composition.
@@ -520,7 +529,7 @@ async function rsSendText(){
   if(liveTyping){rsScheduleLive();return;}
   if(typeBusy||composing)return;
   const input=$('typeText'),value=input.value;
-  if(!value){rsTypeStatus('Type something first.');input.focus();return;}
+  if(!value){rsTypeStatus('Type something first.');return;}
   try{if(await submitTyping([encodeInputCommand('paste',value)])){if(input.value===value)input.value='';}}
   catch(e){rsTypeStatus(e.message,'error');}
 }
@@ -530,9 +539,10 @@ async function rsReadClipboard(){
     if(!navigator.clipboard?.readText)throw Error('unavailable');
     const text=await navigator.clipboard.readText(),input=$('typeText');
     if(input.value.length+text.length-(input.selectionEnd-input.selectionStart)>16000)throw Error('Too much text');
+    if(!typingPanelOpen)return;
     input.setRangeText(text,input.selectionStart,input.selectionEnd,'end');
     if(liveTyping)rsScheduleLive();else rsTypeStatus('Ready. Tap Paste into PC to send.');
-  }catch{rsTypeStatus('Long-press the text box and choose Paste'+(liveTyping?'.':', then tap Paste into PC.'));}
+  }catch{if(typingPanelOpen)rsTypeStatus('Long-press the text box and choose Paste'+(liveTyping?'.':', then tap Paste into PC.'));}
 }
 function rsQueueRemoteCommand(command){
   if(!liveTyping||live.paused||!rs.on||!rs.m){rsTypeStatus('Turn on live typing, select the PC field and tap New field before using desktop keys.','error');return Promise.resolve(false);}
@@ -552,7 +562,7 @@ async function rsTypeKey(key){
     if(key===8&&input.value){
       let start=input.selectionStart,end=input.selectionEnd;
       if(start===end&&start>0){const before=textElements(input.value.slice(0,start));start-=before.at(-1).length;}
-      input.setRangeText('',start,end,'end');rsScheduleLive();input.focus();return true;
+      input.setRangeText('',start,end,'end');rsScheduleLive();return true;
     }
     if(key===8||key===13){
       if(live.keys.length>=128){rsPauseLive('Too many pending keys. Check the PC, select a field, then tap New field.');return false;}
@@ -560,13 +570,21 @@ async function rsTypeKey(key){
       // Enter starts a new local context immediately. Its old text is retained
       // by the queued barrier until Windows acknowledges the ordered input.
       if(key===13)input.value='';
-      rsScheduleLive();input.focus();return completion;
+      rsScheduleLive();return completion;
     }
   }
   if(rsTypingDirty()||typeBusy){rsTypeStatus('Wait for typing to finish before sending this key.','pending');return;}
   return submitTyping(['key '+key]);
 }
 rsUpdateTypingUI();
+// Leaving the typing panel for any remote control is an explicit dismissal.
+// Keep this separate from viewport resizing, which also happens as an IME opens.
+document.addEventListener('pointerdown',event=>{
+  if(typingPanelOpen&&!$('typePanel').contains(event.target)&&!$('rsKeyboard').contains(event.target))rsTypeClose();
+},true);
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&typingPanelOpen){event.preventDefault();event.stopImmediatePropagation();rsTypeClose();}
+},true);
 function fitRemoteViewport(){
   const viewport=window.visualViewport;
   $('rs').style.height=(viewport?viewport.height:window.innerHeight)+'px';
@@ -575,5 +593,28 @@ function fitRemoteViewport(){
 window.visualViewport?.addEventListener('resize',fitRemoteViewport);
 window.visualViewport?.addEventListener('scroll',fitRemoteViewport);
 window.addEventListener('resize',fitRemoteViewport);fitRemoteViewport();
+// Android Back can hide the IME without blurring its editor. Only release that
+// editor after a confirmed keyboard-sized contraction has fully recovered.
+// Opening, ordinary browser chrome changes, rotation and pinch zoom do not blur.
+(()=>{
+  if(!window.visualViewport||!window.matchMedia('(any-pointer: coarse)').matches)return;
+  const viewport=window.visualViewport;
+  let width=viewport.width,height=viewport.height,editor=null,shown=false,scale=viewport.scale;
+  const editable=node=>node?.matches('textarea,input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=file])')&&!node.readOnly&&!node.disabled;
+  document.addEventListener('focusin',()=>{if(shown&&editable(document.activeElement))editor=document.activeElement;});
+  viewport.addEventListener('resize',()=>{
+    if(Math.abs(viewport.width-width)>40||viewport.scale!==scale||Math.abs(viewport.scale-1)>.05){width=viewport.width;height=viewport.height;scale=viewport.scale;editor=null;shown=false;return;}
+    const active=document.activeElement;
+    if(!shown){
+      height=Math.max(height,viewport.height);
+      if(editable(active)&&height-viewport.height>150){shown=true;editor=active;}
+      return;
+    }
+    if(viewport.height<height-60)return;
+    shown=false;const dismissed=editor;editor=null;height=viewport.height;
+    if(active!==dismissed||!editable(active))return;
+    if(active===$('typeText'))rsTypeClose();else active.blur();
+  });
+})();
 </script>
 </body></html>

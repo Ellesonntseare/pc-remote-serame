@@ -12,7 +12,7 @@
   if(nativeAvailable())window.PCRAndroid.onmessage=event=>{
     if(owner||!window.PCRAuth?.signedIn||window.PCRAuth.role!=='guest'||(!nativePending&&!nativeSharing))return;
     let value;try{value=JSON.parse(event.data);}catch{return;}
-    if(value.type==='sharing'){nativePending=false;nativeSharing=true;starting=false;q('[data-share]').hidden=true;q('[data-stop]').hidden=false;status.textContent='Your Android screen is sharing with Serame. Use Stop sharing here or in the Android notification.';}
+    if(value.type==='sharing'){nativePending=false;nativeSharing=true;starting=false;q('[data-share]').hidden=true;q('[data-stop]').hidden=false;status.textContent='Your entire phone screen is live with Serame. Press Home and open other apps; sharing continues. Stop here or in the Android notification.';}
     else if(value.type==='frame'&&nativeSharing&&typeof value.data==='string'&&value.data.length<=1400000&&/^[A-Za-z0-9+/]+=*$/.test(value.data)&&Number.isInteger(value.width)&&Number.isInteger(value.height)&&value.width>0&&value.height>0&&value.width<=1920&&value.height<=1920){dimensions={width:value.width,height:value.height};image.src='data:image/jpeg;base64,'+value.data;image.hidden=false;empty.hidden=true;draw();}
     else if(value.type==='mark'&&nativeSharing)applyMark(value);
     else if(value.type==='stopped'){nativePending=false;nativeSharing=false;stop(value.message||'Phone screen sharing stopped.');}
@@ -53,7 +53,7 @@
   select.addEventListener('change',()=>{watching=select.value;hideFrame();send({type:'watch',id:watching});});
   async function start(){
     if(starting||stream||nativeSharing||owner)return;const version=epoch;starting=true;q('[data-share]').disabled=true;
-    if(nativeAvailable()){nativePending=true;q('[data-stop]').hidden=false;status.textContent='Approve Android’s screen-sharing prompt to start.';nativeSend({type:'start'});return;}
+    if(nativeAvailable()){nativePending=true;q('[data-stop]').hidden=false;status.textContent='Approve sharing your entire phone screen in Android’s prompt. If asked, choose Entire screen.';nativeSend({type:'start'});return;}
     if(!navigator.mediaDevices?.getDisplayMedia){starting=false;q('[data-share]').disabled=false;status.textContent='To share an Android phone screen, use the updated PC Remote Android app. Phone browsers do not support full-screen capture.';return;}
     let chosen;
     try{
@@ -88,8 +88,8 @@
   dialog.addEventListener('close',()=>{if(!owner)stop();else{send({type:'watch',id:''});watching=null;hideFrame();}});
   new ResizeObserver(draw).observe(stage);window.addEventListener('pagehide',()=>{stop();socket?.close();});
   function authChanged(){const auth=window.PCRAuth||{},next=auth.signedIn?(auth.role==='owner'?'owner':'guest:'+auth.guestId):'';if(next===account)return;account=next;epoch++;stop();socket?.close();socket=null;dialog.close();shares=[];watching=null;owner=auth.role==='owner';button.hidden=!auth.signedIn;
-    q('h2').textContent=owner?'Guest screens':'Share your screen';q('.guestScreenHint').textContent=owner?'Guests choose what to share. Use the laser or draw on this preview together.':'Choose a screen or window for Serame to see. No microphone or remote control is shared. Laser marks and drawings appear on this preview.';q('.guestScreenSelect').hidden=!owner;q('[data-share]').hidden=owner;
-    button.textContent=owner?'Guest screens':'Share my screen';const small=document.createElement('span');small.textContent=owner?'View guest screens and draw together':'Choose a window to show Serame';button.append(small);if(owner&&auth.signedIn)void connect().catch(()=>{});
+    q('h2').textContent=owner?'Guest screens':nativeAvailable()?'Share your phone':'Share your screen';q('.guestScreenHint').textContent=owner?'Guests choose what to share. Use the laser or draw on this preview together.':nativeAvailable()?'Share your entire phone live, including Home and other apps. Android asks for your permission. Stop anytime from the sharing notification.':'Choose a screen or window for Serame to see. No microphone or remote control is shared. Laser marks and drawings appear on this preview.';q('.guestScreenSelect').hidden=!owner;q('[data-share]').hidden=owner;
+    button.textContent=owner?'Guest screens':'Share my screen';const small=document.createElement('span');small.textContent=owner?'View guest screens and draw together':nativeAvailable()?'Stream your entire phone to Serame':'Choose a window to show Serame';button.append(small);if(owner&&auth.signedIn)void connect().catch(()=>{});
   }
   window.addEventListener('pcr:auth',authChanged);authChanged();
 })();

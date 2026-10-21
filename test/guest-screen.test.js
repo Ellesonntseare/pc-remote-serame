@@ -22,4 +22,15 @@ test('only owner watches explicit guest sharing; frames and annotation strokes s
   const closed=new Promise(r=>sender.once('close',r));await f.call('/api/guest/revoke',{method:'POST',cookie:f.owner,body:{id:guest.id}});await closed;await next(owner,v=>v.type==='stopped');
 });
 test('guest stop removes the shared view and clears its annotations',async t=>{const f=await fixture(t),guest=await f.guest(),owner=f.ws(f.owner),sender=f.ws(guest.cookie);await Promise.all([opened(owner),opened(sender)]);sender.send(JSON.stringify({type:'start'}));await next(owner,v=>v.type==='shares'&&v.shares.length);owner.send(JSON.stringify({type:'watch',id:guest.id}));await next(owner,v=>v.type==='watching');sender.send(JSON.stringify({type:'stop'}));await next(owner,v=>v.type==='stopped');sender.send(JSON.stringify({type:'start'}));await next(owner,v=>v.type==='shares'&&v.shares.length);owner.send(JSON.stringify({type:'watch',id:guest.id}));assert.deepEqual((await next(owner,v=>v.type==='watching')).marks,[]);});
+
+test('late PC viewers receive the latest live phone frame, and stopped or revoked shares retain no frame',async t=>{
+  const f=await fixture(t),guest=await f.guest(),sender=f.ws(guest.cookie);await opened(sender);
+  sender.send(JSON.stringify({type:'start'}));await next(sender,v=>v.type==='sharing');sender.send(jpeg);
+  const owner=f.ws(f.owner);await opened(owner);await next(owner,v=>v.type==='shares'&&v.shares.length);
+  owner.send(JSON.stringify({type:'watch',id:guest.id}));await next(owner,v=>v.type==='watching');assert.deepEqual(await next(owner,Buffer.isBuffer),jpeg,'no new phone frame is needed to start viewing');
+  sender.send(JSON.stringify({type:'stop'}));await next(owner,v=>v.type==='stopped');sender.send(JSON.stringify({type:'start'}));await next(sender,v=>v.type==='sharing');owner.send(JSON.stringify({type:'watch',id:guest.id}));await next(owner,v=>v.type==='watching');
+  await new Promise(r=>setTimeout(r,40));assert.equal(owner.queue.some(Buffer.isBuffer),false,'the old share has no cached frame');
+  sender.send(jpeg);assert.deepEqual(await next(owner,Buffer.isBuffer),jpeg);await f.call('/api/guest/revoke',{method:'POST',cookie:f.owner,body:{id:guest.id}});await next(owner,v=>v.type==='stopped');
+  owner.send(JSON.stringify({type:'watch',id:guest.id}));await next(owner,v=>v.type==='stopped');await new Promise(r=>setTimeout(r,30));assert.equal(owner.queue.some(Buffer.isBuffer),false,'revocation releases the cached phone image');
+});
 test('audio needs a selected permission and revocation releases the native capture',async t=>{const f=await fixture(t),denied=await f.guest(),allowed=await f.guest({audio:true});assert.equal(await rejected(f.ws(denied.cookie,'/api/audio')),403);assert.equal(f.audioOpens,0);const audio=f.ws(allowed.cookie,'/api/audio');await opened(audio);await next(audio,v=>v.type==='format');assert.equal((await next(audio,Buffer.isBuffer)).length,32);const closed=new Promise(r=>audio.once('close',r));await f.call('/api/guest/revoke',{method:'POST',cookie:f.owner,body:{id:allowed.id}});await closed;assert.equal(f.audioStops,1);});
