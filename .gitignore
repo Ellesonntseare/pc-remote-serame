@@ -8,6 +8,7 @@ test/FrameEncoderChecks/bin/
 test/FrameEncoderChecks/obj/
 test/.test-runtime/
 test/.transfer-check-*/
+test/.resume-check-*/
 *.log
 *.user
 .DS_Store

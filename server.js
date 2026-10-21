@@ -15,6 +15,7 @@ const {createSmartQuality}=require('./smart-quality');
 const {createGuestRequests}=require('./guest-requests');
 const {can}=require('./guest-permissions');
 const {createGuestScreen}=require('./guest-screen');
+const {createWebRtcVideo,iceServers}=require('./webrtc-video');
 const scrypt=require('node:util').promisify(crypto.scrypt);
 const ROOT = __dirname;
 const PRESETS = { low: [35, 0.40, 12], med: [50, 0.60, 20], high: [70, 0.85, 24], hd: [85, 1.0, 30], auto: [85,1.0,24] };
@@ -44,6 +45,8 @@ const PWA_ASSETS = new Map([
   ['/pwa.css', ['pwa.css', 'text/css; charset=utf-8']],
   ['/screen-tools.js', ['screen-tools.js', 'text/javascript; charset=utf-8']],
   ['/touch-gestures.js', ['touch-gestures.js', 'text/javascript; charset=utf-8']],
+  ['/webrtc-video.js', ['webrtc-video.js', 'text/javascript; charset=utf-8']],
+  ['/webrtc-video.css', ['webrtc-video.css', 'text/css; charset=utf-8']],
   ['/screen-tools.css', ['screen-tools.css', 'text/css; charset=utf-8']],
   ['/desktop-controls.js', ['desktop-controls.js', 'text/javascript; charset=utf-8']],
   ['/desktop-controls.css', ['desktop-controls.css', 'text/css; charset=utf-8']],
@@ -127,6 +130,7 @@ function validInput(c) {
   return false;
 }
 function createApp(options={}) {
+  const rtcServers=iceServers(options.webRtcIceServers);
   const tunnelHostname = tunnelHost(options.tunnelHostname);
   const requirePin = options.requirePin ?? !!options.pin;
   const requirePassword=typeof options.password==='string'&&options.password.length>0;
@@ -411,7 +415,7 @@ function createApp(options={}) {
     try{
       if(req.method==='GET'&&(pathname==='/'||pathname==='/index.html')){
         const page=fs.readFileSync(path.join(ROOT,'index.html'));
-        res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' ws://${req.headers.host} wss://${req.headers.host}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'`,'X-Content-Type-Options':'nosniff'});
+        res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' ws://${req.headers.host} wss://${req.headers.host}; worker-src 'self'; media-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'`,'X-Content-Type-Options':'nosniff'});
         return res.end(page);
       }
       if(req.method==='GET'&&(pathname==='/manifest.json'||pathname==='/manifest.webmanifest'))return respond(res,200,{
@@ -488,10 +492,14 @@ function createApp(options={}) {
         }
         if(req.method==='POST'&&pathname==='/api/guest/revoke'){
           const body=await jsonBody(req,4096);let revoked=false;
-          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);guestScreens.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
+          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);guestScreens.revoke(key);webRtcVideo.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
           record(ip,'Guest access ended');return respond(res,200,{ok:true,revoked});
         }
         return respond(res,404,{error:'Guest action not found'});
+      }
+      if(req.method==='GET'&&pathname==='/api/webrtc/config'){
+        if(!requiresHeader(req)||!permits(token,'screen'))return respond(res,403,{error:'Screen viewing was not approved.'});
+        return respond(res,200,{ok:true,iceServers:rtcServers});
       }
       if(req.method==='GET'&&pathname==='/api/apps'){
         if(!permits(token,'apps'))return respond(res,403,{error:'App switching was not approved.'});
@@ -537,7 +545,7 @@ function createApp(options={}) {
       }
       if(req.method==='POST'&&pathname==='/api/unpair'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
-        sessions.delete(token);saveSessions();void fileTransfers.revoke(token);guestScreens.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
+        sessions.delete(token);saveSessions();void fileTransfers.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
         record(ip,'Phone unpaired');return respond(res,200,{ok:true},{'Set-Cookie':`${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`});
       }
       if(req.method==='GET'&&pathname==='/api/screen'){
@@ -576,6 +584,7 @@ function createApp(options={}) {
   const inputStream=new WebSocketServer({noServer:true,maxPayload:100000,perMessageDeflate:false});
   const audioStream=new WebSocketServer({noServer:true,maxPayload:1024,perMessageDeflate:false});
   const guestScreens=createGuestScreen({sessions,auth,sessionExpiry});
+  const webRtcVideo=createWebRtcVideo({sessions,auth,sessionExpiry});
   function rejectUpgrade(socket,status,message) {
     socket.on('error',()=>{});
     const body=JSON.stringify({error:message});
@@ -584,7 +593,7 @@ function createApp(options={}) {
   server.on('upgrade',(req,socket,head)=>{
     socket.on('error',()=>{});
     let pathname;try{pathname=new URL(req.url,'http://localhost').pathname;}catch{return rejectUpgrade(socket,400,'Bad URL');}
-    if(!['/api/input-stream','/api/audio','/api/guest-screen'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
+    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
     if(!allowedRequest(req))return rejectUpgrade(socket,403,'Input stream host rejected');
     try{
       const origin=new URL(req.headers.origin);
@@ -592,6 +601,11 @@ function createApp(options={}) {
     }catch{return rejectUpgrade(socket,403,'Request origin required');}
     const token=auth(req);
     if(!token)return rejectUpgrade(socket,401,'Pair your phone first');
+    if(pathname==='/api/webrtc-video'){
+      const publish=new URL(req.url,'http://localhost').searchParams.get('role')==='publish';
+      if(!permits(token,'screen')||publish&&sessions.get(token).role==='guest')return rejectUpgrade(socket,403,'This video action was not approved');
+      webRtcVideo.upgrade(req,socket,head,token,publish);return;
+    }
     if(pathname==='/api/guest-screen'){guestScreens.upgrade(req,socket,head,token);return;}
     if(pathname==='/api/audio'){
       if(!permits(token,'audio'))return rejectUpgrade(socket,403,'PC audio access was not approved');
@@ -662,8 +676,8 @@ function createApp(options={}) {
       });
     });
   });
-  function stop(){endViewers();closeAudioSockets();guestScreens.revoke();}
-  server.on('close',()=>{clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();stop();inputStream.close();audioStream.close();guestScreens.close();nativeFeatures.close();void fileTransfers.close();});
+  function stop(){endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();}
+  server.on('close',()=>{clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();nativeFeatures.close();void fileTransfers.close();});
   return {server,pin,port,addresses:interfaces,stop};
 }
 if(require.main===module){
@@ -671,7 +685,7 @@ if(require.main===module){
   let config={};
   try {config=JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8'));}
   catch(e) { if(e.code!=='ENOENT'){console.error('Cannot load config.json:',e.message);process.exit(1);} }
-  const app=createApp({screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,password:typeof config.password==='string'&&config.password?config.password:'serame',sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,deviceName:config.deviceName||"SERAME'S PC"});
+  const app=createApp({screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,password:typeof config.password==='string'&&config.password?config.password:'serame',sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC"});
   app.server.listen(app.port,config.tunnelHostname?'127.0.0.1':'0.0.0.0',()=>{
     const actual=app.server.address().port;
     const ip=app.addresses.find(a=>a.startsWith('192.168.'))||app.addresses[0]||'127.0.0.1';

@@ -52,7 +52,24 @@ Use a desktop browser supporting screen capture over HTTPS or localhost. Phone b
 - **Apps** searches open Windows windows and brings a chosen one forward.
 - **PC audio** starts only after selecting Start, with volume, mute and stop. It captures system output, never a microphone. Playback stops on sign-out, screen closure, revoked access or when the page becomes hidden. Headphones help avoid feedback near the PC speakers.
 
-This is a custom JPEG-region implementation with no AnyDesk code or DeskRT. It does not include GPU capture or H.264/H.265 streaming. High-motion video can still need substantial CPU and bandwidth. Only the primary monitor is supported; Windows secure-desktop/UAC prompts are not bypassed.
+The normal Remote screen uses custom JPEG regions with no AnyDesk code or DeskRT. It now prefers Windows DXGI GPU desktop capture and falls back to standard GDI capture when duplication is unavailable, the monitor is rotated, or the desktop/driver resets. GPU capture is retried after 10 seconds. An idle GPU desktop skips pixel readback and JPEG scanning while pointer updates continue. JPEG compression and scaling still use the CPU; this is not a zero-copy GPU video pipeline. Set the host environment variable `PCR_CAPTURE=gdi` before starting it to force the fallback. `RemoteAgent/bin/RemoteAgent.exe --capture-probe` checks availability without acquiring desktop image pixels.
+
+High-motion video can still need substantial CPU and bandwidth. Only the primary monitor is supported; Windows secure-desktop/UAC prompts are not bypassed. A GPU availability check does not establish the real-world speed improvement on a particular PC and phone.
+
+## WebRTC video prototype
+
+**Video preview** is an opt-in, separate video path. The normal Remote screen remains available for control.
+
+1. On the PC, open the app in a desktop browser over HTTPS (or localhost), sign in as owner and open **Video preview**.
+2. Select **Share from this PC** and approve the browser's screen/window picker. No microphone is captured.
+3. On the phone, sign in as owner or an approved guest with Screen viewing enabled. Open **Video preview → Watch PC**.
+4. Stop from either the source browser's sharing indicator or the preview's Stop button. Closing the source panel ends sharing. Guest revocation closes its video peer.
+
+The prototype prefers supported H.264 codecs, retaining compatible fallbacks. It targets at most 1920×1080, 30 fps and 4 Mbps per viewer. Actual codec, frame rate, round-trip delay, encoder implementation and power-efficiency information are shown when the browser reports them. **Browsers choose the encoder; H.264 preference does not force hardware encoding.** Missing hardware/efficiency information is not treated as proof of acceleration. Physical browser/driver testing is still needed before making this the normal video engine.
+
+Only the owner can publish PC video. Signaling stays behind the app's same-origin authentication; approved screen viewers receive only their own peer's messages. Media travels between the browsers using WebRTC, rather than through the JPEG relay. Existing Cloudflare Tunnel does not act as a WebRTC media relay.
+
+The default ICE server list is empty, suitable for initial same-network testing. Connections across different networks can require STUN/TURN. Configure your own servers with private `config.json` field `webRtcIceServers`, an array of objects with `urls`, and optional `username` and `credential`. Relay credentials are sent only to authenticated, approved screen viewers, so use scoped or temporary relay credentials. No third-party relay account is provisioned by this update. Use the normal Remote screen when a direct video connection is unavailable.
 
 ## Files and previews
 
@@ -100,6 +117,14 @@ Tests use synthetic frames, mock clipboard/audio and isolated transfer folders. 
 
 Native checks cover 4K frames, cumulative patches, skipped updates, dynamic resolution changes with unique keyframes, and odd dimensions. Their noisy test image measured 6,115,186 bytes for a full frame and 3,009 bytes for a small patch. This is a synthetic size comparison, not a live latency or bandwidth guarantee.
 
-## Android
+## Android reverse screen sharing
 
-The Android WebView project and debug APK workflow are included. The browser/PWA update does not require a new APK. Use the HTTPS website/PWA for the custom domain and a desktop browser for guest screen sharing. Android screen sharing/control is not implemented by this release.
+Install **PC-Remote-Android.apk** from this project folder on the Android phone (Android 8 or later). This build is version 1.1. Use **Open remote.teamtrader.co.za** for the HTTPS website, or connect to your private PC IPv4 address and port on Wi-Fi. Restart the Windows host with `start-cloudflare.bat` after this source update to load new server routes.
+
+Sign into the Android app as **guest**, have the owner approve it, then select **Share my screen**. Android asks for screen-sharing permission for every session. The foreground service displays a sharing notification with a Stop action. It continues while you switch apps and sends only the latest JPEG frame, at up to roughly 6 fps with the longest side limited to 960 pixels. The PC owner opens **Guest screens** to view it. Laser/drawing annotations appear on the app preview.
+
+Stop from the notification, the app panel, Android's sharing indicator, or by ending guest access. Closing the app task, navigating away, signing out, losing authentication or connection, or a system projection stop also ends sharing. The service never starts at boot and does not restart after process death. No microphone, phone audio, accessibility permission or saved screen recording is used. Android protects secure app content normally.
+
+The native bridge is restricted to the main frame of the selected private PC origin or the exact HTTPS website. Cookies stay in the app and authenticate its native sharing socket. Other origins cannot invoke capture. Origin unit tests run in the Android build.
+
+The website/PWA on an ordinary phone browser cannot capture the entire Android screen; the updated Android app is required. Android System WebView must support origin-scoped web messages. If Android reports that the existing debug app has an incompatible signature, remove that earlier debug installation before installing this build; debug signing keys can differ between CI runners. A real-device permission/background/rotation test remains necessary. This update shares Android screens for viewing and annotation; it does not remotely control the phone.
