@@ -2,6 +2,10 @@ package za.co.pcremote.controller
 import org.junit.Assert.*
 import org.junit.Test
 class PhoneControlPolicyTest {
+    @Test fun wakePacketIsBoundedAndValidatesAdapterAddress() {
+        val bytes=WakeOnLan.packet("02:12:34:56:78:9A");assertEquals(102,bytes.size);assertTrue(bytes.take(6).all{it==255.toByte()});assertEquals(2.toByte(),bytes[6]);assertEquals(2.toByte(),bytes[96]);
+        try{WakeOnLan.packet("not-a-mac");fail("Invalid address accepted")}catch(_:IllegalArgumentException){}
+    }
     private val id = "a".repeat(32)
     @Test fun consentExpiryRevocationAndReplay() {
         var time = 0L; val policy = PhoneControlPolicy { time }; val tap = PhoneCommand("tap", listOf(PhonePoint(.5,.5)))

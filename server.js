@@ -16,6 +16,10 @@ const {createGuestRequests}=require('./guest-requests');
 const {can}=require('./guest-permissions');
 const {createGuestScreen}=require('./guest-screen');
 const {createWebRtcVideo,iceServers}=require('./webrtc-video');
+const wakeOnLan=require('./wake-on-lan');
+const {createHandoffs}=require('./handoffs');
+const {createCollaboration}=require('./collaboration');
+const {png,imageTool}=require('./image-tools');
 const scrypt=require('node:util').promisify(crypto.scrypt);
 const ROOT = __dirname;
 const PRESETS = { low: [35, 0.40, 12], med: [50, 0.60, 20], high: [70, 0.85, 24], hd: [85, 1.0, 30], auto: [85,1.0,24] };
@@ -47,6 +51,12 @@ const PWA_ASSETS = new Map([
   ['/touch-gestures.js', ['touch-gestures.js', 'text/javascript; charset=utf-8']],
   ['/webrtc-video.js', ['webrtc-video.js', 'text/javascript; charset=utf-8']],
   ['/webrtc-video.css', ['webrtc-video.css', 'text/css; charset=utf-8']],
+  ['/session-features.js', ['session-features.js', 'text/javascript; charset=utf-8']],
+  ['/session-features.css', ['session-features.css', 'text/css; charset=utf-8']],
+  ['/collaboration.js', ['collaboration.js', 'text/javascript; charset=utf-8']],
+  ['/collaboration.css', ['collaboration.css', 'text/css; charset=utf-8']],
+  ['/image-tools.js', ['image-tools.js', 'text/javascript; charset=utf-8']],
+  ['/image-tools.css', ['image-tools.css', 'text/css; charset=utf-8']],
   ['/screen-tools.css', ['screen-tools.css', 'text/css; charset=utf-8']],
   ['/desktop-controls.js', ['desktop-controls.js', 'text/javascript; charset=utf-8']],
   ['/desktop-controls.css', ['desktop-controls.css', 'text/css; charset=utf-8']],
@@ -137,6 +147,7 @@ function createApp(options={}) {
   const passwordSalt=crypto.randomBytes(16),passwordHash=requirePassword?crypto.scryptSync(options.password,passwordSalt,32):null;
   const guestHash=requirePassword?crypto.scryptSync('guest',passwordSalt,32):null;
   const guestRequests=createGuestRequests();
+  const handoffs=createHandoffs();
   const pin = options.pin || String(crypto.randomInt(10000000,99999999));
   const port = options.port ?? Number(process.env.PORT || 7666);
   const enabled = options.screen ?? true;
@@ -181,7 +192,7 @@ function createApp(options={}) {
   };
   const requiresHeader=(req)=>req.headers['x-pcr']==='1';
   const permits=(token,key)=>can(sessions.get(token),key);
-  const accessInfo=token=>({role:sessions.get(token).role||'owner',...(sessions.get(token).role==='guest'?{permissions:sessions.get(token).permissions||{},guestId:sessions.get(token).guestId}:{})});
+  const accessInfo=token=>({role:sessions.get(token).role||'owner',until:sessions.get(token).until,...(sessions.get(token).role==='guest'?{permissions:sessions.get(token).permissions||{},guestId:sessions.get(token).guestId}:{})});
   const isTunnelRequest=req=>!!tunnelHostname&&loopbackIP(req.socket.remoteAddress)&&sameHost(req.headers.host,new Set([tunnelHostname]));
   const allowedRequest=req=>tunnelHostname?isTunnelRequest(req):privateIP(req.socket.remoteAddress)&&sameHost(req.headers.host,hostnames);
   function videoPacket(type,value){
@@ -450,7 +461,7 @@ function createApp(options={}) {
         if(request.state!=='approved')return respond(res,200,{ok:true,state:request.state,until:request.until});
         const approved=guestRequests.consume(secret,ip);
         const raw=crypto.randomBytes(32).toString('hex'),key=sessionKey(raw);
-        sessions.set(key,{ip,until:Date.now()+SESSION_TIME,persistent:false,role:'guest',guestId:approved.id,device:approved.device,permissions:approved.permissions});record(ip,'Guest signed in');
+        sessions.set(key,{ip,until:Date.now()+approved.durationMinutes*60000,persistent:false,role:'guest',guestId:approved.id,device:approved.device,permissions:approved.permissions});record(ip,'Guest signed in');
         return respond(res,200,{ok:true,state:'approved'}, {'Set-Cookie':[`${COOKIE_NAME}=${raw}; Path=/; HttpOnly; SameSite=Strict${viaTunnel?'; Secure':''}`,clearCookie]});
       }
       if(req.method==='POST'&&pathname==='/api/pair'){
@@ -482,17 +493,37 @@ function createApp(options={}) {
       }
       const token=auth(req);
       if(!token)return respond(res,401,{error:'Pair your phone first'});
+      if(req.method==='GET'&&pathname==='/api/collaboration/config'){
+        if(!requiresHeader(req)||!permits(token,'voice')&&!permits(token,'whiteboard'))return respond(res,403,{error:'Collaboration access was not approved.'});
+        return respond(res,200,{ok:true,iceServers:rtcServers});
+      }
+      if(pathname==='/api/ocr'||pathname==='/api/clipboard/image'){
+        const ocr=pathname==='/api/ocr';if(!requiresHeader(req)||!permits(token,ocr?'screen':'clipboard'))return respond(res,403,{error:'This feature was not approved.'});
+        if(ocr&&req.method!=='POST'||!['POST','GET'].includes(req.method))return respond(res,405,{error:'Action unavailable.'});
+        try{let data='';if(req.method==='POST'){const body=await jsonBody(req,12*1024*1024);png(body.data);data=body.data;}const mode=ocr?'ocr':req.method==='GET'?'clipboard-image-read':'clipboard-image-write';const result=options.imageTools?await options.imageTools(mode,data):await imageTool(ROOT,mode,data);return respond(res,200,result);}catch(e){return respond(res,400,{error:e.message});}
+      }
+      if(pathname.startsWith('/api/handoff')){
+        if(sessions.get(token).role==='guest'||!requiresHeader(req))return respond(res,403,{error:'Sign into your owner account on both devices.'});
+        if(req.method==='POST'&&pathname==='/api/handoff')return respond(res,200,{ok:true,...handoffs.create(token)});
+        if(req.method==='POST'&&pathname==='/api/handoff/claim'){const body=await jsonBody(req,1024);const result=handoffs.claim(body.code,token);return respond(res,result?200:409,result?{ok:true,...result}:{error:'This code is no longer available.'});}
+        if(req.method==='GET'&&pathname==='/api/handoff'){const result=handoffs.status(new URL(req.url,'http://localhost').searchParams.get('code'),token);return respond(res,result?200:404,result?{ok:true,...result}:{error:'Handoff expired.'});}
+      }
+      if(pathname==='/api/wake'){
+        if(sessions.get(token).role==='guest'||!requiresHeader(req))return respond(res,403,{error:'Only the owner can send wake signals.'});
+        if(req.method==='GET')return respond(res,200,{ok:true,networks:wakeOnLan.networks()});
+        if(req.method==='POST'){const body=await jsonBody(req,1024);await wakeOnLan.wake(body.mac,body.broadcast,options.wakeSend);return respond(res,200,{ok:true,message:'Wake signal sent. The PC must have Wake-on-LAN enabled.'});}
+      }
       if(pathname.startsWith('/api/guest/')){
         if(sessions.get(token).role==='guest')return respond(res,403,{error:'Only the owner can manage guest access.'});
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
         if(req.method==='GET'&&pathname==='/api/guest/requests')return respond(res,200,{ok:true,requests:guestRequests.pending(),active:Array.from(sessions.values()).filter(s=>s.role==='guest'&&s.until>Date.now()).map(s=>({id:s.guestId,device:s.device,until:s.until,permissions:s.permissions||{}}))});
         if(req.method==='POST'&&pathname==='/api/guest/decide'){
-          const body=await jsonBody(req,4096);if(typeof body.approve!=='boolean'||!guestRequests.decide(body.id,body.approve,body.permissions))return respond(res,409,{error:'This guest request has expired or was already answered.'});
+          const body=await jsonBody(req,4096);if(typeof body.approve!=='boolean'||!guestRequests.decide(body.id,body.approve,body.permissions,body.durationMinutes))return respond(res,409,{error:'This guest request has expired or was already answered.'});
           record(ip,body.approve?'Guest access approved':'Guest access denied');return respond(res,200,{ok:true});
         }
         if(req.method==='POST'&&pathname==='/api/guest/revoke'){
           const body=await jsonBody(req,4096);let revoked=false;
-          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);guestScreens.revoke(key);webRtcVideo.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
+          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);guestScreens.revoke(key);webRtcVideo.revoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
           record(ip,'Guest access ended');return respond(res,200,{ok:true,revoked});
         }
         return respond(res,404,{error:'Guest action not found'});
@@ -545,7 +576,7 @@ function createApp(options={}) {
       }
       if(req.method==='POST'&&pathname==='/api/unpair'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
-        sessions.delete(token);saveSessions();void fileTransfers.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
+        sessions.delete(token);saveSessions();void fileTransfers.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);collaboration.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
         record(ip,'Phone unpaired');return respond(res,200,{ok:true},{'Set-Cookie':`${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`});
       }
       if(req.method==='GET'&&pathname==='/api/screen'){
@@ -585,6 +616,7 @@ function createApp(options={}) {
   const audioStream=new WebSocketServer({noServer:true,maxPayload:1024,perMessageDeflate:false});
   const guestScreens=createGuestScreen({sessions,auth,sessionExpiry});
   const webRtcVideo=createWebRtcVideo({sessions,auth,sessionExpiry});
+  const collaboration=createCollaboration({sessions,auth,sessionExpiry});
   function rejectUpgrade(socket,status,message) {
     socket.on('error',()=>{});
     const body=JSON.stringify({error:message});
@@ -593,7 +625,7 @@ function createApp(options={}) {
   server.on('upgrade',(req,socket,head)=>{
     socket.on('error',()=>{});
     let pathname;try{pathname=new URL(req.url,'http://localhost').pathname;}catch{return rejectUpgrade(socket,400,'Bad URL');}
-    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
+    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video','/api/collaboration'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
     if(!allowedRequest(req))return rejectUpgrade(socket,403,'Input stream host rejected');
     try{
       const origin=new URL(req.headers.origin);
@@ -601,6 +633,10 @@ function createApp(options={}) {
     }catch{return rejectUpgrade(socket,403,'Request origin required');}
     const token=auth(req);
     if(!token)return rejectUpgrade(socket,401,'Pair your phone first');
+    if(pathname==='/api/collaboration'){
+      if(!permits(token,'voice')&&!permits(token,'whiteboard'))return rejectUpgrade(socket,403,'Collaboration was not approved');
+      collaboration.upgrade(req,socket,head,token);return;
+    }
     if(pathname==='/api/webrtc-video'){
       const publish=new URL(req.url,'http://localhost').searchParams.get('role')==='publish';
       if(!permits(token,'screen')||publish&&sessions.get(token).role==='guest')return rejectUpgrade(socket,403,'This video action was not approved');
@@ -676,8 +712,8 @@ function createApp(options={}) {
       });
     });
   });
-  function stop(){endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();}
-  server.on('close',()=>{clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();nativeFeatures.close();void fileTransfers.close();});
+  function stop(){endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();collaboration.revoke();}
+  server.on('close',()=>{clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();collaboration.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   return {server,pin,port,addresses:interfaces,stop};
 }
 if(require.main===module){

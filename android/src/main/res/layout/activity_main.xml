@@ -53,6 +53,9 @@
             <TextView android:id="@+id/error" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:textColor="#FF9AA7"
                 android:textSize="13sp" android:layout_marginTop="16dp" />
+            <EditText android:id="@+id/wakeMac" android:layout_width="match_parent" android:layout_height="56dp" android:singleLine="true" android:hint="PC MAC address · AA:BB:CC:DD:EE:FF" android:inputType="textNoSuggestions" android:textColor="#FFFFFF" android:textColorHint="#7D8BA1" android:textSize="14sp" android:padding="12dp" android:background="@drawable/field_background" android:layout_marginTop="20dp" />
+            <Button android:id="@+id/wakePc" android:layout_width="match_parent" android:layout_height="52dp" android:text="Wake my PC on this Wi-Fi" android:textAllCaps="false" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Wake a compatible PC on the same Wi-Fi network." android:textColor="#8E9BB5" android:textSize="12sp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Sign in with your app password. Approved guests can share their phone screen after granting Android's screen-sharing permission."
                 android:textColor="#8E9BB5" android:textSize="12sp" android:lineSpacingExtra="3dp"

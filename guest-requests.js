@@ -15,8 +15,8 @@ function createGuestRequests({now=Date.now,lifetime=5*60*1000}={}){
   }
   function find(secret,ip){prune();if(typeof secret!=='string'||!/^[a-f0-9]{64}$/.test(secret))return null;const key=digest(secret);return Array.from(requests.values()).find(r=>r.key===key&&r.ip===ip)||null;}
   function pending(){prune();return Array.from(requests.values()).filter(r=>r.state==='pending').map(({id,device,created,until})=>({id,device,created,until}));}
-  function decide(id,approve,permissions){prune();const request=requests.get(id);if(!request||request.state!=='pending')return false;const selected=approve?guestPermissions(permissions):null;request.state=approve?'approved':'denied';request.permissions=selected;return true;}
-  function consume(secret,ip){const request=find(secret,ip);if(request?.state!=='approved')return null;requests.delete(request.id);return {id:request.id,device:request.device,permissions:request.permissions};}
+  function decide(id,approve,permissions,durationMinutes=120){prune();const request=requests.get(id);if(!request||request.state!=='pending')return false;if(approve&&(!Number.isInteger(durationMinutes)||durationMinutes<5||durationMinutes>480))throw Error('Choose a guest session from 5 minutes to 8 hours.');const selected=approve?guestPermissions(permissions):null;request.state=approve?'approved':'denied';request.permissions=selected;request.durationMinutes=durationMinutes;return true;}
+  function consume(secret,ip){const request=find(secret,ip);if(request?.state!=='approved')return null;requests.delete(request.id);return {id:request.id,device:request.device,permissions:request.permissions,durationMinutes:request.durationMinutes};}
   function cancel(secret,ip){const request=find(secret,ip);if(request)requests.delete(request.id);}
   function clear(){requests.clear();}
   return {begin,find,pending,decide,consume,cancel,clear};

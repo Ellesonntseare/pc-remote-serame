@@ -26,6 +26,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Length==1&&args[0] is "--ocr" or "--clipboard-image-read" or "--clipboard-image-write"){ImageTools.Run(args[0]);return;}
         if(args.Length==1&&args[0]=="--capture-probe")
         {
             try{Native.SetProcessDPIAware();using var probe=GpuDesktopCapture.Create(Screen.PrimaryScreen?.Bounds??throw new InvalidOperationException("No display"));Console.WriteLine("{\"gpuAvailable\":true,\"backend\":\"dxgi\"}");}

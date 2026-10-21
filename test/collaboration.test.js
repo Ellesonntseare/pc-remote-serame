@@ -1,0 +1,23 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),{WebSocket}=require('ws'),{createApp}=require('../server'),{validStroke}=require('../collaboration');
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+async function fixture(t){const app=createApp({password:'serame',disableAgent:true,disableActions:true});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port,sockets=[];
+  async function call(route,{method='GET',body,cookie}={}){const response=await fetch(base+route,{method,headers:{'X-PCR':'1',...cookie&&{Cookie:cookie},'Content-Type':'application/json'},...body&&{body:JSON.stringify(body)}});return {status:response.status,json:await response.json(),cookie:response.headers.getSetCookie()[0]?.split(';')[0]};}
+  const owner=(await call('/api/pair',{method:'POST',body:{password:'serame'}})).cookie;
+  async function guest(permissions){const pending=(await call('/api/pair',{method:'POST',body:{password:'guest'}})).cookie;const request=(await call('/api/guest/requests',{cookie:owner})).json.requests[0];await call('/api/guest/decide',{method:'POST',cookie:owner,body:{id:request.id,approve:true,permissions}});return (await call('/api/guest/poll',{method:'POST',cookie:pending,body:{}})).cookie;}
+  function socket(cookie){const ws=new WebSocket(base.replace('http','ws')+'/api/collaboration',{headers:{Origin:base,Cookie:cookie}});ws.queue=[];ws.on('message',data=>ws.queue.push(JSON.parse(data)));ws.on('error',()=>{});sockets.push(ws);return ws;}
+  t.after(async()=>{sockets.forEach(ws=>ws.terminate());app.stop();await new Promise(r=>app.server.close(r));});return {call,guest,socket,owner};
+}
+async function next(ws,predicate){for(let i=0;i<200;i++){const index=ws.queue.findIndex(predicate);if(index>=0)return ws.queue.splice(index,1)[0];await delay(10);}throw Error('Collaboration event missing');}
+test('whiteboard input bounds colour, width and coordinates',()=>{assert.equal(validStroke({color:'#69e3ba',width:3,points:[{x:.1,y:.2}]}),true);for(const value of [{color:'url(script)',width:3,points:[{x:0,y:0}]},{color:'#69e3ba',width:100,points:[{x:0,y:0}]},{color:'#69e3ba',width:3,points:[{x:2,y:0}]}])assert.equal(validStroke(value),false);});
+test('voice signaling stays between opted-in participants and revocation ends their call',async t=>{
+  const f=await fixture(t),guest=await f.guest({voice:true}),other=await f.guest({voice:true}),owner=f.socket(f.owner),phone=f.socket(guest),outsider=f.socket(other);
+  const ready=await next(phone,v=>v.type==='ready');await next(owner,v=>v.type==='ready');await next(outsider,v=>v.type==='ready');phone.send(JSON.stringify({type:'voice-join'}));owner.send(JSON.stringify({type:'voice-join'}));await next(owner,v=>v.type==='people'&&v.people.some(p=>p.id===ready.id&&p.voice));owner.send(JSON.stringify({type:'call',id:ready.id}));const call=await next(phone,v=>v.type==='voice-peer');assert.equal(call.initiator,false);assert.equal((await next(owner,v=>v.type==='voice-peer')).initiator,true);
+  owner.send(JSON.stringify({type:'description',id:call.id,description:{type:'offer',sdp:'v=0\r\n'}}));assert.equal((await next(phone,v=>v.type==='description')).description.type,'offer');await delay(30);assert.equal(outsider.queue.some(v=>v.type==='description'),false);
+  await f.call('/api/unpair',{method:'POST',cookie:guest,body:{}});await next(owner,v=>v.type==='voice-ended');
+});
+test('whiteboards are scoped to one guest session and do not leak to other guests',async t=>{
+  const f=await fixture(t),guest=await f.guest({whiteboard:true}),other=await f.guest({whiteboard:true}),owner=f.socket(f.owner),phone=f.socket(guest),outsider=f.socket(other);const ready=await next(phone,v=>v.type==='ready');await next(owner,v=>v.type==='ready');await next(outsider,v=>v.type==='ready');phone.send(JSON.stringify({type:'board-join'}));await next(phone,v=>v.type==='board');owner.send(JSON.stringify({type:'board-join',room:ready.room}));await next(owner,v=>v.type==='board');outsider.send(JSON.stringify({type:'board-join',room:ready.room}));await next(outsider,v=>v.type==='board');
+  phone.send(JSON.stringify({type:'stroke',color:'#69e3ba',width:3,points:[{x:.2,y:.3},{x:.6,y:.7}]}));assert.equal((await next(owner,v=>v.type==='stroke')).points.length,2);await delay(30);assert.equal(outsider.queue.some(v=>v.type==='stroke'),false);owner.send(JSON.stringify({type:'board-clear'}));assert.deepEqual((await next(phone,v=>v.type==='board')).strokes,[]);
+});
+test('guest collaboration requires an approved permission',async t=>{const f=await fixture(t),guest=await f.guest({screen:true});assert.equal((await f.call('/api/collaboration/config',{cookie:guest})).status,403);});

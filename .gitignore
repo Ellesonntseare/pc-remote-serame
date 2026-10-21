@@ -6,6 +6,8 @@ config.json
 .remembered-sessions.json*
 test/FrameEncoderChecks/bin/
 test/FrameEncoderChecks/obj/
+test/ImageToolsChecks/bin/
+test/ImageToolsChecks/obj/
 test/.test-runtime/
 test/.transfer-check-*/
 test/.resume-check-*/

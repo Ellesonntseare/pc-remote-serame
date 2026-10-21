@@ -15,6 +15,9 @@ import android.provider.Settings
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
+import android.net.Uri
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -41,6 +44,8 @@ class MainActivity : Activity() {
     private var pendingProjection = false
     private var bridgeInstalled = false
     private var controlDialog: AlertDialog? = null
+    private var microphoneRequest: PermissionRequest? = null
+    private var filesResult: ValueCallback<Array<Uri>>? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,6 +59,11 @@ class MainActivity : Activity() {
         val prefs = getSharedPreferences("pc_remote_android", MODE_PRIVATE)
         address.setText(prefs.getString("ip", ""))
         portField.setText(prefs.getInt("port", 7666).toString())
+        val wakeMac=findViewById<EditText>(R.id.wakeMac);wakeMac.setText(prefs.getString("wakeMac",""))
+        findViewById<Button>(R.id.wakePc).setOnClickListener { button ->
+            val mac=wakeMac.text.toString().trim();button.isEnabled=false
+            Thread{val message=try{WakeOnLan.send(mac);prefs.edit().putString("wakeMac",mac).apply();"Wake signal sent. Wait for the PC, then connect."}catch(e:Exception){e.message?:"Could not send the wake signal."};runOnUiThread{error.text=message;button.isEnabled=true}}.start()
+        }
         findViewById<Button>(R.id.connect).setOnClickListener {
             val ip = address.text.toString().trim()
             val port = portField.text.toString().toIntOrNull()
@@ -88,13 +98,28 @@ class MainActivity : Activity() {
         settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
-        web.webChromeClient = WebChromeClient()
+        web.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest) {
+                runOnUiThread {
+                    if(!isAllowed(request.origin.toString()) || request.resources.any{it!=PermissionRequest.RESOURCE_AUDIO_CAPTURE}){request.deny();return@runOnUiThread}
+                    if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                    else {microphoneRequest?.deny();microphoneRequest=request;requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),503)}
+                }
+            }
+            override fun onPermissionRequestCanceled(request: PermissionRequest) { if(microphoneRequest===request)microphoneRequest=null }
+            override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
+                if(!isAllowed(view.url?:""))return false
+                filesResult?.onReceiveValue(null);filesResult=callback
+                return try{startActivityForResult(params.createIntent(),504);true}catch(_:Exception){filesResult=null;callback.onReceiveValue(null);true}
+            }
+        }
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 // Do not navigate to anything outside this one private PC's origin.
                 return !isAllowed(request.url.toString())
             }
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                microphoneRequest?.deny();microphoneRequest=null;filesResult?.onReceiveValue(null);filesResult=null
                 pendingProjection = false; ScreenShareService.stopSharing(); shareReply = null
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
@@ -149,10 +174,12 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 501) requestProjection()
+        if(requestCode==503){val request=microphoneRequest;microphoneRequest=null;if(request!=null){if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED&&isAllowed(request.origin.toString())&&isAllowed(web.url?:""))request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) else request.deny()}}
     }
     @Deprecated("MediaProjection consent result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if(requestCode==504){val callback=filesResult;filesResult=null;callback?.onReceiveValue(if(isAllowed(web.url?:""))WebChromeClient.FileChooserParams.parseResult(resultCode,data)else null);return}
         if (requestCode != 502) return
         val requested = pendingProjection; pendingProjection = false
         if (!requested || !isAllowed(web.url ?: "")) return
@@ -189,6 +216,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        microphoneRequest?.deny();microphoneRequest=null;filesResult?.onReceiveValue(null);filesResult=null
         controlDialog?.dismiss();controlDialog=null
         pendingProjection = false; ScreenShareService.stopSharing(); ScreenShareService.events = null; shareReply = null
         web.stopLoading()
