@@ -2,7 +2,12 @@ package za.co.pcremote.controller
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.webkit.CookieManager
@@ -15,11 +20,13 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import androidx.webkit.JavaScriptReplyProxy
+import org.json.JSONObject
 import java.net.URI
 
-/** A LAN-only client. All power, screen and input requests go to the user's own Windows PC.
- * No cloud relay, no background capture, no Android accessibility service.
- */
+/** Personal PC client with explicit, Android-approved guest screen sharing. */
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var connectScreen: ScrollView
@@ -27,6 +34,9 @@ class MainActivity : Activity() {
     private lateinit var address: EditText
     private lateinit var portField: EditText
     private var selectedOrigin: String? = null
+    private var shareReply: JavaScriptReplyProxy? = null
+    private var pendingProjection = false
+    private var bridgeInstalled = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,18 +53,16 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.connect).setOnClickListener {
             val ip = address.text.toString().trim()
             val port = portField.text.toString().toIntOrNull()
-            if (!isPrivateIpv4(ip) || port == null || port !in 1..65535) {
+            if (!TrustedOrigin.privateIp(ip) || port == null || port !in 1..65535) {
                 error.text = "Use your PC's private IPv4 address and a port from 1 to 65535."
                 return@setOnClickListener
             }
             prefs.edit().putString("ip", ip).putInt("port", port).apply()
             error.text = ""
-            selectedOrigin = "http://$ip:$port"
-            connectScreen.visibility = View.GONE
-            web.visibility = View.VISIBLE
-            web.requestFocus()
-            web.loadUrl("$selectedOrigin/")
+            connectTo("http://$ip:$port")
         }
+        findViewById<Button>(R.id.connectWebsite).setOnClickListener { connectTo("https://remote.teamtrader.co.za") }
+        ScreenShareService.events = { value -> runCatching { shareReply?.postMessage(value.toString()) }; Unit }
         // Allow the user-initiated Keyboard button in the WebView to focus
         // its visible textarea and summon the Android IME normally.
         web.isFocusable = true
@@ -78,6 +86,7 @@ class MainActivity : Activity() {
                 return !isAllowed(request.url.toString())
             }
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                pendingProjection = false; ScreenShareService.stopSharing(); shareReply = null
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
@@ -90,23 +99,60 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun isAllowed(url: String): Boolean {
-        val expected = selectedOrigin ?: return false
-        return try {
-            val uri = URI(url)
-            val origin = "${uri.scheme}://${uri.host}:${uri.port}"
-            uri.scheme == "http" && origin == expected && uri.userInfo == null
-        } catch (_: Exception) { false }
+    private fun connectTo(origin: String) {
+        selectedOrigin = TrustedOrigin.normalize(origin) ?: return
+        if (bridgeInstalled) WebViewCompat.removeWebMessageListener(web, "PCRAndroid")
+        bridgeInstalled = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+        if (bridgeInstalled) WebViewCompat.addWebMessageListener(web, "PCRAndroid", setOf(selectedOrigin!!)) { view, message, sourceOrigin, isMainFrame, reply ->
+            if (!isMainFrame || TrustedOrigin.normalize(sourceOrigin.toString()) != selectedOrigin || !isAllowed(view.url ?: "")) return@addWebMessageListener
+            try {
+                val value = JSONObject(message.data ?: "{}")
+                when (value.optString("type")) {
+                    "start" -> {
+                        if (pendingProjection) return@addWebMessageListener
+                        val cookie = CookieManager.getInstance().getCookie(selectedOrigin!!).orEmpty()
+                        if (!cookie.contains("pc_remote_session=")) { reply.postMessage("{\"type\":\"stopped\",\"message\":\"Sign in as an approved guest first.\"}"); return@addWebMessageListener }
+                        shareReply = reply; pendingProjection = true
+                        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 501)
+                        else requestProjection()
+                    }
+                    "stop" -> { pendingProjection = false; ScreenShareService.stopSharing() }
+                    "mark" -> ScreenShareService.forwardMark(value)
+                }
+            } catch (_: Exception) { reply.postMessage("{\"type\":\"stopped\",\"message\":\"Could not start phone sharing.\"}") }
+        }
+        error.text = ""; connectScreen.visibility = View.GONE; web.visibility = View.VISIBLE; web.requestFocus(); web.loadUrl("$selectedOrigin/")
     }
 
-    private fun isPrivateIpv4(text: String): Boolean {
-        if (!Regex("^[0-9]{1,3}(\\.[0-9]{1,3}){3}$").matches(text)) return false
-        val x = text.split('.').mapNotNull { it.toIntOrNull() }
-        if (x.size != 4 || x.any { it !in 0..255 }) return false
-        return x[0] == 10 || (x[0] == 172 && x[1] in 16..31) || (x[0] == 192 && x[1] == 168)
+    @Suppress("DEPRECATION")
+    private fun requestProjection() {
+        if (!pendingProjection || !isAllowed(web.url ?: "")) return
+        startActivityForResult(getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent(), 502)
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 501) requestProjection()
+    }
+    @Deprecated("MediaProjection consent result")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 502) return
+        val requested = pendingProjection; pendingProjection = false
+        if (!requested || !isAllowed(web.url ?: "")) return
+        if (resultCode != RESULT_OK || data == null) { shareReply?.postMessage("{\"type\":\"stopped\",\"message\":\"Screen-sharing permission was cancelled.\"}"); return }
+        val cookie = CookieManager.getInstance().getCookie(selectedOrigin!!).orEmpty()
+        val intent = Intent(this, ScreenShareService::class.java).putExtra("origin", selectedOrigin).putExtra("cookie", cookie).putExtra("consent", data).putExtra("resultCode", resultCode)
+        startForegroundService(intent)
+    }
+
+    private fun isAllowed(url: String): Boolean {
+        val expected = selectedOrigin ?: return false
+        return TrustedOrigin.normalize(url) == expected
     }
 
     private fun showConnect(message: String) {
+        pendingProjection = false; ScreenShareService.stopSharing()
         web.stopLoading()
         web.loadUrl("about:blank")
         web.visibility = View.GONE
@@ -127,6 +173,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        pendingProjection = false; ScreenShareService.stopSharing(); ScreenShareService.events = null; shareReply = null
         web.stopLoading()
         web.destroy()
         super.onDestroy()

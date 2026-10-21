@@ -2,7 +2,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),{JSDOM,CookieJar,VirtualConsole}=require('jsdom'),{createApp}=require('../server');
 async function until(predicate){const end=Date.now()+5000;while(Date.now()<end){if(await predicate())return;await new Promise(r=>setTimeout(r,15));}throw Error('Interface did not reach the expected state');}
 async function fixture(t){const dir=await fs.mkdtemp(path.join(__dirname,'.transfer-check-')),errors=[],windows=[];const app=createApp({password:'serame',disableAgent:true,disableActions:true,transferDirectory:dir});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
-  async function page(){const jar=new CookieJar(),console=new VirtualConsole();console.on('jsdomError',error=>{if(!error.message.includes('Could not parse CSS stylesheet'))errors.push(error.message);});const dom=await JSDOM.fromURL(base,{runScripts:'dangerously',resources:'usable',pretendToBeVisual:true,cookieJar:jar,virtualConsole:console,beforeParse(window){
+  async function page(options={}){const jar=new CookieJar(),console=new VirtualConsole();console.on('jsdomError',error=>{if(!error.message.includes('Could not parse CSS stylesheet'))errors.push(error.message);});const dom=await JSDOM.fromURL(base,{runScripts:'dangerously',resources:'usable',pretendToBeVisual:true,cookieJar:jar,virtualConsole:console,beforeParse(window){
+    if(options.android)window.PCRAndroid={postMessage:value=>options.android.push(JSON.parse(value))};
     window.TextEncoder=TextEncoder;window.TextDecoder=TextDecoder;window.AbortController=AbortController;window.ResizeObserver=class{observe(){}unobserve(){}disconnect(){}};
     window.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
     window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){if(!this.open)return;this.open=false;this.dispatchEvent(new window.Event('close'));};
@@ -16,8 +17,16 @@ async function fixture(t){const dir=await fs.mkdtemp(path.join(__dirname,'.trans
 async function login(window,password){const doc=window.document;doc.getElementById('pin').value=password;doc.getElementById('rememberMe').checked=false;doc.getElementById('pairForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));}
 test('password eye toggles visibility, owner tools mount, and Presentation mode always restores controls',async t=>{
   const f=await fixture(t),window=await f.page(),doc=window.document,input=doc.getElementById('pin'),eye=doc.getElementById('passwordPeek');input.value='sample';assert.equal(input.type,'password');eye.click();assert.equal(input.type,'text');assert.equal(eye.getAttribute('aria-label'),'Hide password');eye.click();assert.equal(input.type,'password');
+  assert.equal(doc.querySelector('.pairHelp,.guestLoginNote'),null,'requested bottom login text is removed');
   await login(window,'serame');await until(()=>window.PCRAuth?.signedIn);assert.equal(doc.getElementById('guestManageButton').hidden,false);assert.equal(window.getComputedStyle(doc.querySelector('.stats')).display,'grid');assert.ok(doc.getElementById('rsLens'));assert.ok(doc.getElementById('pcAppsButton'));assert.ok(doc.getElementById('filesDialog'));
   doc.getElementById('rsPresentation').click();assert.equal(doc.getElementById('rs').classList.contains('screenClean'),true);assert.equal(window.getComputedStyle(doc.getElementById('rsRestoreControls')).display,'inline-flex');doc.getElementById('rsRestoreControls').click();assert.equal(doc.getElementById('rs').classList.contains('screenClean'),false);
+});
+
+test('Android guest sharing asks the native app for consent, accepts a live preview and stops on sign-out',async t=>{
+  const f=await fixture(t),owner=await f.page(),messages=[],phone=await f.page({android:messages});await login(owner,'serame');await until(()=>owner.PCRAuth?.signedIn);await login(phone,'guest');await until(()=>owner.document.querySelector('.guestRequestCard'));owner.document.querySelector('.guestApprove').click();await until(()=>phone.PCRAuth?.role==='guest');
+  phone.document.querySelector('.guestScreenHome').click();phone.document.querySelector('#guestScreenDialog [data-share]').click();assert.deepEqual(messages,[{type:'start'}]);assert.equal(phone.document.querySelector('#guestScreenDialog [data-stop]').hidden,false);
+  phone.PCRAndroid.onmessage({data:JSON.stringify({type:'sharing'})});phone.PCRAndroid.onmessage({data:JSON.stringify({type:'frame',data:'AAAA',width:540,height:960})});assert.equal(phone.document.querySelector('#guestScreenDialog img').hidden,false);
+  phone.eval('showPair()');assert.equal(messages.at(-1).type,'stop');assert.equal(phone.document.querySelector('#guestScreenDialog').open,false);
 });
 test('guest waits for owner approval, privacy defaults hide sensitive panels, and owner snippets never cross into guest UI',async t=>{
   const f=await fixture(t),owner=await f.page(),guest=await f.page();await login(owner,'serame');await until(()=>owner.PCRAuth?.signedIn);owner.localStorage.setItem('pcr_clipboard_history_v1',JSON.stringify([{text:'Owner private sample',source:'test',time:Date.now(),pinned:true}]));

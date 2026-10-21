@@ -44,6 +44,20 @@ oddEncoder.Encode(odd,70,false,1);Paint(odd,new Rectangle(100,72,1,1),Color.Whit
 var edge=oddEncoder.Encode(odd,70,false,2)!;
 using(var patch=Decode(edge)) Check(Read(edge,13)+patch.Width==101 && Read(edge,17)+patch.Height==73,"Edge regions must stay within odd-sized screens");
 timer.Stop();
+var bgra=Enumerable.Repeat((byte)199,24).ToArray();
+bgra[0]=10;bgra[1]=20;bgra[2]=30;bgra[4]=40;bgra[5]=50;bgra[6]=60;
+bgra[12]=70;bgra[13]=80;bgra[14]=90;bgra[16]=100;bgra[17]=110;bgra[18]=120;
+var bgr=Enumerable.Repeat((byte)177,16).ToArray();
+var pinnedSource=GCHandle.Alloc(bgra,GCHandleType.Pinned);var pinnedDestination=GCHandle.Alloc(bgr,GCHandleType.Pinned);
+try
+{
+    BgraCopy.Copy(pinnedSource.AddrOfPinnedObject(),12,pinnedDestination.AddrOfPinnedObject(),8,2,2);
+    Check(bgr.Take(6).SequenceEqual(new byte[]{10,20,30,40,50,60})&&bgr.Skip(8).Take(6).SequenceEqual(new byte[]{70,80,90,100,110,120}),"GPU pixel conversion must preserve channels and row pitches");
+    Check(bgr[6]==177&&bgr[7]==177&&bgr[14]==177&&bgr[15]==177,"GPU pixel conversion must not overwrite padding");
+    BgraCopy.Copy(pinnedSource.AddrOfPinnedObject(),12,pinnedDestination.AddrOfPinnedObject()+8,-8,2,2);
+    Check(bgr.Take(6).SequenceEqual(new byte[]{70,80,90,100,110,120}),"Bottom-up capture surfaces must preserve row order");
+}
+finally{pinnedSource.Free();pinnedDestination.Free();}
 using var dynamicOutput=new ScreenOutput();
 dynamicOutput.Resize(96,64);
 var beforeResize=dynamicOutput.Encoder.Encode(dynamicOutput.Image,85,false,1)!;

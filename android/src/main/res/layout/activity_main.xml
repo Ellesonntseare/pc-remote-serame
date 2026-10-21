@@ -19,13 +19,17 @@
                 android:text="▣  PC REMOTE" android:textColor="#93B4FF" android:textStyle="bold"
                 android:letterSpacing="0.17" android:textSize="15sp" android:layout_marginBottom="22dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Control your PC from anywhere on your Wi-Fi."
+                android:text="Your PC. Your phone. Connected."
                 android:textColor="#F7F9FF" android:textSize="29sp" android:textStyle="bold"
                 android:layout_marginBottom="12dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Keep the Windows PC Remote server running. Your phone and computer must be connected to the same private network."
+                android:text="Connect through your website, or use the PC's address on your Wi-Fi."
                 android:textColor="#A4ADC2" android:textSize="14sp" android:lineSpacingExtra="4dp"
                 android:layout_marginBottom="26dp" />
+            <Button android:id="@+id/connectWebsite" android:layout_width="match_parent"
+                android:layout_height="56dp" android:text="Open remote.teamtrader.co.za" android:textAllCaps="false"
+                android:textSize="14sp" android:textColor="#FFFFFF" android:background="@drawable/connect_background"
+                android:layout_marginBottom="24dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="PC IP ADDRESS" android:textColor="#BAC8DE" android:textStyle="bold"
                 android:textSize="12sp" android:layout_marginBottom="8dp" />
@@ -50,7 +54,7 @@
                 android:layout_height="wrap_content" android:textColor="#FF9AA7"
                 android:textSize="13sp" android:layout_marginTop="16dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="You'll enter the 8-digit pairing PIN displayed on your PC after connecting. Controls and shortcuts are customizable inside Remote Screen."
+                android:text="Sign in with your app password. Approved guests can share their phone screen after granting Android's screen-sharing permission."
                 android:textColor="#8E9BB5" android:textSize="12sp" android:lineSpacingExtra="3dp"
                 android:layout_marginTop="20dp" />
         </LinearLayout>

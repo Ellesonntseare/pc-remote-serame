@@ -5,8 +5,18 @@
   dialog.innerHTML='<header class="guestScreenHead"><div><span class="guestEyebrow">A SHARED VIEW</span><h2 id="guestScreenTitle">Guest screens</h2></div><button type="button" data-close aria-label="Close shared screen">✕</button></header><p class="guestScreenHint"></p><div class="guestScreenSelect"><label for="guestScreenSelect">Sharing now</label><select id="guestScreenSelect" aria-label="Choose guest screen"></select></div><div class="guestScreenStage"><video muted playsinline hidden></video><img alt="Guest shared screen" hidden><canvas aria-label="Shared screen annotation surface"></canvas><div class="guestScreenEmpty">A little space to see things together.</div></div><div class="guestScreenTools"><div class="guestDrawTools" role="group" aria-label="Annotation tool"><button type="button" data-tool="laser" aria-pressed="true">◉ Laser</button><button type="button" data-tool="pen" aria-pressed="false">✎ Draw</button><button type="button" data-clear>Clear</button></div><button type="button" data-share class="guestShareStart">Share my screen ↗</button><button type="button" data-stop hidden>Stop sharing</button></div><p class="guestScreenStatus" role="status" aria-live="polite"></p>';
   document.body.append(dialog);
   const q=selector=>dialog.querySelector(selector),video=q('video'),image=q('img'),canvas=q('canvas'),stage=q('.guestScreenStage'),ctx=canvas.getContext('2d'),select=q('select'),empty=q('.guestScreenEmpty'),status=q('.guestScreenStatus');
-  let socket=null,stream=null,timer=null,owner=false,watching=null,shares=[],marks=[],laser=null,tool='laser',dragging=false,lastPoint=null,lastSent=0,frameUrl=null,frameGeneration=0,dimensions=null,epoch=0,starting=false,sending=false,account='',pendingBlob=null,decoding=false,laserTimer=null;
-  const send=value=>{if(socket?.readyState===WebSocket.OPEN&&socket.bufferedAmount<512*1024)socket.send(JSON.stringify(value));};
+  let socket=null,stream=null,timer=null,owner=false,watching=null,shares=[],marks=[],laser=null,tool='laser',dragging=false,lastPoint=null,lastSent=0,frameUrl=null,frameGeneration=0,dimensions=null,epoch=0,starting=false,sending=false,account='',pendingBlob=null,decoding=false,laserTimer=null,nativePending=false,nativeSharing=false;
+  const nativeAvailable=()=>typeof window.PCRAndroid?.postMessage==='function';
+  const nativeSend=value=>{try{window.PCRAndroid?.postMessage(JSON.stringify(value));}catch{}};
+  const send=value=>{if(nativeSharing&&value.type==='mark'){nativeSend(value);return;}if(socket?.readyState===WebSocket.OPEN&&socket.bufferedAmount<512*1024)socket.send(JSON.stringify(value));};
+  if(nativeAvailable())window.PCRAndroid.onmessage=event=>{
+    if(owner||!window.PCRAuth?.signedIn||window.PCRAuth.role!=='guest'||(!nativePending&&!nativeSharing))return;
+    let value;try{value=JSON.parse(event.data);}catch{return;}
+    if(value.type==='sharing'){nativePending=false;nativeSharing=true;starting=false;q('[data-share]').hidden=true;q('[data-stop]').hidden=false;status.textContent='Your Android screen is sharing with Serame. Use Stop sharing here or in the Android notification.';}
+    else if(value.type==='frame'&&nativeSharing&&typeof value.data==='string'&&value.data.length<=1400000&&/^[A-Za-z0-9+/]+=*$/.test(value.data)&&Number.isInteger(value.width)&&Number.isInteger(value.height)&&value.width>0&&value.height>0&&value.width<=1920&&value.height<=1920){dimensions={width:value.width,height:value.height};image.src='data:image/jpeg;base64,'+value.data;image.hidden=false;empty.hidden=true;draw();}
+    else if(value.type==='mark'&&nativeSharing)applyMark(value);
+    else if(value.type==='stopped'){nativePending=false;nativeSharing=false;stop(value.message||'Phone screen sharing stopped.');}
+  };
   function wipe(){marks=[];laser=null;draw();}
   function hideFrame(){frameGeneration++;pendingBlob=null;image.hidden=true;image.removeAttribute('src');if(frameUrl){URL.revokeObjectURL(frameUrl);frameUrl=null;}dimensions=null;empty.hidden=false;wipe();}
   function decodeFrame(){
@@ -14,6 +24,7 @@
     const done=()=>{decoding=false;decodeFrame();};decoded.onload=()=>{if(generation!==frameGeneration||socket!==current){URL.revokeObjectURL(url);done();return;}if(frameUrl)URL.revokeObjectURL(frameUrl);frameUrl=url;image.src=url;image.hidden=false;empty.hidden=true;dimensions={width:decoded.naturalWidth,height:decoded.naturalHeight};draw();done();};decoded.onerror=()=>{URL.revokeObjectURL(url);done();};decoded.src=url;
   }
   function stop(message='Screen sharing is off.'){
+    if(nativePending||nativeSharing)nativeSend({type:'stop'});nativePending=false;nativeSharing=false;
     starting=false;clearTimeout(timer);timer=null;send({type:'stop'});const previous=stream;stream=null;for(const track of previous?.getTracks()||[])track.stop();video.srcObject=null;video.hidden=true;sending=false;q('[data-share]').disabled=false;q('[data-share]').hidden=owner;q('[data-stop]').hidden=true;hideFrame();status.textContent=message;
   }
   function connect(){
@@ -41,8 +52,9 @@
   }
   select.addEventListener('change',()=>{watching=select.value;hideFrame();send({type:'watch',id:watching});});
   async function start(){
-    if(starting||stream||owner)return;const version=epoch;starting=true;q('[data-share]').disabled=true;
-    if(!navigator.mediaDevices?.getDisplayMedia){starting=false;q('[data-share]').disabled=false;status.textContent='Use a desktop browser over HTTPS to share your screen.';return;}
+    if(starting||stream||nativeSharing||owner)return;const version=epoch;starting=true;q('[data-share]').disabled=true;
+    if(nativeAvailable()){nativePending=true;q('[data-stop]').hidden=false;status.textContent='Approve Android’s screen-sharing prompt to start.';nativeSend({type:'start'});return;}
+    if(!navigator.mediaDevices?.getDisplayMedia){starting=false;q('[data-share]').disabled=false;status.textContent='To share an Android phone screen, use the updated PC Remote Android app. Phone browsers do not support full-screen capture.';return;}
     let chosen;
     try{
       chosen=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:10,max:12}},audio:false});
@@ -68,7 +80,7 @@
   }
   function applyMark(mark){if(mark.tool==='clear')marks=[];else if(mark.tool==='pen'){marks.push(mark);marks=marks.slice(-160);}else laser={...mark,at:Date.now()};draw();}
   function point(event){const rect=bounds();if(!rect)return null;const box=canvas.getBoundingClientRect(),x=(event.clientX-box.left-rect.x)/rect.w,y=(event.clientY-box.top-rect.y)/rect.h;return x>=0&&x<=1&&y>=0&&y<=1?{x,y}:null;}
-  function mark(event,force=false){const p=point(event);if(!p||!(owner?watching:stream))return;const now=Date.now();if(!force&&now-lastSent<35)return;lastSent=now;const value={type:'mark',tool,points:tool==='pen'&&lastPoint?[lastPoint,p]:[p,p],color:owner?'#66e6bc':'#82b7ff'};lastPoint=p;applyMark(value);send(value);}
+  function mark(event,force=false){const p=point(event);if(!p||!(owner?watching:stream||nativeSharing))return;const now=Date.now();if(!force&&now-lastSent<35)return;lastSent=now;const value={type:'mark',tool,points:tool==='pen'&&lastPoint?[lastPoint,p]:[p,p],color:owner?'#66e6bc':'#82b7ff'};lastPoint=p;applyMark(value);send(value);}
   canvas.addEventListener('pointerdown',event=>{if(event.button!==0)return;dragging=true;lastPoint=null;canvas.setPointerCapture(event.pointerId);mark(event,true);});canvas.addEventListener('pointermove',event=>{if(dragging)mark(event);});const end=event=>{if(dragging)mark(event,true);dragging=false;lastPoint=null;};canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',()=>{dragging=false;lastPoint=null;});
   for(const item of dialog.querySelectorAll('[data-tool]'))item.addEventListener('click',()=>{tool=item.dataset.tool;for(const other of dialog.querySelectorAll('[data-tool]'))other.setAttribute('aria-pressed',String(other===item));});
   q('[data-clear]').addEventListener('click',()=>{const value={type:'mark',tool:'clear'};applyMark(value);send(value);});q('[data-share]').addEventListener('click',start);q('[data-stop]').addEventListener('click',()=>stop('You stopped screen sharing.'));q('[data-close]').addEventListener('click',()=>dialog.close());

@@ -26,6 +26,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Length==1&&args[0]=="--capture-probe")
+        {
+            try{Native.SetProcessDPIAware();using var probe=GpuDesktopCapture.Create(Screen.PrimaryScreen?.Bounds??throw new InvalidOperationException("No display"));Console.WriteLine("{\"gpuAvailable\":true,\"backend\":\"dxgi\"}");}
+            catch{Console.WriteLine("{\"gpuAvailable\":false,\"backend\":\"gdi\"}");}
+            return;
+        }
         if (args.Length > 0 && args[0] is "--audio" or "--apps-list" or "--app-focus")
         {
             if (args.Length != 1) { Environment.ExitCode = 2; return; }
@@ -77,6 +83,7 @@ internal static class Program
             using var outputSurface = new ScreenOutput();
             outputSurface.Resize(outW, outH);
             using var capture = Graphics.FromImage(source);
+            using var desktopCapture = new DesktopCapture(primary,Environment.GetEnvironmentVariable("PCR_CAPTURE")!="gdi");
             var jpeg = ImageCodecInfo.GetImageEncoders().First(e => e.MimeType == "image/jpeg");
             using var encoder = new EncoderParameters(1);
             encoder.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
@@ -96,6 +103,7 @@ internal static class Program
                     if(Interlocked.CompareExchange(ref frameBudget,available-1,available)!=available)continue;
                 }
                 int requestedQuality=Volatile.Read(ref jpegQuality);
+                bool compressionChanged=requestedQuality!=quality;
                 if(requestedQuality!=quality)
                 {
                     encoder.Param[0].Dispose();
@@ -121,9 +129,11 @@ internal static class Program
                         break;
                     }
                     bool regionMode = regions;
-                    capture.CopyFromScreen(primary.Left, primary.Top, 0, 0, primary.Size);
+                    bool needsPixels=!regionMode||!wasRegions||compressionChanged||Volatile.Read(ref refreshRequested)!=0;
+                    if(!desktopCapture.Capture(source,needsPixels,out bool pixelsChanged)){Send(stdout,4,"{}"u8);Thread.Sleep(msPerFrame);continue;}
                     if (!regionMode) DrawCursor(capture);
                     else SendCursor(stdout);
+                    if(regionMode&&!pixelsChanged&&!needsPixels){Send(stdout,4,"{}"u8);int idleRemaining=msPerFrame-(int)(Environment.TickCount64-start);if(idleRemaining>0)Thread.Sleep(idleRemaining);continue;}
                     Bitmap image = source;
                     if (outW != primary.Width || outH != primary.Height)
                     {

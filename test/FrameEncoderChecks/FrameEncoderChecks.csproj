@@ -2,7 +2,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup><Compile Include="../../RemoteAgent/DesktopFrameEncoder.cs" Link="DesktopFrameEncoder.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../RemoteAgent/ScreenOutput.cs" Link="ScreenOutput.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../RemoteAgent/BgraCopy.cs" Link="BgraCopy.cs" /></ItemGroup>
 </Project>

@@ -2,7 +2,6 @@
 (() => {
   const form=document.getElementById('pairForm'),gate=document.getElementById('pairGate');
   if(!form||!gate)return;
-  const note=document.createElement('p');note.className='guestLoginNote';note.textContent='Guest access requires your approval.';form.querySelector('.pairHelp').before(note);
   const waiting=document.createElement('section');waiting.className='guestWaitingPanel';waiting.hidden=true;
   waiting.innerHTML='<div class="guestWaitingPulse" aria-hidden="true">↗</div><h2>Waiting for Serame</h2><p>Your request is ready. Serame needs to sign in and approve you.</p><span id="guestWaitStatus" role="status" aria-live="polite">Waiting for approval…</span><button type="button" id="guestCancelRequest">Back to sign in</button>';
   form.append(waiting);
