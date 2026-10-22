@@ -11,6 +11,15 @@ test('owner sign-in cancels its pending guest request and cannot be replaced by 
 test('guest manager expires requests and rejects missing secrets, duplicate decisions and other IPs',()=>{let now=1000;const g=createGuestRequests({now:()=>now,lifetime:500});const a=g.begin({ip:'a',device:'phone'});assert.equal(g.find('bad','a'),null);assert.equal(g.find(a.secret,'b'),null);assert.equal(g.begin({ip:'a',device:'phone',existingSecret:a.secret}).id,a.id);assert.equal(g.decide(a.id,true),true);assert.equal(g.decide(a.id,false),false);assert.ok(g.consume(a.secret,'a'));assert.equal(g.consume(a.secret,'a'),null);const b=g.begin({ip:'a'});now=1600;assert.equal(g.find(b.secret,'a'),null);assert.deepEqual(g.pending(),[]);});
 
 async function approve(f,owner,permissions){const pending=await f.guest(),queue=await f.request('/api/guest/requests',{cookie:owner}),id=queue.json.requests[0].id;const decision=await f.request('/api/guest/decide',{method:'POST',cookie:owner,body:{id,approve:true,...permissions!==undefined&&{permissions}}});assert.equal(decision.status,200);return {id,cookie:getCookie(await f.request('/api/guest/poll',{method:'POST',cookie:pending,body:{}}))};}
+
+test('only the owner can extend active guest access without changing permissions or issuing another login',async t=>{
+  const f=await fixture(t),owner=await f.owner(),guest=await approve(f,owner,{screen:true,voice:true}),body={id:guest.id,minutes:30};const before=(await f.request('/api/session',{cookie:guest.cookie})).json;
+  assert.equal((await f.request('/api/guest/extend',{cookie:guest.cookie,method:'POST',body})).status,403);assert.equal((await f.request('/api/guest/extend',{method:'POST',body})).status,401);
+  for(const minutes of [0,-1,4,1.5,481,'30'])assert.equal((await f.request('/api/guest/extend',{cookie:owner,method:'POST',body:{...body,minutes}})).status,400);
+  assert.equal((await f.request('/api/guest/extend',{cookie:owner,method:'POST',body,headers:{'X-PCR':'0'}})).status,403);assert.equal((await f.request('/api/guest/extend',{cookie:owner,method:'POST',body,headers:{Origin:'https://wrong.example'}})).status,403);
+  const extension=await f.request('/api/guest/extend',{cookie:owner,method:'POST',body});assert.equal(extension.status,200);assert.equal(extension.json.until,before.until+30*60000);assert.equal(extension.headers['set-cookie'],undefined);const after=(await f.request('/api/session',{cookie:guest.cookie})).json;assert.deepEqual(after.permissions,before.permissions);assert.equal(after.until,extension.json.until);assert.equal(after.guestId,before.guestId);
+  assert.equal((await f.request('/api/guest/extend',{cookie:owner,method:'POST',body:{...body,minutes:480}})).status,400);await f.request('/api/guest/revoke',{cookie:owner,method:'POST',body:{id:guest.id}});assert.equal((await f.request('/api/guest/extend',{cookie:owner,method:'POST',body})).status,409);
+});
 test('view-only guest sees no private status, host name or history and cannot call unapproved APIs directly',async t=>{
   const f=await fixture(t),owner=await f.owner(),guest=await approve(f,owner);
   const info=(await f.request('/api/status',{cookie:guest.cookie})).json;

@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const screen=document.getElementById('rs');
+  const screen=document.getElementById('rs');const controlTouches=event=>window.PCRHoldControl?.touches(event)||Array.from(event.touches||[]);
   const view=document.getElementById('rsv');
   const canvas=document.getElementById('rsc');
   if(!screen||!view||!canvas)return;
@@ -162,19 +162,19 @@
   let exitTouch=null;
   view.addEventListener('touchstart',event=>{
     if(!screen.classList.contains('screenClean'))return;
-    if(event.touches.length>=3){
+    if(controlTouches(event).length>=3){
       consume(event);
       if(g){clearTimeout(g.lp);if(g.dr)qc('up l');g=null;}
-      exitTouch={at:performance.now(),points:Array.from(event.touches,t=>({id:t.identifier,x:t.clientX,y:t.clientY})),moved:false};
+      exitTouch={at:performance.now(),points:Array.from(controlTouches(event),t=>({id:t.identifier,x:t.clientX,y:t.clientY})),moved:false};
     }else if(exitTouch)consume(event);
   },{capture:true,passive:false});
   view.addEventListener('touchmove',event=>{
     if(!exitTouch)return;consume(event);
-    for(const touch of event.touches){const initial=exitTouch.points.find(p=>p.id===touch.identifier);if(initial&&Math.hypot(touch.clientX-initial.x,touch.clientY-initial.y)>20)exitTouch.moved=true;}
+    for(const touch of controlTouches(event)){const initial=exitTouch.points.find(p=>p.id===touch.identifier);if(initial&&Math.hypot(touch.clientX-initial.x,touch.clientY-initial.y)>20)exitTouch.moved=true;}
   },{capture:true,passive:false});
   view.addEventListener('touchend',event=>{
     if(!exitTouch)return;consume(event);
-    if(event.touches.length)return;
+    if(controlTouches(event).length)return;
     const tap=!exitTouch.moved&&performance.now()-exitTouch.at<700;exitTouch=null;
     if(tap)restoreControls();
   },{capture:true,passive:false});
@@ -202,15 +202,15 @@
   // Two-finger gestures belong to the local view until recognized. Suppress
   // the old one-finger tap/drag state so lifting one finger cannot click the PC.
   let multi=null,multiHeld=false,wheelRemainder=0,multiStarted=0,multiTap=false;
-  const points=event=>Array.from(event.touches,t=>({id:t.identifier,x:t.clientX,y:t.clientY}));
+  const points=event=>Array.from(controlTouches(event),t=>({id:t.identifier,x:t.clientX,y:t.clientY}));
   function releaseRemoteTouch(){if(g){clearTimeout(g.lp);if(g.dr)qc('up l');g=null;}wheelRemainder=0;}
-  view.addEventListener('touchstart',event=>{if(event.touches.length<2&&!multiHeld)return;consume(event);releaseRemoteTouch();multiHeld=true;multiStarted=performance.now();multiTap=event.touches.length===2;multi=event.touches.length===2?window.PCRTouchGestures?.create(points(event),zoom):null;},{capture:true,passive:false});
-  view.addEventListener('touchmove',event=>{if(!multiHeld)return;consume(event);if(event.touches.length!==2||!multi)return;const action=multi.update(points(event));if(!action)return;multiTap=false;
+  view.addEventListener('touchstart',event=>{if(controlTouches(event).length<2&&!multiHeld)return;consume(event);releaseRemoteTouch();multiHeld=true;multiStarted=performance.now();multiTap=controlTouches(event).length===2;multi=controlTouches(event).length===2?window.PCRTouchGestures?.create(points(event),zoom):null;},{capture:true,passive:false});
+  view.addEventListener('touchmove',event=>{if(!multiHeld)return;consume(event);if(controlTouches(event).length!==2||!multi)return;const action=multi.update(points(event));if(!action)return;multiTap=false;
     if(action.type==='pinch'){setZoom(action.zoom,{precise:true,anchor:{x:action.x,y:action.y}});return;}
     if(pan||window.PCRCanAccess&&!window.PCRCanAccess('control')){view.scrollLeft-=action.dx;view.scrollTop-=action.dy;return;}
     wheelRemainder+=action.dy*4;const delta=Math.trunc(wheelRemainder);wheelRemainder-=delta;if(delta)qc('wheel '+delta);
   },{capture:true,passive:false});
-  view.addEventListener('touchend',event=>{if(!multiHeld)return;consume(event);multi=null;if(!event.touches.length){if(multiTap&&performance.now()-multiStarted<300&&!pan)qc('click r');multiTap=false;multiHeld=false;releaseRemoteTouch();}},{capture:true,passive:false});
+  view.addEventListener('touchend',event=>{if(!multiHeld)return;consume(event);multi=null;if(!controlTouches(event).length){if(multiTap&&performance.now()-multiStarted<300&&!pan)qc('click r');multiTap=false;multiHeld=false;releaseRemoteTouch();}},{capture:true,passive:false});
   view.addEventListener('touchcancel',event=>{if(!multiHeld)return;consume(event);multi=null;multiHeld=false;releaseRemoteTouch();},{capture:true,passive:false});
   // Capture local pan gestures before the controller's remote pointer handlers.
   view.addEventListener('pointerdown',event=>{
@@ -220,8 +220,8 @@
   view.addEventListener('pointermove',event=>{if(!pan||event.pointerType!=='mouse')return;consume(event);movePan(event.clientX,event.clientY);},true);
   view.addEventListener('pointerup',event=>{if(!pan||event.pointerType!=='mouse')return;consume(event);stopGesture();},true);
   view.addEventListener('pointercancel',event=>{if(!pan||event.pointerType!=='mouse')return;consume(event);stopGesture();},true);
-  view.addEventListener('touchstart',event=>{if(!pan)return;consume(event);const touch=event.touches[0];if(touch)startPan(touch.clientX,touch.clientY);},{capture:true,passive:false});
-  view.addEventListener('touchmove',event=>{if(!pan)return;consume(event);const touch=event.touches[0];if(touch)movePan(touch.clientX,touch.clientY);},{capture:true,passive:false});
+  view.addEventListener('touchstart',event=>{if(!pan)return;consume(event);const touch=controlTouches(event)[0];if(touch)startPan(touch.clientX,touch.clientY);},{capture:true,passive:false});
+  view.addEventListener('touchmove',event=>{if(!pan)return;consume(event);const touch=controlTouches(event)[0];if(touch)movePan(touch.clientX,touch.clientY);},{capture:true,passive:false});
   view.addEventListener('touchend',event=>{if(!pan)return;consume(event);stopGesture();},{capture:true,passive:false});
   view.addEventListener('touchcancel',event=>{if(!pan)return;consume(event);stopGesture();},{capture:true,passive:false});
   view.addEventListener('wheel',event=>{if(!pan)return;consume(event);view.scrollLeft+=event.deltaX;view.scrollTop+=event.deltaY;},{capture:true,passive:false});

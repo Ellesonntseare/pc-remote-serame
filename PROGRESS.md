@@ -5,7 +5,7 @@
 - [x] Android phone control code, local approval and Stop control
 - [x] Phone control relay and interface checks
 - [x] Android 1.3 phone control build
-- [ ] Android 1.4 build and final APK delivery
+- [x] Android 1.4 build and final APK delivery
 - [ ] Real phone control verification
 
 ## Requested feature queue
@@ -19,3 +19,15 @@
 - [x] Device handoff implementation and two-device interface check
 
 Source changes go directly into this project folder. No source ZIP is prepared.
+
+## Latest interface and session updates
+
+- [x] Select all guest permissions, including partial selection
+- [x] Owner session extension, countdown sync and two-minute warning
+- [x] Guest account ribbon and remote-screen badge
+- [x] Hold-to-control for PC and approved phone input
+- [x] Swiping dock, Left/Right buttons and top options menu
+- [x] Dark metallic reference dashboard and live status rings
+- [x] Animated login orbs, restrained interface motion and reduced-motion support
+- [x] Media controls through the Windows audio endpoint and native media keys
+- [x] Actual Windows 1% volume step and mute check; original sound settings restored

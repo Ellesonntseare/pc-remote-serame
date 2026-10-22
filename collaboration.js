@@ -13,7 +13,7 @@ function createCollaboration({sessions,auth,sessionExpiry}){
     if(peers.size>=20){ws.close(1008,'Room is full');return;}const session=sessions.get(token);if(!session){ws.close();return;}
     const peer={ws,token,owner:session.role!=='guest',id:randomBytes(12).toString('hex'),roomId:session.guestId||null,voice:false,board:false,boardRoom:null,partner:null,alive:true,rate:0,at:Date.now()};peers.add(peer);
     send(peer,{type:'ready',id:peer.id,room:peer.roomId});announce();
-    const expiry=sessionExpiry(session.until,()=>{drop(peer);ws.close(1008,'Session expired');});const heartbeat=setInterval(()=>{if(!peer.alive||auth(req)!==token){drop(peer);ws.terminate();return;}peer.alive=false;ws.ping();},15000);heartbeat.unref();ws.on('pong',()=>peer.alive=true);ws.on('error',()=>{});
+    const expiry=sessionExpiry(()=>session.until,()=>{drop(peer);ws.close(1008,'Session expired');});const heartbeat=setInterval(()=>{if(!peer.alive||auth(req)!==token){drop(peer);ws.terminate();return;}peer.alive=false;ws.ping();},15000);heartbeat.unref();ws.on('pong',()=>peer.alive=true);ws.on('error',()=>{});
     ws.on('message',(bytes,binary)=>{
       if(auth(req)!==token){drop(peer);ws.close(1008,'Session ended');return;}if(Date.now()-peer.at>1000){peer.at=Date.now();peer.rate=0;}if(binary||++peer.rate>80){ws.close(1008,'Message limit');return;}
       let value;try{value=JSON.parse(bytes.toString());if(!value||typeof value!=='object')return;}catch{return;}

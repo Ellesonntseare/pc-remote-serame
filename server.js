@@ -28,10 +28,10 @@ const COOKIE_NAME = 'pc_remote_session';
 const SESSION_TIME = 2 * 60 * 60 * 1000;
 const MAX_PACKET = 8 * 1024 * 1024;
 // Node timers overflow above about 24.8 days; remembered sessions last 30 days.
-function sessionExpiry(until,expire){
+function sessionExpiry(until,expire,{now=Date.now,setTimer=setTimeout,clearTimer=clearTimeout}={}){
   let timer,stopped=false;
-  function check(){if(stopped)return;const remaining=until-Date.now();if(remaining<=0){expire();return;}timer=setTimeout(check,Math.min(remaining,2147483647));timer.unref();}
-  check();return()=>{stopped=true;clearTimeout(timer);};
+  function check(){if(stopped)return;const remaining=(typeof until==='function'?until():until)-now();if(!Number.isFinite(remaining)||remaining<=0){stopped=true;expire();return;}timer=setTimer(check,Math.min(remaining,2147483647));timer.unref?.();}
+  check();return()=>{stopped=true;clearTimer(timer);};
 }
 // Explicit public asset map: no arbitrary filesystem paths or paired data.
 const PWA_ASSETS = new Map([
@@ -404,11 +404,7 @@ function createApp(options={}) {
       lock:['rundll32.exe',['user32.dll,LockWorkStation']],cancel:['shutdown',['/a']],
     };
     if(cmd[action])return execFile(cmd[action][0],cmd[action][1],callback);
-    // Media keys are sent by standard Windows WScript Shell (no screen/keyboard injection scripts).
-    const mapping={volup:175,voldown:174,mute:173,playpause:179,next:176,prev:177};
-    const code=mapping[action], times=['volup','voldown'].includes(action)?5:1;
-    const script=`$w=New-Object -ComObject WScript.Shell;1..${times}|ForEach-Object{$w.SendKeys([char]${code})}`;
-    return execFile('powershell.exe',['-NoProfile','-Command',script],callback);
+    return nativeFeatures.sendMedia(action).then(result=>callback(null,result),callback);
   }
   let prevCpu=os.cpus(),cpu=0;
   const cpuClock=setInterval(()=>{const now=os.cpus();let total=0,idle=0;now.forEach((c,i)=>{for(const k in c.times)total+=c.times[k]-(prevCpu[i]?.times[k]||0);idle+=c.times.idle-(prevCpu[i]?.times.idle||0);});cpu=total?Math.max(0,Math.round(100*(1-idle/total))):0;prevCpu=now;},3000);
@@ -493,6 +489,10 @@ function createApp(options={}) {
       }
       const token=auth(req);
       if(!token)return respond(res,401,{error:'Pair your phone first'});
+      if(req.method==='GET'&&pathname==='/api/session'){
+        if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
+        return respond(res,200,{ok:true,...accessInfo(token)});
+      }
       if(req.method==='GET'&&pathname==='/api/collaboration/config'){
         if(!requiresHeader(req)||!permits(token,'voice')&&!permits(token,'whiteboard'))return respond(res,403,{error:'Collaboration access was not approved.'});
         return respond(res,200,{ok:true,iceServers:rtcServers});
@@ -525,6 +525,15 @@ function createApp(options={}) {
           const body=await jsonBody(req,4096);let revoked=false;
           for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);guestScreens.revoke(key);webRtcVideo.revoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
           record(ip,'Guest access ended');return respond(res,200,{ok:true,revoked});
+        }
+        if(req.method==='POST'&&pathname==='/api/guest/extend'){
+          const body=await jsonBody(req,1024),minutes=body.minutes;
+          if(!Number.isInteger(minutes)||minutes<5||minutes>480)return respond(res,400,{error:'Choose between 5 minutes and 8 hours.'});
+          const guest=Array.from(sessions.values()).find(s=>s.role==='guest'&&s.guestId===body.id&&s.until>Date.now());
+          if(!guest)return respond(res,409,{error:'This guest session has ended.'});
+          const until=guest.until+minutes*60000;
+          if(until>Date.now()+480*60000)return respond(res,400,{error:'A guest can have up to 8 hours remaining.'});
+          guest.until=until;record(ip,'Guest session extended');return respond(res,200,{ok:true,until});
         }
         return respond(res,404,{error:'Guest action not found'});
       }
@@ -592,7 +601,7 @@ function createApp(options={}) {
         if(regions&&regionMode&&agent?.stdin.writable&&!refreshPending){refreshPending=true;agent.stdin.write('refresh\n');}
         updateVideoDemand();if(agentMeta)res.write(viewerMetadata(v));
         // An already-open stream must not outlive the pairing session.
-        const expiry=sessionExpiry(sessions.get(token).until,()=>{if(!res.writableEnded)res.end();});
+        const expiry=sessionExpiry(()=>sessions.get(token)?.until||0,()=>{if(!res.writableEnded)res.end();});
         record(ip,'Remote screen opened');console.log(`[Sharing screen with ${ip}. Close host window to stop.]`);
         res.on('close',()=>{expiry();viewers.delete(v);updateVideoDemand();if(!viewers.size)endAgent();});
         return;
@@ -607,7 +616,7 @@ function createApp(options={}) {
         const b=await jsonBody(req);if(!commands.has(b.action))return respond(res,400,{error:'Unknown action'});
         if(!permits(token,['volup','voldown','mute','playpause','next','prev'].includes(b.action)?'media':'power'))return respond(res,403,{error:'This control was not approved.'});
         record(ip,`Requested ${b.action}`);
-        return act(b.action,e=>respond(res,e?500:200,e?{error:`Action failed: ${e.message}`}:{ok:true,msg:`${b.action} requested`}));
+        return act(b.action,(e,result)=>respond(res,e?500:200,e?{error:`Action failed: ${e.message}`}:{ok:true,...result,msg:result?.msg||`${b.action} requested`}));
       }
       return respond(res,404,{error:'Not found'});
     }catch(err){if(res.headersSent){res.destroy();return;}return respond(res,err.message==='Request too large'?413:400,{error:err.message});}
@@ -648,7 +657,7 @@ function createApp(options={}) {
       if(Array.from(audioSockets).filter(entry=>entry.token===token).length>=2||audioSockets.size>=4)return rejectUpgrade(socket,429,'Stop an existing audio session first');
       audioStream.handleUpgrade(req,socket,head,ws=>{
         const entry={ws,token,capture:null};audioSockets.add(entry);let alive=true,formatSent=false;
-        const expiry=sessionExpiry(sessions.get(token).until,()=>{entry.capture?.stop();disconnectInput(ws,1008,'Session expired');});
+        const expiry=sessionExpiry(()=>sessions.get(token)?.until||0,()=>{entry.capture?.stop();disconnectInput(ws,1008,'Session expired');});
         const send=value=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(value));};
         ws.on('error',()=>{});ws.on('pong',()=>{alive=true;});
         const heartbeat=setInterval(()=>{if(!alive||auth(req)!==token){entry.capture?.stop();ws.terminate();return;}alive=false;ws.ping();},15000);heartbeat.unref();
@@ -670,7 +679,7 @@ function createApp(options={}) {
     inputStream.handleUpgrade(req,socket,head,ws=>{
       const entry={ws,token};inputSockets.add(entry);
       if(viewer){viewer.feedbackSocket=ws;viewer.inFlight.clear();updateVideoDemand();}
-      const expiry=sessionExpiry(sessions.get(token).until,()=>disconnectInput(ws,1008,'Session expired'));
+      const expiry=sessionExpiry(()=>sessions.get(token)?.until||0,()=>disconnectInput(ws,1008,'Session expired'));
       const activeIds=new Set();
       const send=payload=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(payload));};
       ws.on('error',()=>{});
@@ -729,4 +738,4 @@ if(require.main===module){
   });
   app.server.on('error',e=>{console.error(e.code==='EADDRINUSE'?'Port is in use. Close the previous PC Remote terminal before starting a new instance.':e.message);process.exitCode=1;});
 }
-module.exports={createApp,privateIP,validInput};
+module.exports={createApp,privateIP,validInput,sessionExpiry};

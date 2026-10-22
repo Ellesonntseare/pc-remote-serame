@@ -5,6 +5,10 @@ const format={type:'format',encoding:'f32le',sampleRate:48000,channels:2,source:
 function packet(type,data){if(!Buffer.isBuffer(data))data=Buffer.from(JSON.stringify(data));const header=Buffer.alloc(5);header[0]=type;header.writeUInt32BE(data.length,1);return Buffer.concat([header,data]);}
 function fakeChild(){const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.stderr=new PassThrough();child.killed=false;child.kill=()=>{child.killed=true;queueMicrotask(()=>child.emit('close',0));};return child;}
 function fixture(){const calls=[];let current=1000;const service=createNativeFeatures({root:process.cwd(),platform:'win32',fsImpl:{existsSync:()=>true},now:()=>current,spawnImpl:(file,args,options)=>{const child=fakeChild();calls.push({file,args,options,child});return child;}});return {service,calls,advance(ms){current+=ms;}};}
+
+test('media actions launch only the fixed native mode and reject arbitrary input before launch',async()=>{
+  const f=fixture();for(const action of ['volup','voldown','mute','playpause','next','prev']){const pending=f.service.sendMedia(action),call=f.calls.at(-1);assert.deepEqual(call.args,['--media']);assert.equal(call.options.windowsHide,true);const chunks=[];for await(const chunk of call.child.stdin)chunks.push(chunk);assert.deepEqual(JSON.parse(Buffer.concat(chunks)),{action});call.child.stdout.end('{"ok":true,"volume":51}');call.child.emit('close',0);assert.equal((await pending).volume,51);}await assert.rejects(f.service.sendMedia('shutdown'),/Invalid media/);assert.equal(f.calls.length,6);f.service.close();
+});
 test('audio framing survives arbitrary partial/coalesced reads and enforces packet bounds',()=>{
   const seen=[],reader=new AudioPacketReader((type,data)=>seen.push([type,Buffer.from(data)])),pcm=Buffer.alloc(64),all=Buffer.concat([packet(1,format),packet(0,pcm)]);
   for(let i=0;i<all.length;i+=3)reader.push(all.subarray(i,i+3));reader.end();assert.deepEqual(seen.map(value=>value[0]),[1,0]);assert.deepEqual(JSON.parse(seen[0][1]),format);assert.deepEqual(seen[1][1],pcm);

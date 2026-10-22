@@ -27,7 +27,7 @@ function createWebRtcVideo({auth,sessionExpiry,sessions}){
       const peer={ws,token,publish,id:crypto.randomBytes(16).toString('hex'),linked:false,alive:true,rate:0,rateAt:Date.now()};peers.add(peer);
       if(publish){publisher=peer;for(const other of peers)if(other!==peer)send(other,{type:'source-ready'});}
       send(peer,{type:'ready',publish,available:!!publisher});
-      const expiry=sessionExpiry(sessions.get(token).until,()=>{drop(peer);ws.close(1008,'Session expired');});
+      const expiry=sessionExpiry(()=>sessions.get(token)?.until||0,()=>{drop(peer);ws.close(1008,'Session expired');});
       const heartbeat=setInterval(()=>{if(!peer.alive||auth(req)!==token){drop(peer);ws.terminate();return;}peer.alive=false;ws.ping();},15000);heartbeat.unref();
       ws.on('pong',()=>{peer.alive=true;});ws.on('error',()=>{});
       ws.on('message',(bytes,binary)=>{

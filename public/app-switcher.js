@@ -30,6 +30,7 @@
       finally{if(version===generation){busy=false;refresh.disabled=false;render();}}
     }
     async function focus(app){
+      if(window.PCRHoldControl&&!window.PCRHoldControl.can('pc')){status.textContent='Hold to control.';return;}
       if(busy)return;const version=generation;busy=true;refresh.disabled=true;status.textContent='Opening '+app.processName+'…';render();
       try{
         const result=await call('/api/apps/focus',{method:'POST',body:JSON.stringify({id:app.id})});if(version!==generation)return;

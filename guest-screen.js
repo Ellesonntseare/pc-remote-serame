@@ -21,7 +21,7 @@ function createGuestScreen({sessions,auth,sessionExpiry}){
       const session=sessions.get(token);if(!session){ws.close(1008,'Session ended');return;}
       const peer={ws,token,owner:session.role!=='guest',id:session.guestId,device:session.device||'Guest browser',sharing:false,watching:null,marks:[],frame:null,lastFrame:0,rateAt:Date.now(),rate:0,alive:true};
       if(!peer.owner)for(const old of peers)if(!old.owner&&old.id===peer.id){stopShare(old);old.ws.close(1001,'Sharing moved to another tab');}
-      peers.add(peer);const expiry=sessionExpiry(session.until,()=>ws.close(1008,'Session expired'));
+      peers.add(peer);const expiry=sessionExpiry(()=>session.until,()=>ws.close(1008,'Session expired'));
       send(peer,{type:'ready',role:peer.owner?'owner':'guest'});if(peer.owner)send(peer,{type:'shares',shares:shareList()});
       ws.on('error',()=>{});ws.on('pong',()=>{peer.alive=true;});
       const heartbeat=setInterval(()=>{if(auth(req)!==token||!peer.alive){stopShare(peer);ws.terminate();return;}peer.alive=false;ws.ping();},15000);heartbeat.unref();

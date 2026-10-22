@@ -20,11 +20,12 @@
     if(!control.canControl&&tool==='control'){tool='laser';for(const item of dialog.querySelectorAll('[data-tool]'))item.setAttribute('aria-pressed',String(item.dataset.tool==='laser'));}
   }
   function resetControl(){clearTimeout(controlTimeout);controlTimeout=null;controlPending=null;controlTouch=null;control={state:'off',supported:false,canControl:false};capture=null;displayedGeneration=0;controlUI();}
-  function sendControl(command){
+  function sendControl(command){if(window.PCRHoldControl&&!window.PCRHoldControl.can('phone'))return;
     if(!owner||!watching||!control.canControl||!control.id||!capture||capture.generation!==displayedGeneration||controlPending)return;
     const seq=++controlSeq;controlPending=seq;send({type:'control',id:control.id,seq,generation:capture.generation,command});controlUI();
     controlTimeout=setTimeout(()=>{if(controlPending===seq){send({type:'control-stop'});resetControl();status.textContent='Phone action timed out. Request control again; actions are never replayed.';}},6500);
   }
+  window.addEventListener('pcr:hold-release',event=>{if(event.detail.scope==='phone')controlTouch=null;});
   q('[data-request-control]').addEventListener('click',()=>{if(control.canControl){send({type:'control-stop'});resetControl();}else{send({type:'control-request'});q('[data-control-status]').textContent='Sending control request…';}});
   q('[data-phone-stop]').addEventListener('click',()=>{nativeSend({type:'control-stop'});resetControl();});
   for(const item of controls.querySelectorAll('[data-phone-key]'))item.addEventListener('click',()=>sendControl({action:item.dataset.phoneKey}));
@@ -112,6 +113,7 @@
   function point(event){const rect=bounds();if(!rect)return null;const box=canvas.getBoundingClientRect(),x=(event.clientX-box.left-rect.x)/rect.w,y=(event.clientY-box.top-rect.y)/rect.h;return x>=0&&x<=1&&y>=0&&y<=1?{x,y}:null;}
   function mark(event,force=false){const p=point(event);if(!p||!(owner?watching:stream||nativeSharing))return;const now=Date.now();if(!force&&now-lastSent<35)return;lastSent=now;const value={type:'mark',tool,points:tool==='pen'&&lastPoint?[lastPoint,p]:[p,p],color:owner?'#66e6bc':'#82b7ff'};lastPoint=p;applyMark(value);send(value);}
   canvas.addEventListener('pointerdown',event=>{
+    if(tool==='control'&&window.PCRHoldControl&&!window.PCRHoldControl.can('phone')){event.preventDefault();event.stopImmediatePropagation();return;}
     if(tool!=='control')return;event.preventDefault();event.stopImmediatePropagation();const p=point(event);if(!p||!control.canControl||controlPending||capture?.generation!==displayedGeneration)return;
     controlTouch={point:p,at:performance.now(),button:event.button,id:event.pointerId};canvas.setPointerCapture(event.pointerId);
   },true);
@@ -127,7 +129,7 @@
   for(const item of dialog.querySelectorAll('[data-tool]'))item.addEventListener('click',()=>{tool=item.dataset.tool;for(const other of dialog.querySelectorAll('[data-tool]'))other.setAttribute('aria-pressed',String(other===item));});
   q('[data-clear]').addEventListener('click',()=>{const value={type:'mark',tool:'clear'};applyMark(value);send(value);});q('[data-share]').addEventListener('click',start);q('[data-stop]').addEventListener('click',()=>stop('You stopped screen sharing.'));q('[data-close]').addEventListener('click',()=>dialog.close());
   button.addEventListener('click',()=>{dialog.showModal();draw();if(owner)void connect().then(renderShares).catch(error=>{status.textContent=error.message;});});
-  dialog.addEventListener('close',()=>{if(!owner)stop();else{send({type:'watch',id:''});watching=null;resetControl();hideFrame();}});
+  dialog.addEventListener('close',()=>{window.PCRHoldControl?.release();if(!owner)stop();else{send({type:'watch',id:''});watching=null;resetControl();hideFrame();}});
   new ResizeObserver(draw).observe(stage);window.addEventListener('pagehide',()=>{stop();socket?.close();});
   function authChanged(){const auth=window.PCRAuth||{},next=auth.signedIn?(auth.role==='owner'?'owner':'guest:'+auth.guestId):'';if(next===account)return;account=next;epoch++;stop();socket?.close();socket=null;dialog.close();shares=[];watching=null;owner=auth.role==='owner';button.hidden=!auth.signedIn;
     q('h2').textContent=owner?'Guest screens':nativeAvailable()?'Share your phone':'Share your screen';q('.guestScreenHint').textContent=owner?'View or control a shared screen.':nativeAvailable()?'Share your phone with Serame.':'Share a screen or window with Serame.';q('.guestScreenSelect').hidden=!owner;q('[data-share]').hidden=owner;

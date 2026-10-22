@@ -33,12 +33,12 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
   function request(argument,input){return new Promise((resolve,reject)=>{
     let child;try{child=helper(argument);}catch(error){reject(error);return;}
     let output='',done=false;
-    const timer=setTimeout(()=>{finish(Error('The app list timed out. Try again.'));child.kill();},5000);timer.unref?.();
+    const timer=setTimeout(()=>{finish(Error('The Windows helper timed out. Try again.'));child.kill();},5000);timer.unref?.();
     function finish(error,value){if(done)return;done=true;clearTimeout(timer);if(error)reject(error);else resolve(value);}
     child.stdin.on('error',()=>{});child.stderr.resume();child.stdout.setEncoding('utf8');
-    child.stdout.on('data',chunk=>{output+=chunk;if(Buffer.byteLength(output)>MAX_HELPER_OUTPUT){finish(Error('The app list is too large.'));child.kill();}});
-    child.on('error',()=>finish(Error('The Windows app helper could not start.')));
-    child.on('close',()=>{if(done)return;try{const value=JSON.parse(output);if(value?.ok!==true)throw Error(value?.error||'Windows apps are unavailable.');finish(null,value);}catch(error){finish(error);}});
+    child.stdout.on('data',chunk=>{output+=chunk;if(Buffer.byteLength(output)>MAX_HELPER_OUTPUT){finish(Error('The Windows helper response is too large.'));child.kill();}});
+    child.on('error',()=>finish(Error('The Windows helper could not start.')));
+    child.on('close',()=>{if(done)return;try{const value=JSON.parse(output);if(value?.ok!==true)throw Error(value?.error||'This Windows action is unavailable.');finish(null,value);}catch(error){finish(error);}});
     child.stdin.end(input?JSON.stringify(input):'','utf8');
   });}
   function prune(){for(const [key,value]of appTokens)if(value.until<=now())appTokens.delete(key);}
@@ -81,6 +81,10 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     return session;
   }
   function close(){closed=true;appTokens.clear();for(const session of audioSessions)session.stop();}
-  return {listApps,focusApp,openAudio,close};
+  async function sendMedia(action){
+    if(!['volup','voldown','mute','playpause','next','prev'].includes(action))throw Error('Invalid media command.');
+    return request('--media',{action});
+  }
+  return {listApps,focusApp,sendMedia,openAudio,close};
 }
 module.exports={createNativeFeatures,AudioPacketReader,validFormat};

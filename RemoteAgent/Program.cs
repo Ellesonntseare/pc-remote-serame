@@ -26,6 +26,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Length==1&&args[0]=="--media"){MediaKeys.Run();return;}
         if(args.Length==1&&args[0] is "--ocr" or "--clipboard-image-read" or "--clipboard-image-write"){ImageTools.Run(args[0]);return;}
         if(args.Length==1&&args[0]=="--capture-probe")
         {

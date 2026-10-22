@@ -17,6 +17,8 @@ The password eye shows or conceals the text you enter. **Remember me** remembers
 
 Guests use **guest**, then wait for an owner signed in with **serame** to approve them. Requests appear in a popup and under **Guests** in the header.
 
+**Select all** checks every permission, and shows a partial selection when some are enabled. The guest sees a **Guest account** ribbon and remaining time. Under **Guests**, the owner can extend an active session by 15, 30 or 60 minutes; a two-minute warning also offers **Extend 30 min**. Extensions update existing screen, input, audio and voice connection deadlines without reconnecting. Extend before expiry: an ended or revoked session needs a fresh approval. Remaining access is capped at eight hours, and extension never changes permissions.
+
 Each approval offers these choices:
 
 - View PC screen — selected by default.
@@ -41,6 +43,12 @@ Use a desktop browser supporting screen capture over HTTPS or localhost. Phone b
 
 ## Remote screen and controls
 
+- The dashboard uses the supplied dark metallic design, teal feature icons and live CPU/memory rings. Login has floating blue/teal orbs; motion pauses when hidden or signed in and honours reduced motion.
+- Files, clipboard, guests, shared screens, live video, devices, collaboration, PC audio, apps, install and control settings use redesigned page layouts with icon headers, grouped action cards and responsive work areas. The connected PC heading is centred.
+- The separate **Trackpad** dock below the picture moves the pointer relatively in either screen mode. Tap to click, hold to drag, use two fingers to scroll or tap to right-click. Drawn **Left** and **Right** mouse buttons send the corresponding click.
+- The top **Remote options** menu contains keyboard, shortcut keys, control settings, presentation and other remote tools. **Hide keys** keeps its saved setting.
+- **Controls → Hold-to-control** optionally requires the dock's hold button or Shift before sending input. Release, cancellation, sign-out and focus loss drop queued movement and release held buttons. The same preference applies to approved Android phone control; it does not grant permission.
+
 - **Auto** quality starts sharp, reduces encoded size during sustained movement or slow delivery, and restores sharpness when idle or the link recovers. Changes preserve native pointer coordinates and the input process.
 - Manual Low / Med / High / HD target up to 12 / 20 / 24 / 30 fps, subject to PC and connection limits.
 - Cumulative changed-region JPEGs and bounded frame credit prevent old frames building up behind a slow viewer.
@@ -51,6 +59,8 @@ Use a desktop browser supporting screen capture over HTTPS or localhost. Phone b
 - **Present** hides the toolbars and keyboard tray, retaining a small **Show controls** button. Escape and a three-finger tap also restore controls. The separate full-screen icon uses browser full screen when available.
 - **Apps** searches open Windows windows and brings a chosen one forward.
 - **PC audio** starts only after selecting Start, with volume, mute and stop. It captures system output, never a microphone. Playback stops on sign-out, screen closure, revoked access or when the page becomes hidden. Headphones help avoid feedback near the PC speakers.
+
+The dashboard's **Media remote** controls PC output independently of screen sharing. Volume changes by one percentage point per tap through the Windows audio endpoint; Mute toggles that endpoint directly. Previous, Next and Play/Pause use Windows media keys. A playback app must support those keys. Buttons wait for completion and show failures instead of typing characters into the active app.
 
 The normal Remote screen uses custom JPEG regions with no AnyDesk code or DeskRT. It now prefers Windows DXGI GPU desktop capture and falls back to standard GDI capture when duplication is unavailable, the monitor is rotated, or the desktop/driver resets. GPU capture is retried after 10 seconds. An idle GPU desktop skips pixel readback and JPEG scanning while pointer updates continue. JPEG compression and scaling still use the CPU; this is not a zero-copy GPU video pipeline. Set the host environment variable `PCR_CAPTURE=gdi` before starting it to force the fallback. `RemoteAgent/bin/RemoteAgent.exe --capture-probe` checks availability without acquiring desktop image pixels.
 
