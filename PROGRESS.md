@@ -40,4 +40,5 @@ Source changes go directly into this project folder. No source ZIP is prepared.
 - [x] Initial capture size is bounded before the first frame
 - [x] Small unsent-pointer budget with ordered commands and independent typing limit
 - [x] Control glow animation uses transforms; hidden login motion stays paused
-- [ ] Real mobile-data verification after host restart
+- [x] Host restart confirmed; public site and updated assets verified live on 22 October 2026
+- [ ] Real Android control and mobile-data responsiveness verification
