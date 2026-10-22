@@ -133,6 +133,13 @@ test('slow frame delivery adjusts compression without changing the screen sessio
   await until(()=>f.written.includes('quality 40'));assert.equal(f.streamId,original);assert.ok(f.written.filter(c=>c==='frame').length>=2,'capture resumes on fresh frame credit');
 });
 
+test('Auto respects a phone encoding size while pointer metadata stays native and desktop viewers can request full detail',async t=>{
+  const f=await fixture();t.after(()=>f.close());const phone=await f.openScreen('/api/screen?p=auto&regions=1&maxWidth=1280');assert.equal(phone.metadata.w,1920);assert.equal(phone.metadata.h,1080);await until(()=>f.written.includes('stream 67 24 85'));
+  const {ws}=await f.connect({},'/api/input-stream?screen='+phone.metadata.streamId);ws.send(JSON.stringify({id:'native-pointer',cmds:['abs 1919 1079']}));await until(()=>ws.messages.some(v=>v.id==='native-pointer'));assert.ok(f.written.includes('abs 1919 1079'));
+  await f.openScreen('/api/screen?p=auto&regions=1');await pause(1300);await until(()=>f.written.includes('stream 100 24 85'));assert.equal(phone.res.destroyed,false);
+  for(const value of ['0','-1','99999','NaN','1.2'])assert.equal((await request(f.port,'/api/screen?p=auto&maxWidth='+value,'GET',undefined,{Cookie:f.cookie})).status,400);
+});
+
 test('region streaming recovers a keyframe skipped by a slow viewer',async t=>{
   const f=await fixture();t.after(()=>f.close());await f.openScreen('/api/screen?regions=1');
   const {ws}=await f.connect({},'/api/input-stream?screen='+f.streamId);

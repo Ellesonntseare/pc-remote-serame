@@ -345,7 +345,8 @@ async function rsRun(){
   });
   screenRenderer.reset(ab);
   try{
-    const r=await fetch('/api/screen?p='+QN[rs.qi]+'&regions=1',{headers:{'X-PCR':'1'},signal:ab.signal});
+    const autoWidth=rs.qi===4&&window.matchMedia('(any-pointer: coarse)').matches?Math.max(1280,Math.min(1920,Math.round(innerWidth*Math.min(devicePixelRatio||1,2)))):null;
+    const r=await fetch('/api/screen?p='+QN[rs.qi]+'&regions=1'+(autoWidth?'&maxWidth='+autoWidth:''),{headers:{'X-PCR':'1'},signal:ab.signal});
     if(rs.ab!==ab||!rs.on){await r.body?.cancel();return;}
     if(!r.ok){const d=await r.json().catch(()=>({}));msg(d.error||'Screen unavailable');$('rsst').textContent=d.error||'Screen unavailable';rsPauseLive('Screen unavailable. Reopen the screen, select a PC field, then tap New field.');return rsClose();}
     const rd=r.body.getReader(),packets=new window.PCRPacketReader();let frameId=null;

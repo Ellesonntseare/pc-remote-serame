@@ -217,7 +217,7 @@ function createApp(options={}) {
     }
     const next=viewers.size>0&&Array.from(viewers).every(v=>v.feedbackSocket?.readyState===WebSocket.OPEN);
     if(next!==captureDemand){captureDemand=next;captureRequested=false;if(agent?.stdin.writable)agent.stdin.write('flow '+(next?1:0)+'\n');}
-    requestVideoFrame();
+    applySmartQuality();requestVideoFrame();
   }
   function acknowledgeVideo(viewer,id){
     if(!Number.isSafeInteger(id)||!viewer.inFlight.has(id))return;
@@ -245,7 +245,8 @@ function createApp(options={}) {
   }
   function closeAudioSockets(token){for(const entry of audioSockets)if(!token||entry.token===token){entry.capture?.stop();disconnectInput(entry.ws,1001,'Session ended');}}
   function applySmartQuality(){
-    if(agentPreset!=='auto'||!agent?.stdin.writable||!viewers.size)return;
+    if(agentPreset!=='auto'||!agent?.stdin.writable||!agentMeta||!viewers.size)return;
+    if(agentMeta){const nativeWidth=JSON.parse(agentMeta.subarray(5).toString('utf8')).w;const requested=Math.max(...Array.from(viewers,v=>v.maxWidth||Infinity));if(Number.isFinite(nativeWidth)&&nativeWidth>0)smart.limitScale(Math.min(1,requested/nativeWidth));}
     const settings=smart.tick();if(settings){agent.stdin.write(`stream ${Math.round(settings.scale*100)} ${settings.fps} ${settings.quality}\n`);currentQuality=settings.quality;}
   }
   const smartClock=setInterval(applySmartQuality,250);smartClock.unref();
@@ -270,7 +271,7 @@ function createApp(options={}) {
     for(const v of viewers) {try {v.res.end();} catch{}}
     viewers.clear();endAgent();
   }
-  function startAgent(preset) {
+  function startAgent(preset,maxWidth=null) {
     if (agent && agentPreset===preset) return true;
     endAgent();
     if ((process.platform!=='win32' && !options.agentFactory) || options.disableAgent) return false;
@@ -283,6 +284,7 @@ function createApp(options={}) {
     let bin,args;
     if(fs.existsSync(exe)) {bin=exe;args=[String(fps),String(quality),String(scale)];}
     else {bin='dotnet';args=[dll,String(fps),String(quality),String(scale)];}
+    if(preset==='auto'&&maxWidth)args.push(String(maxWidth));
     const p=options.agentFactory ? options.agentFactory(preset) : spawn(bin,args,{cwd:ROOT,windowsHide:false,stdio:['pipe','pipe','pipe']});
     agent=p;agentPreset=preset;agentBuffer=new ScreenPacketReader(MAX_PACKET);agentReady=false;
     p.stdin.on('error',()=>{});
@@ -312,7 +314,7 @@ function createApp(options={}) {
           for(const v of viewers)if(v.regions&&v.res.writable&&!v.busy)v.busy=!v.res.write(pkt);
           return;
         }else if(pkt[0]!==0&&pkt[0]!==5) return;
-        if(pkt[0]===1){for(const v of viewers)if(v.res.writable)v.res.write(viewerMetadata(v));return;}
+        if(pkt[0]===1){applySmartQuality();for(const v of viewers)if(v.res.writable)v.res.write(viewerMetadata(v));return;}
         captureRequested=false;
         let frameBase=null,keyframe=true;
         if(pkt[0]===5){
@@ -591,13 +593,15 @@ function createApp(options={}) {
       if(req.method==='GET'&&pathname==='/api/screen'){
         if(!permits(token,'screen'))return respond(res,403,{error:'Screen viewing was not approved.'});
         if(!enabled||!requiresHeader(req))return respond(res,403,{error:'Screen sharing disabled'});
-        const preset=new URL(req.url,'http://localhost').searchParams.get('p')||'med';
+        const query=new URL(req.url,'http://localhost').searchParams,preset=query.get('p')||'med';
         if(!PRESETS[preset])return respond(res,400,{error:'Invalid quality setting'});
-        if(!startAgent(preset))return respond(res,503,{error:'Desktop agent unavailable. Build it on Windows using start.bat.'});
+        const maxWidth=preset==='auto'&&query.has('maxWidth')?Number(query.get('maxWidth')):null;
+        if(maxWidth!==null&&(!Number.isInteger(maxWidth)||maxWidth<320||maxWidth>8192))return respond(res,400,{error:'Invalid screen size preference'});
+        if(!startAgent(preset,maxWidth))return respond(res,503,{error:'Desktop agent unavailable. Build it on Windows using start.bat.'});
         res.writeHead(200,{'Content-Type':'application/octet-stream','Cache-Control':'no-store, no-transform','X-Accel-Buffering':'no','X-Content-Type-Options':'nosniff'});
         res.socket.setNoDelay(true);
         const regions=new URL(req.url,'http://localhost').searchParams.get('regions')==='1';
-        const v={res,token,regions,regionBase:null,busy:false,streamId:crypto.randomBytes(12).toString('hex'),feedbackSocket:null,inFlight:new Map(),deliveryMs:0};viewers.add(v);res.on('drain',()=>{v.busy=false;requestVideoFrame();});
+        const v={res,token,regions,maxWidth,regionBase:null,busy:false,streamId:crypto.randomBytes(12).toString('hex'),feedbackSocket:null,inFlight:new Map(),deliveryMs:0};viewers.add(v);res.on('drain',()=>{v.busy=false;requestVideoFrame();});
         if(regions&&regionMode&&agent?.stdin.writable&&!refreshPending){refreshPending=true;agent.stdin.write('refresh\n');}
         updateVideoDemand();if(agentMeta)res.write(viewerMetadata(v));
         // An already-open stream must not outlive the pairing session.

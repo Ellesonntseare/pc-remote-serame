@@ -62,25 +62,28 @@ internal static class Program
             catch(Exception ex){Console.WriteLine(JsonSerializer.Serialize(new {ok=false,error="Clipboard unavailable. "+ex.Message}));Environment.ExitCode=1;}
             return;
         }
-        if (args.Length != 3 || !int.TryParse(args[0], out int fps)
+        if (args.Length is not (3 or 4) || !int.TryParse(args[0], out int fps)
             || !long.TryParse(args[1], out long quality)
             || !double.TryParse(args[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double scale)
             || fps < 1 || fps > 30 || quality < 20 || quality > 90 || scale < .25 || scale > 1.0)
         {
-            Console.Error.WriteLine("Usage: RemoteAgent <fps:1..30> <jpeg-quality:20..90> <scale:0.25..1>");
+            Console.Error.WriteLine("Usage: RemoteAgent <fps:1..30> <jpeg-quality:20..90> <scale:0.25..1> [max-width:320..8192]");
             Environment.ExitCode = 2;
             return;
         }
+        int maxWidth=0;
+        if(args.Length==4&&(!int.TryParse(args[3],out maxWidth)||maxWidth<320||maxWidth>8192)){Environment.ExitCode=2;return;}
         try
         {
             Native.SetProcessDPIAware();
             primary = Screen.PrimaryScreen?.Bounds ?? throw new InvalidOperationException("No active desktop monitor");
             if (primary.Width <= 0 || primary.Height <= 0) throw new InvalidOperationException("Invalid monitor size");
+            if(maxWidth>0)scale=Math.Round(Math.Max(.25,Math.Min(scale,maxWidth/(double)primary.Width))*100)/100;
             int outW = Math.Max(1, (int)Math.Round(primary.Width * scale));
             int outH = Math.Max(1, (int)Math.Round(primary.Height * scale));
             int msPerFrame = Math.Max(33, 1000 / fps);
             var stdout = Console.OpenStandardOutput();
-            Send(stdout, 1, JsonSerializer.SerializeToUtf8Bytes(new { w = primary.Width, h = primary.Height }));
+            Send(stdout, 1, JsonSerializer.SerializeToUtf8Bytes(new { w = primary.Width, h = primary.Height,encodedW=outW,encodedH=outH,scale }));
             using var source = new Bitmap(primary.Width, primary.Height, PixelFormat.Format24bppRgb);
             using var outputSurface = new ScreenOutput();
             outputSurface.Resize(outW, outH);

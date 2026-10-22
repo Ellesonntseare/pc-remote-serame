@@ -33,6 +33,11 @@ test('native quality starts immediately and tick emits only changed settings',()
   for(let i=0;i<6;i++){c.advance(250);assert.equal(c.sample(80,100),null);}
 });
 
+test('phone resolution limits preserve adaptive motion, native coordinates and bounded recovery',()=>{
+  const c=harness();c.smart.limitScale(.5);assert.deepEqual(c.smart.tick(),{scale:.5,fps:24,quality:85});c.advance(1300);c.input(['mv 1 0']);c.advance(50);c.input(['mv 1 0']);c.advance(50);assert.deepEqual(c.input(['mv 1 0']),{scale:.4,fps:24,quality:76});c.advance(1300);assert.deepEqual(c.smart.tick(),{scale:.5,fps:24,quality:85});
+  c.smart.limitScale(.01);c.advance(1300);assert.equal(c.smart.tick().scale,.25);c.smart.limitScale(NaN);assert.equal(c.smart.tick(),null);c.smart.reset();assert.deepEqual(c.smart.tick(),native);
+});
+
 test('snapshots and emitted settings are independent copies of the applied configuration',()=>{
   const c=harness();const initial=c.smart.snapshot();assert.deepEqual(initial,native);initial.scale=.1;
   assert.deepEqual(c.smart.snapshot(),native);begin(c);

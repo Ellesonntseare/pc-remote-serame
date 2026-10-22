@@ -1,6 +1,7 @@
 'use strict';
 (() => {
   const MAX_BUFFER=64*1024;
+  const POINTER_BUFFER=1024;
   let socket=null,wanted=false,retryTimer=null,openTimer=null,retryDelay=2000,nextId=1;
   const pending=new Map();
   let lastFrameAck=null;
@@ -60,7 +61,7 @@
   // Backpressure keeps unsent actions in the controller's coalescing queue.
   function sendPointer(commands){
     if(!ready())return 'http';
-    if(socket.bufferedAmount>=MAX_BUFFER)return 'blocked';
+    if(socket.bufferedAmount>=POINTER_BUFFER)return 'blocked';
     const ws=socket;
     try{ws.send(JSON.stringify({cmds:commands,wait:false}));ws.pcrUsed=true;return 'sent';}
     catch{lost(ws,'Could not send PC input');ws.close();return 'failed';}

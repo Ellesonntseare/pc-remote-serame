@@ -51,6 +51,7 @@ Use a desktop browser supporting screen capture over HTTPS or localhost. Phone b
 
 - **Auto** quality starts sharp, reduces encoded size during sustained movement or slow delivery, and restores sharpness when idle or the link recovers. Changes preserve native pointer coordinates and the input process.
 - Manual Low / Med / High / HD target up to 12 / 20 / 24 / 30 fps, subject to PC and connection limits.
+- On touch devices, **Auto** requests an encoded width suited to the phone: 1280–1920 pixels based on viewport and pixel density. Movement and network pressure reduce it further; idle restores the sharper phone profile. Native pointer coordinates stay unchanged. Manual HD retains the full PC resolution. Multiple Auto viewers use the largest requested size, and a desktop viewer can still request native detail. The capture helper starts at the phone size so its first frame is also bounded.
 - Cumulative changed-region JPEGs and bounded frame credit prevent old frames building up behind a slow viewer.
 - The separately drawn pointer gives immediate local feedback. **Controls → Pointer size** adjusts it from 50% to 250% and remembers the setting.
 - **Lens** magnifies the pointer area. Fine mode slows movement; nudge buttons move one PC pixel.
@@ -61,6 +62,10 @@ Use a desktop browser supporting screen capture over HTTPS or localhost. Phone b
 - **PC audio** starts only after selecting Start, with volume, mute and stop. It captures system output, never a microphone. Playback stops on sign-out, screen closure, revoked access or when the page becomes hidden. Headphones help avoid feedback near the PC speakers.
 
 The dashboard's **Media remote** controls PC output independently of screen sharing. Volume changes by one percentage point per tap through the Windows audio endpoint; Mute toggles that endpoint directly. Previous, Next and Play/Pause use Windows media keys. A playback app must support those keys. Buttons wait for completion and show failures instead of typing characters into the active app.
+
+Pointer backpressure now starts at 1 KiB of unsent socket data, rather than 64 KiB. Additional movement stays in the existing coalescing queue, preserving button order. Small frame acknowledgements still pass and acknowledged typing keeps its separate limit. Decorative control glows rotate using transforms instead of changing a gradient angle every frame. Login motion remains paused outside sign-in.
+
+A generated 4K document benchmark (12 measured frames per configuration) produced about 334 KB per native frame, 43 KB at the phone idle profile and 26 KB during phone movement. This is approximately 87% and 92% less data for that example. Mean scaling/encoding work was 28.06, 22.25 and 19.07 ms respectively. These are synthetic host measurements; real mobile-data latency, FPS and battery use still need an on-device check after restarting the updated host.
 
 The normal Remote screen uses custom JPEG regions with no AnyDesk code or DeskRT. It now prefers Windows DXGI GPU desktop capture and falls back to standard GDI capture when duplication is unavailable, the monitor is rotated, or the desktop/driver resets. GPU capture is retried after 10 seconds. An idle GPU desktop skips pixel readback and JPEG scanning while pointer updates continue. JPEG compression and scaling still use the CPU; this is not a zero-copy GPU video pipeline. Set the host environment variable `PCR_CAPTURE=gdi` before starting it to force the fallback. `RemoteAgent/bin/RemoteAgent.exe --capture-probe` checks availability without acquiring desktop image pixels.
 

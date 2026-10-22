@@ -14,11 +14,11 @@ const SCALE_COOLDOWN=1200,MOTION_IDLE=700;
 
 function createSmartQuality({now=Date.now}={}){
   const clock=typeof now==='function'?now:Date.now;
-  let current,emitted,tier,lastScaleChange,lastTierChange,latestTime;
+  let current,emitted,tier,lastScaleChange,lastTierChange,latestTime,maxScale=1;
   let slowSamples,fastSamples,motionSamples,motionUntil,lastAbsolute;
 
   function reset(){
-    current={...NATIVE};emitted=false;tier=0;
+    current={...NATIVE};emitted=false;tier=0;maxScale=1;
     lastScaleChange=-Infinity;lastTierChange=-Infinity;latestTime=-Infinity;
     slowSamples=[];fastSamples=[];motionSamples=[];motionUntil=-Infinity;lastAbsolute=null;
     return snapshot();
@@ -83,15 +83,17 @@ function createSmartQuality({now=Date.now}={}){
       if(tier<PRESSURE.length-1&&slowSamples.length>=3&&slowSamples.at(-1)-slowSamples[0]>=400){tier++;lastTierChange=at;slowSamples=[];fastSamples=[];}
       else if(tier>0&&fastSamples.length>=5&&fastSamples.at(-1)-fastSamples[0]>=1000){tier--;lastTierChange=at;slowSamples=[];fastSamples=[];}
     }
-    const desired=tier?PRESSURE[tier]:at<motionUntil?MOTION:NATIVE;
+    const profile=tier?PRESSURE[tier]:at<motionUntil?MOTION:NATIVE;
+    const desired={...profile,scale:Math.max(.25,Math.round(profile.scale*maxScale*100)/100)};
     if(current.scale!==desired.scale&&at-lastScaleChange<SCALE_COOLDOWN)return null;
     if(emitted&&current.scale===desired.scale&&current.fps===desired.fps&&current.quality===desired.quality)return null;
     if(current.scale!==desired.scale)lastScaleChange=at;
     current={...desired};emitted=true;return snapshot();
   }
   function snapshot(){return {...current};}
+  function limitScale(value){if(Number.isFinite(value))maxScale=Math.max(.25,Math.min(1,value));}
   reset();
-  return {reset,input,sample,tick,snapshot};
+  return {reset,input,sample,tick,snapshot,limitScale};
 }
 
 module.exports={createSmartQuality};

@@ -31,3 +31,13 @@ Source changes go directly into this project folder. No source ZIP is prepared.
 - [x] Animated login orbs, restrained interface motion and reduced-motion support
 - [x] Media controls through the Windows audio endpoint and native media keys
 - [x] Actual Windows 1% volume step and mute check; original sound settings restored
+
+## Mobile-data performance
+
+- [x] Reviewed desktop capture and browser backpressure documentation
+- [x] Measured a generated 4K desktop against phone idle/motion profiles
+- [x] Auto encoding size follows the phone display; native pointer mapping and manual HD retained
+- [x] Initial capture size is bounded before the first frame
+- [x] Small unsent-pointer budget with ordered commands and independent typing limit
+- [x] Control glow animation uses transforms; hidden login motion stays paused
+- [ ] Real mobile-data verification after host restart
