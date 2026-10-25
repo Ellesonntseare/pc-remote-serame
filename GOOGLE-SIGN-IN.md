@@ -8,7 +8,7 @@ The app/host operator configures the OAuth client once. Ordinary users select th
 
 ## One-time setup
 
-1. Open [Google Auth Platform](https://console.cloud.google.com/auth/overview), select or create a project, then configure Branding and an External Audience. While the project is in Testing, add the Google accounts that will test registration. Before offering public registration, configure the audience for production and complete Google's applicable publishing requirements.
+1. Open [Google Auth Platform](https://console.cloud.google.com/auth/overview), select or create a project, then configure Branding and an External Audience. This app requests only `openid email`, so Google's identity-only sign-in exception applies: each person does not need to be added as a test user. For a public launch, configure the audience for production and complete Google's applicable publishing requirements. See [Google's audience rules](https://support.google.com/cloud/answer/15549945).
 2. Under **Clients → Create client**, choose **Web application**. Add this exact **Authorized redirect URI** for the personal app:
 
    `https://remote.teamtrader.co.za/api/auth/google/callback`
