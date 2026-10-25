@@ -8,5 +8,5 @@ function guestPermissions(value){
   if(permissions.apps){permissions.control=true;permissions.screen=true;}
   return permissions;
 }
-function can(session,key){return !!session&&(session.role!=='guest'||session.permissions?.[key]===true);}
+function can(session,key){return !!session&&session.role!=='account'&&(session.role!=='guest'||session.permissions?.[key]===true);}
 module.exports={KEYS,guestPermissions,can};

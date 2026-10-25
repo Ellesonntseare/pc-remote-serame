@@ -5,8 +5,8 @@ const fault=(message,status=400)=>Object.assign(Error(message),{status});
 
 function createGoogleSignIn(config={},dependencies={}){
   let origin='';try{const url=new URL(config.origin);if(url.protocol==='https:'&&!url.username&&!url.password&&url.pathname==='/'&&!url.search&&!url.hash)origin=url.origin;}catch{}
-  const emails=new Set((Array.isArray(config.allowedEmails)?config.allowedEmails:[]).filter(v=>typeof v==='string'&&v.includes('@')).map(v=>v.trim().toLowerCase()));
-  const enabled=!!(origin&&config.clientId&&config.clientSecret&&emails.size),transactions=new Map(),now=dependencies.now||Date.now;
+  const emails=new Set((Array.isArray(config.ownerEmails||config.allowedEmails)?config.ownerEmails||config.allowedEmails:[]).filter(v=>typeof v==='string'&&v.includes('@')).map(v=>v.trim().toLowerCase()));
+  const enabled=!!(origin&&config.clientId&&config.clientSecret),transactions=new Map(),now=dependencies.now||Date.now;
   const redirectUri=origin+'/api/auth/google/callback';
   async function verify(code,verifier){
     if(dependencies.verify)return dependencies.verify(code,verifier);
@@ -21,7 +21,8 @@ function createGoogleSignIn(config={},dependencies={}){
   function available(){if(!enabled)throw fault('Google sign-in is not enabled for this PC yet. Use your password for now.',503);}
   function googleUrl(id,entry){const url=new URL('https://accounts.google.com/o/oauth2/v2/auth');url.search=new URLSearchParams({client_id:config.clientId,redirect_uri:redirectUri,response_type:'code',scope:'openid email',state:id,nonce:entry.nonce,code_challenge:hash(entry.verifier),code_challenge_method:'S256',prompt:'select_account'});return url.href;}
   return {
-    enabled,origin,isAllowed:identity=>enabled&&identity?.provider==='google'&&emails.has(identity.email)&&typeof identity.subject==='string',
+    enabled,origin,isAllowed:identity=>enabled&&identity?.provider==='google'&&typeof identity.email==='string'&&typeof identity.subject==='string'&&!!identity.subject,
+    isOwner:identity=>enabled&&identity?.provider==='google'&&emails.has(identity.email),
     start({remember=false,device=false,ip}){
       available();clean();if(transactions.size>=128)throw fault('Too many sign-ins are pending. Try again shortly.',429);
       const id=random(),secret=random(),entry={until:now()+TTL,verifier:random(),nonce:random(),cookie:random(),remember,device,ip,started:false,status:'pending',secretHash:hash(secret)};transactions.set(id,entry);
@@ -35,7 +36,7 @@ function createGoogleSignIn(config={},dependencies={}){
         if(error)throw fault('Google sign-in was cancelled.');
         if(typeof code!=='string'||!code||code.length>4096)throw fault('Google did not return a valid sign-in code.');
         const claims=await verify(code,entry.verifier);
-        if(entry.until<=now()||!claims||claims.nonce!==entry.nonce||claims.aud!==config.clientId||!Number.isFinite(claims.exp)||claims.exp*1000<=now()||!['accounts.google.com','https://accounts.google.com'].includes(claims.iss)||typeof claims.sub!=='string'||!claims.sub||claims.email_verified!==true||typeof claims.email!=='string'||!emails.has(claims.email.toLowerCase()))throw fault('This Google account is not approved for this PC.',403);
+        if(entry.until<=now()||!claims||claims.nonce!==entry.nonce||claims.aud!==config.clientId||!Number.isFinite(claims.exp)||claims.exp*1000<=now()||!['accounts.google.com','https://accounts.google.com'].includes(claims.iss)||typeof claims.sub!=='string'||!claims.sub||claims.sub.length>256||claims.email_verified!==true||typeof claims.email!=='string'||claims.email.length>320||!claims.email.includes('@'))throw fault('Google could not verify this account.',403);
         entry.identity={provider:'google',subject:claims.sub,email:claims.email.toLowerCase()};entry.status='approved';
         if(entry.device)return {device:true};transactions.delete(id);return {identity:entry.identity,remember:entry.remember};
       }catch(error){entry.status='denied';throw fault(error.status?error.message:'Google could not verify this sign-in. Please try again.',error.status||502);}

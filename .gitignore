@@ -4,6 +4,7 @@ RemoteAgent/obj/
 RemoteAgent/.vs/
 config.json
 .remembered-sessions.json*
+.google-accounts.json*
 test/FrameEncoderChecks/bin/
 test/FrameEncoderChecks/obj/
 test/ImageToolsChecks/bin/

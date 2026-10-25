@@ -12,8 +12,9 @@ test('Google app handoff uses PKCE and returns a single-use app session identity
   const result=f.google.poll({...f.ticket,ip:'phone'});assert.equal(result.identity.subject,'google-account-id');assert.equal(result.remember,true);assert.throws(()=>f.google.poll({...f.ticket,ip:'phone'}),/expired/);
 });
 
-test('Google rejects a wrong account, unverified email, wrong issuer/audience/nonce and expired token',async()=>{
-  for(const change of [{email:'stranger@gmail.com'},{email_verified:false},{iss:'https://evil.example'},{aud:'other-client'},{nonce:'wrong'},{exp:1}]){const f=fixture();f.setClaims(identity(f.url.searchParams.get('nonce'),change));await assert.rejects(f.callback(),/not approved/);assert.throws(()=>f.google.poll({...f.ticket,ip:'phone'}),/cancelled|not approved/);}
+test('Google accepts new verified users and rejects unverified email, wrong issuer/audience/nonce and expired tokens',async()=>{
+  const newcomer=fixture();newcomer.setClaims(identity(newcomer.url.searchParams.get('nonce'),{email:'new-person@gmail.com'}));await newcomer.callback();assert.equal(newcomer.google.poll({...newcomer.ticket,ip:'phone'}).identity.email,'new-person@gmail.com');
+  for(const change of [{email_verified:false},{iss:'https://evil.example'},{aud:'other-client'},{nonce:'wrong'},{exp:1}]){const f=fixture();f.setClaims(identity(f.url.searchParams.get('nonce'),change));await assert.rejects(f.callback(),/could not verify/);assert.throws(()=>f.google.poll({...f.ticket,ip:'phone'}),/cancelled|not approved/);}
 });
 
 test('Google denies expired transactions, disabled configuration and provider failures without exposing secrets',async()=>{

@@ -1,6 +1,6 @@
 # PC Remote — Serame's personal remote app
 
-Version 1.7 improves local IP entry, speeds up startup and local transfers, adds Google sign-in support, and adds native Android camera/microphone capture for local HTTP. See [Google setup](GOOGLE-SIGN-IN.md), [version 1.7 checks](docs/version-1.7.md), [the feature guide](docs/mission-control.md), and [reference artwork notes](docs/design-artwork.md).
+Version 1.7 improves local IP entry, speeds up startup and local transfers, adds Google registration/login with persistent accounts and PC pairing, and adds native Android camera/microphone capture for local HTTP. See [Google setup](GOOGLE-SIGN-IN.md), [version 1.7 checks](docs/version-1.7.md), [the feature guide](docs/mission-control.md), and [reference artwork notes](docs/design-artwork.md).
 
 ## Start the updated app
 

@@ -2,6 +2,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
 const source=name=>fs.readFileSync(path.join(__dirname,'../public',name),'utf8');
 const plain=value=>JSON.parse(JSON.stringify(value));
+test('Settings exposes the signed-in Google account and a working sign-out action on phones',async t=>{
+  const f=await fixture(t);let signedOut=0;f.window.PCRAuth.account={email:'person@gmail.com'};f.window.unpair=()=>{signedOut++;};f.window.PCRWorkspaceSettings.open();assert.equal(f.doc.querySelector('#workspaceSettings [data-current-account]').textContent,'person@gmail.com');f.doc.getElementById('workspaceSignOut').click();assert.equal(signedOut,1);assert.equal(f.doc.getElementById('workspaceSettings').open,false);
+});
 async function fixture(t,options={}){
   const names={screen:'Remote screen',file:'Files & clipboard',audio:'PC audio',video:'Live video',guest:'Guest screens',collaborate:'Collaborate',devices:'Devices',power:'Power'};
   const tiles=Object.entries(names).map(([id,title])=>'<button class="quick wide" '+(id==='screen'?'id="screenBtn"':'')+' data-dashboard-tile="'+id+'" '+(options.denied?.includes(id)?'data-pcr-denied="true"':'')+'><span class="dashboardTileIcon"><svg></svg></span><span class="dashboardTileCopy"><strong>'+title+'</strong><small>Control your PC</small></span></button>').join('');
