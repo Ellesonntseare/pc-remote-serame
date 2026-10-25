@@ -1,13 +1,17 @@
-param([string]$Email,[string]$Origin)
+param([string]$Email,[string]$Origin,[string]$ClientId)
 $ErrorActionPreference='Stop'
 $configPath=Join-Path $PSScriptRoot 'config.json'
 $settings=if(Test-Path -LiteralPath $configPath){Get-Content -LiteralPath $configPath -Raw|ConvertFrom-Json}else{[pscustomobject]@{}}
+if(!$Email){$Email=@($settings.googleSignIn.ownerEmails+$settings.googleSignIn.allowedEmails|Where-Object {$_})|Select-Object -First 1}
 if(!$Email){$Email=Read-Host 'PC owner Google email (new users register separately)'}
 if($Email -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$'){throw 'Enter a valid Google email address.'}
+if(!$Origin){$Origin=[string]$settings.googleSignIn.origin}
 if(!$Origin){$Origin=Read-Host 'Your HTTPS PC Remote website (example: https://remote.example.com)'}
 $uri=[uri]$Origin
 if($uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.AbsolutePath -ne '/' -or $uri.Query -or $uri.Fragment){throw 'Enter only your HTTPS website origin.'}
-$clientId=Read-Host 'Google Web application client ID'
+if(!$ClientId){$ClientId=[string]$settings.googleSignIn.clientId}
+if(!$ClientId){$ClientId=Read-Host 'Google Web application client ID'}
+$clientId=$ClientId.Trim()
 if($clientId -notmatch '^[a-zA-Z0-9._-]+\.apps\.googleusercontent\.com$'){throw 'Enter the Web application client ID from Google Auth Platform.'}
 $secureSecret=Read-Host 'Google client secret (hidden)' -AsSecureString
 $pointer=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
