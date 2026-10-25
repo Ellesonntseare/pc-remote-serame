@@ -1,0 +1,11 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),{PhoneAudioSender}=require('../public/phone-audio');
+test('browser microphone sends PCM only after output readiness; mute clears queued samples and a slow network drops backlog',async()=>{
+ const contexts=[],sockets=[],states=[],track={kind:'audio',enabled:true,stopped:false,addEventListener(){},stop(){this.stopped=true;}},stream={getTracks:()=>[track],getAudioTracks:()=>[track]};
+ class Audio{constructor(){this.sampleRate=48000;this.destination={};contexts.push(this);}resume(){return Promise.resolve();}close(){this.closed=true;return Promise.resolve();}createMediaStreamSource(){return{connect(){},disconnect(){}};}createScriptProcessor(){return{connect(){},disconnect(){}};}}
+ class Socket{constructor(){this.readyState=1;this.bufferedAmount=0;this.sent=[];sockets.push(this);}send(value){this.sent.push(value);}close(){this.readyState=3;}}
+ const sender=new PhoneAudioSender({Audio,Socket,getUserMedia:async options=>{assert.equal(options.video,false);return stream;},location:{protocol:'https:',host:'remote.example'},onState:value=>states.push(value)});await sender.start();const socket=sockets[0];assert.equal(sender.node,null);socket.onmessage({data:JSON.stringify({type:'ready'})});assert.equal(JSON.parse(socket.sent[0]).encoding,'s16le');socket.onmessage({data:JSON.stringify({type:'started'})});await Promise.resolve();
+ const capture=()=>sender.node.onaudioprocess({inputBuffer:{getChannelData:()=>new Float32Array([0,1,-1,.5])}});capture();assert.deepEqual(Buffer.from(socket.sent.find(v=>v instanceof ArrayBuffer)),Buffer.from([0,0,255,127,0,128,0,64]));
+ sender.control(.4,true);assert.equal(track.enabled,false);capture();const buffers=socket.sent.filter(v=>v instanceof ArrayBuffer);assert.ok(Buffer.from(buffers.at(-1)).every(value=>value===0),'late captured audio is cleared after Mute');assert.equal(JSON.parse(socket.sent.filter(v=>typeof v==='string').at(-1)).value,0);
+ socket.bufferedAmount=30000;capture();assert.equal(socket.sent.filter(v=>v instanceof ArrayBuffer).length,buffers.length);sender.stop();assert.equal(track.stopped,true);assert.equal(contexts[0].closed,true);assert.equal(socket.readyState,3);assert.equal(states.at(-1).state,'stopped');
+});

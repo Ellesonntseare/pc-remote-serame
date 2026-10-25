@@ -80,7 +80,7 @@
                 android:text="Sign in with your app password. Approved guests can share their phone screen after granting Android's screen-sharing permission."
                 android:textColor="#8E9BB5" android:textSize="12sp" android:lineSpacingExtra="3dp"
                 android:layout_marginTop="20dp" />
-            <TextView android:id="@+id/appVersion" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="PC Remote 1.7" android:textColor="#63869F" android:textSize="10sp" android:gravity="center" android:layout_marginTop="20dp" />
+            <TextView android:id="@+id/appVersion" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="PC Remote 1.8" android:textColor="#63869F" android:textSize="10sp" android:gravity="center" android:layout_marginTop="20dp" />
         </LinearLayout>
     </ScrollView>
 

@@ -49,6 +49,7 @@ internal static class Program
             catch{Console.WriteLine("{\"gpuAvailable\":false,\"backend\":\"gdi\"}");}
             return;
         }
+        if(args.Length>0&&args[0]=="--audio-playback"){AudioPlayback.Run();return;}
         if (args.Length > 0 && args[0] is "--audio" or "--apps-list" or "--app-focus")
         {
             if (args.Length != 1) { Environment.ExitCode = 2; return; }

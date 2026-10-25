@@ -74,6 +74,8 @@ class MainActivity : Activity() {
     private var localMedia:LocalMediaCapture?=null
     private var pendingLocalMedia:JSONObject?=null
     private var localMediaId=""
+    private var pendingPhoneAudio:String?=null
+    private var pendingPhoneAudioVolume=.6
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -117,6 +119,7 @@ class MainActivity : Activity() {
             startLocalConnection(address.text.toString(),portField.text.toString().trim().toIntOrNull()?:7666)
         }
         findViewById<Button>(R.id.connectWebsite).setOnClickListener { connectTo("https://remote.teamtrader.co.za") }
+        PhoneAudioService.events={value->runOnUiThread{if(!isFinishing&&!isDestroyed&&value.optString("origin")==selectedOrigin&&isAllowed(web.url?:""))web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:phone-audio',{detail:$value}))",null)}}
         ScreenShareService.events = { value ->
             runCatching { shareReply?.postMessage(value.toString()) }
             if(value.optString("type")=="control-request")showControlRequest()
@@ -190,11 +193,11 @@ class MainActivity : Activity() {
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 volumeControlEnabled=false;stopAirMouse()
                 microphoneRequest?.deny();microphoneRequest=null;filesResult?.onReceiveValue(null);filesResult=null
-                stopLocalMedia();pendingProjection = false; ScreenShareService.stopSharing(); shareReply = null
+                stopLocalMedia();pendingPhoneAudio=null;PhoneAudioService.stop();pendingProjection = false; ScreenShareService.stopSharing(); shareReply = null
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localMedia",true).put("version","1.7");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null)}
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("version","1.8");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow PC Remote through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -260,6 +263,9 @@ class MainActivity : Activity() {
             try {
                 val value = JSONObject(message.data ?: "{}")
                 when (value.optString("type")) {
+                    "phone-audio-start" -> requestPhoneAudio(value.optString("source"),value.optDouble("volume",.6))
+                    "phone-audio-stop" -> {pendingPhoneAudio=null;PhoneAudioService.stop()}
+                    "phone-audio-control" -> PhoneAudioService.control(value.optDouble("volume",.6),value.optBoolean("muted",false))
                     "local-media-start" -> requestLocalMedia(value)
                     "local-media-stop" -> if(value.optString("id")==localMediaId)stopLocalMedia()
                     "local-media-credit" -> if(value.optString("id")==localMediaId)localMedia?.credit(value.optString("kind"))
@@ -334,12 +340,14 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 501) requestProjection()
+        if(requestCode==507){val source=pendingPhoneAudio;if(source!=null){if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)continuePhoneAudio(source)else{pendingPhoneAudio=null;phoneAudioEvent("error","Microphone permission was declined. Allow it in Android app settings.")}}}
         if(requestCode==506){val value=pendingLocalMedia;pendingLocalMedia=null;if(value!=null&&isAllowed(web.url?:"")){if(localMediaPermissions(value).all{checkSelfPermission(it)==PackageManager.PERMISSION_GRANTED})beginLocalMedia(value)else mediaEvent(JSONObject().put("kind","error").put("id",value.optString("id")).put("message","Camera or microphone permission was declined. Open Android app permissions to allow access."))}}
         if(requestCode==503){val request=microphoneRequest;microphoneRequest=null;if(request!=null){val required=mediaPermissions(request);if(required!=null&&required.all{checkSelfPermission(it)==PackageManager.PERMISSION_GRANTED}&&isAllowed(web.url?:""))request.grant(request.resources) else request.deny()}}
     }
     @Deprecated("MediaProjection consent result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if(requestCode==508){val source=pendingPhoneAudio;pendingPhoneAudio=null;if(source=="playback"&&resultCode==RESULT_OK&&data!=null&&isAllowed(web.url?:""))startPhoneAudio(source,data,resultCode)else phoneAudioEvent("stopped","Android audio sharing was cancelled.");return}
         if(requestCode==505){
             val request=downloadRequest;downloadRequest=null;val destination=data?.data;val image=screenshotBytes;screenshotBytes=null
             if(resultCode==RESULT_OK&&request!=null&&destination!=null&&image!=null){Thread{val message=try{contentResolver.openOutputStream(destination,"w")?.use{it.write(image)}?:throw IllegalStateException("Could not save screenshot.");"Screenshot saved."}catch(e:Exception){e.message?:"Could not save screenshot."};runOnUiThread{Toast.makeText(this,message,Toast.LENGTH_LONG).show()}}.start();return}
@@ -403,6 +411,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         connectionGeneration++
+        pendingPhoneAudio=null;PhoneAudioService.stop();PhoneAudioService.events=null
         stopLocalMedia()
         hideFullscreen()
         stopAirMouse();volumeControlEnabled=false
@@ -429,6 +438,28 @@ class MainActivity : Activity() {
         super.onStop()
     }
 
+    private fun phoneAudioEvent(state:String,message:String){val value=JSONObject().put("state",state).put("message",message);if(isAllowed(web.url?:""))web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:phone-audio',{detail:$value}))",null)}
+    private fun requestPhoneAudio(source:String,volume:Double){
+        if(source !in listOf("microphone","playback")||!isAllowed(web.url?:""))return
+        if(source=="playback"&&Build.VERSION.SDK_INT<29){phoneAudioEvent("error","Phone audio sharing needs Android 10 or newer.");return}
+        if(pendingPhoneAudio!=null)return
+        stopLocalMedia();PhoneAudioService.stop();pendingPhoneAudio=source;pendingPhoneAudioVolume=if(volume.isFinite())volume.coerceIn(0.0,1.0)else .6
+        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),507)else continuePhoneAudio(source)
+    }
+    private fun continuePhoneAudio(source:String){
+        if(!isAllowed(web.url?:"")){pendingPhoneAudio=null;return}
+        if(source=="playback"){
+            val manager=getSystemService(MediaProjectionManager::class.java)
+            val consent=if(Build.VERSION.SDK_INT>=34)manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())else manager.createScreenCaptureIntent()
+            startActivityForResult(consent,508)
+        }else{pendingPhoneAudio=null;startPhoneAudio(source)}
+    }
+    private fun startPhoneAudio(source:String,consent:Intent?=null,code:Int=0){
+        val origin=selectedOrigin?:return
+        val cookie=CookieManager.getInstance().getCookie(origin).orEmpty()
+        if(!cookie.contains("pc_remote_session=")){phoneAudioEvent("error","Sign in and pair the PC first.");return}
+        try{startForegroundService(Intent(this,PhoneAudioService::class.java).putExtra("origin",origin).putExtra("cookie",cookie).putExtra("source",source).putExtra("volume",pendingPhoneAudioVolume).putExtra("consent",consent).putExtra("resultCode",code))}catch(_:Exception){phoneAudioEvent("error","Android could not start audio streaming. Open this app and retry.")}
+    }
     private fun mediaEvent(value:JSONObject){runOnUiThread{if(!isFinishing&&!isDestroyed&&isAllowed(web.url?:""))web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:native-media',{detail:$value}))",null)}}
     private fun localMediaPermissions(value:JSONObject)=listOfNotNull(if(value.optBoolean("video"))Manifest.permission.CAMERA else null,if(value.optBoolean("audio"))Manifest.permission.RECORD_AUDIO else null)
     private fun requestLocalMedia(value:JSONObject){

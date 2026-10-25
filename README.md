@@ -1,6 +1,6 @@
 # PC Remote — Serame's personal remote app
 
-Version 1.7 improves local IP entry, speeds up startup and local transfers, adds Google registration/login with persistent accounts and PC pairing, and adds native Android camera/microphone capture for local HTTP. See [Google setup](GOOGLE-SIGN-IN.md), [version 1.7 checks](docs/version-1.7.md), [the feature guide](docs/mission-control.md), and [reference artwork notes](docs/design-artwork.md).
+Version 1.8 adds [phone-to-PC audio streaming](docs/phone-audio.md), with microphone/phone playback selection and direct Windows speaker output. The Cloudflare launcher reuses a healthy running host. Version 1.7 introduced faster local connections/transfers, Google registration/login, and native local camera/microphone capture. See [Google setup](GOOGLE-SIGN-IN.md), [version 1.7 checks](docs/version-1.7.md), [the feature guide](docs/mission-control.md), and [reference artwork notes](docs/design-artwork.md).
 
 ## Start the updated app
 

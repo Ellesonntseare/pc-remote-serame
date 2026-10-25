@@ -16,6 +16,7 @@ const {createAssetCache}=require('./asset-cache');
 const {createAssetBundles}=require('./asset-bundles');
 const {createGoogleSignIn}=require('./google-signin');
 const {createGoogleAccounts}=require('./google-accounts');
+const {createPhoneAudio}=require('./phone-audio');
 const {createSystemMetrics}=require('./system-metrics');
 const {createSmartQuality}=require('./smart-quality');
 const {createGuestRequests}=require('./guest-requests');
@@ -41,6 +42,9 @@ function sessionExpiry(until,expire,{now=Date.now,setTimer=setTimeout,clearTimer
 }
 // Explicit public asset map: no arbitrary filesystem paths or paired data.
 const PWA_ASSETS = new Map([
+  ['/phone-audio.js',['phone-audio.js','text/javascript; charset=utf-8']],
+  ['/phone-audio.css',['phone-audio.css','text/css; charset=utf-8']],
+  ['/audio-capture-worklet.js',['audio-capture-worklet.js','text/javascript; charset=utf-8']],
   ['/google-signin.js',['google-signin.js','text/javascript; charset=utf-8']],
   ['/native-media.js',['native-media.js','text/javascript; charset=utf-8']],
   ...['mission-control','camera-sharing','local-connection'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
@@ -564,6 +568,10 @@ function createApp(options={}) {
         const addresses=Object.entries(os.networkInterfaces()).flatMap(([name,entries])=>(entries||[]).filter(item=>item.family==='IPv4'&&!item.internal&&privateIP(item.address)).map(item=>({name,address:item.address}))).sort((a,b)=>Number(b.address.startsWith('192.168.'))-Number(a.address.startsWith('192.168.'))).slice(0,12);
         return respond(res,200,{ok:true,name:hostname,port:server.address().port,addresses,local:!viaTunnel});
       }
+      if(req.method==='GET'&&pathname==='/api/phone-audio/config'){
+        if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Only the paired PC owner can stream audio to this PC.'});
+        return respond(res,200,{ok:true,available:process.platform==='win32'||!!options.nativeFeatures?.openAudioOutput,defaultVolume:.6});
+      }
       if(req.method==='GET'&&pathname==='/api/collaboration/config'){
         if(!requiresHeader(req)||!['voice','whiteboard','chat','notes'].some(key=>permits(token,key)))return respond(res,403,{error:'Collaboration access was not approved.'});
         return respond(res,200,{ok:true,iceServers:rtcServers});
@@ -712,7 +720,8 @@ function createApp(options={}) {
   const guestScreens=createGuestScreen({sessions,auth,sessionExpiry});
   const webRtcVideo=createWebRtcVideo({sessions,auth,sessionExpiry});
   const cameraChannels=new Map(['pc','phone'].map(room=>[room,createWebRtcVideo({sessions,auth,sessionExpiry})]));
-  function cameraRevoke(token){for(const channel of cameraChannels.values())channel.revoke(token);}
+  const phoneAudio=createPhoneAudio({sessions,auth,sessionExpiry,openOutput:settings=>nativeFeatures.openAudioOutput(settings)});
+  function cameraRevoke(token){phoneAudio.revoke(token);for(const channel of cameraChannels.values())channel.revoke(token);}
   const collaboration=createCollaboration({sessions,auth,sessionExpiry});
   function rejectUpgrade(socket,status,message) {
     socket.on('error',()=>{});
@@ -722,7 +731,7 @@ function createApp(options={}) {
   server.on('upgrade',(req,socket,head)=>{
     socket.on('error',()=>{});
     let pathname;try{pathname=new URL(req.url,'http://localhost').pathname;}catch{return rejectUpgrade(socket,400,'Bad URL');}
-    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video','/api/collaboration','/api/camera'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
+    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video','/api/collaboration','/api/camera','/api/phone-audio'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
     if(!allowedRequest(req))return rejectUpgrade(socket,403,'Input stream host rejected');
     try{
       const origin=new URL(req.headers.origin);
@@ -731,6 +740,10 @@ function createApp(options={}) {
     const token=auth(req);
     if(!token)return rejectUpgrade(socket,401,'Pair your phone first');
     if(sessions.get(token).role==='account')return rejectUpgrade(socket,403,'Pair this PC before opening a remote session');
+    if(pathname==='/api/phone-audio'){
+      if(sessions.get(token)?.role!=='owner')return rejectUpgrade(socket,403,'Only the paired PC owner can stream audio to this PC');
+      phoneAudio.upgrade(req,socket,head,token);return;
+    }
     if(pathname==='/api/camera'){
       if(sessions.get(token)?.role==='guest')return rejectUpgrade(socket,403,'Camera sharing is available only to the owner');
       const query=new URL(req.url,'http://localhost').searchParams,channel=cameraChannels.get(query.get('room'));
@@ -818,7 +831,7 @@ function createApp(options={}) {
     });
   });
   function stop(){endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();cameraRevoke();collaboration.revoke();}
-  server.on('close',()=>{google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();for(const channel of cameraChannels.values())channel.close();collaboration.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
+  server.on('close',()=>{google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   return {server,pin,port,addresses:interfaces,stop};
 }
 if(require.main===module){
