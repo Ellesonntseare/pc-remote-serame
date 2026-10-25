@@ -16,6 +16,8 @@
 - 237 Node checks passed on Windows, including Google state/nonce/allowlist rejection, native handoff, malformed local addresses, guest privacy, cache validation, exact upload bytes and switching a resumed upload from LAN to tunnel.
 - Chromium checked layouts at 320, 390, 430, 768, 1280 and 1680 pixels without horizontal overflow or JavaScript errors. Camera picture/audio reached a second browser and recording saved successfully.
 - A real HTTP LAN WebRTC test ran with `isSecureContext=false` and no browser `getUserMedia`. Simulated native JPEG/PCM events produced a 480×640 picture plus an audio track on the receiving browser; closure ended capture tracks. This verifies the bridge and network path, not physical Android camera hardware.
-- Delaying the startup script produced zero visible frames of the old layout. The three compressed bundles initially measured 148,815 bytes before the later Google/native-media additions. Warm startup transferred 3,248 bytes across resources on that test PC. Device/network timings vary.
+- Delaying the startup script produced zero visible frames of the old layout. The final three compressed bundles measured 151,832 bytes. Warm startup transferred 3,249 bytes across resources on that test PC. Device/network timings vary.
+- A 64 MiB upload through loopback HTTP and real durable file writes improved from 17,398 ms / 64 chunk requests to 3,112 ms / 8 chunk requests (3.7 to 20.6 MiB/s). Both file hashes matched. These are host-side benchmark results, not a promise of phone/Wi-Fi throughput.
+- See [signing and the one-time reinstall](android-signing.md) before replacing an older preview. The persistent key is retained outside source control and its certificate is pinned in CI.
 
 Physical phone camera/microphone capture and the real Google OAuth consent flow require device testing and Google credentials respectively. They are not claimed as completed hardware/account tests.

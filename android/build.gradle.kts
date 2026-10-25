@@ -20,6 +20,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    val previewStore = System.getenv("PCR_SIGNING_STORE")
+    if (!previewStore.isNullOrBlank()) {
+        signingConfigs.create("personalPreview") {
+            storeFile = file(previewStore)
+            storeType = "PKCS12"
+            storePassword = System.getenv("PCR_SIGNING_PASSWORD")?.trim()
+            keyAlias = "pcremote-personal-preview"
+            keyPassword = System.getenv("PCR_SIGNING_PASSWORD")?.trim()
+        }
+        buildTypes.getByName("debug").signingConfig = signingConfigs.getByName("personalPreview")
+    }
 }
 
 dependencies {

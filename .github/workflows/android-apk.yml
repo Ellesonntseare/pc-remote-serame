@@ -54,18 +54,28 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Keep debug signing consistent for future updates
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: pc-remote-android-debug-signing-v1
+      - name: Load persistent personal preview signing key
+        env:
+          STORE_B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+        run: |
+          test -n "$STORE_B64" && test -n "$STORE_PASSWORD"
+          printf '%s' "$STORE_B64" | tr -d '\r\n' | base64 --decode > "$RUNNER_TEMP/pcremote-preview.p12"
+          chmod 600 "$RUNNER_TEMP/pcremote-preview.p12"
+          printf 'PCR_SIGNING_STORE=%s\n' "$RUNNER_TEMP/pcremote-preview.p12" >> "$GITHUB_ENV"
       - name: Build debug APK
+        env:
+          PCR_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
         run: gradle :android:testDebugUnitTest :android:assembleDebug --no-daemon --stacktrace
       - name: Verify APK signature and version
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/build/outputs/apk/debug/android-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs android/build/outputs/apk/debug/android-debug.apk > apk-signature.txt
+          cat apk-signature.txt
+          grep -q 'Signer #1 certificate SHA-256 digest: 1803b0080ad05d54df52de3a61fa4a9978244ca51e9df842d0303d42636c11eb' apk-signature.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/debug/android-debug.apk > apk-metadata.txt
           sed -n '1,8p' apk-metadata.txt
+          grep -q "android.permission.CAMERA" apk-metadata.txt
+          grep -q "android.permission.RECORD_AUDIO" apk-metadata.txt
           sha256sum android/build/outputs/apk/debug/android-debug.apk
       - name: Upload installable APK
         uses: actions/upload-artifact@v4

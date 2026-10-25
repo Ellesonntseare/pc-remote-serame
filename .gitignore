@@ -17,6 +17,8 @@ test/.resume-check-*/
 .env
 .env.*
 *.pfx
+.signing/
+*.p12
 *.pem
 *.key
 .gradle/
