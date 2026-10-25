@@ -29,8 +29,16 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-      - name: Run server security tests
-        run: npm test
+      - name: Run portable host checks
+        # The served Windows UI integration suite runs in checks.yml on Windows.
+        # Keep Android compilation independent of Linux emulation of that UI.
+        shell: bash
+        run: |
+          portable=()
+          for file in test/*.test.js; do
+            if [[ "$file" != "test/interface.test.js" ]]; then portable+=("$file"); fi
+          done
+          node --require ./test/use-sandbox-home.cjs --test "${portable[@]}"
       - name: Install Java 17
         uses: actions/setup-java@v4
         with:

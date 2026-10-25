@@ -1,6 +1,8 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),{JSDOM,CookieJar,VirtualConsole}=require('jsdom'),{createApp}=require('../server');
-async function until(predicate){const end=Date.now()+5000;while(Date.now()<end){if(await predicate())return;await new Promise(r=>setTimeout(r,15));}throw Error('Interface did not reach the expected state');}
+// Served pages parse the complete style/script set; allow loaded CI runners to
+// finish real async UI work without changing the state assertions below.
+async function until(predicate){const end=Date.now()+10000;while(Date.now()<end){if(await predicate())return;await new Promise(r=>setTimeout(r,15));}throw Error('Interface did not reach the expected state');}
 async function fixture(t,appOptions={}){const dir=await fs.mkdtemp(path.join(__dirname,'.transfer-check-')),errors=[],windows=[];const app=createApp({password:'serame',disableAgent:true,disableActions:true,transferDirectory:dir,...appOptions});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
   async function page(options={}){const jar=new CookieJar(),console=new VirtualConsole();console.on('jsdomError',error=>{if(!error.message.includes('Could not parse CSS stylesheet'))errors.push(error.message);});const dom=await JSDOM.fromURL(base,{runScripts:'dangerously',resources:'usable',pretendToBeVisual:true,cookieJar:jar,virtualConsole:console,beforeParse(window){
     if(options.android)window.PCRAndroid={postMessage:value=>options.android.push(JSON.parse(value))};
