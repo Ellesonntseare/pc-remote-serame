@@ -583,7 +583,7 @@ function createApp(options={}) {
         }
         if(req.method==='POST'&&pathname==='/api/guest/revoke'){
           const body=await jsonBody(req,4096);let revoked=false;
-          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
+          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);await fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
           record(ip,'Guest access ended');return respond(res,200,{ok:true,revoked});
         }
         if(req.method==='POST'&&pathname==='/api/guest/revoke-all'){
@@ -591,7 +591,7 @@ function createApp(options={}) {
           if(!Array.isArray(ids)||ids.length<1||ids.length>50||new Set(ids).size!==ids.length||ids.some(id=>typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id)))return respond(res,400,{error:'Choose the active guests to end.'});
           const selected=new Set(ids);let revoked=0;
           for(const [key,session]of [...sessions])if(session.role==='guest'&&selected.has(session.guestId)){
-            sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked++;
+            sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);await fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked++;
           }
           record(ip,'Ended '+revoked+' guest sessions');return respond(res,200,{ok:true,revoked});
         }
@@ -658,7 +658,7 @@ function createApp(options={}) {
       }
       if(req.method==='POST'&&pathname==='/api/unpair'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
-        sessions.delete(token);saveSessions();void fileTransfers.revoke(token);deviceLinks.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);cameraRevoke(token);collaboration.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
+        sessions.delete(token);saveSessions();await fileTransfers.revoke(token);deviceLinks.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);cameraRevoke(token);collaboration.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
         record(ip,'Phone unpaired');return respond(res,200,{ok:true},{'Set-Cookie':`${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`});
       }
       if(req.method==='GET'&&pathname==='/api/screen'){

@@ -27,6 +27,13 @@ test('password login is required and unchecked Remember me uses a browser-sessio
   const cookie=correct.headers['set-cookie'][0].split(';')[0];assert.equal((await f.request('/api/status',{cookie})).status,200);await f.restart();assert.equal((await f.request('/api/status',{cookie})).status,401);
 });
 
+test('sign-out acknowledges only after unfinished transfer files have been removed',async t=>{
+  const f=await fixture(t),cookie=await f.login(),created=await f.request('/api/files/uploads',{method:'POST',cookie,body:{name:'unfinished.bin',size:100}}),u=created.json;
+  await f.request('/api/files/uploads/'+u.id+'?offset=0',{method:'PUT',cookie,raw:true,body:Buffer.from('partial')});
+  assert.equal((await f.request('/api/unpair',{method:'POST',cookie,body:{}})).status,200);
+  assert.ok(!(await fs.readdir(path.join(f.root,'files'))).some(name=>name.includes(u.id)),'no revocation work outlives the successful sign-out response');
+});
+
 test('direct LAN uploads negotiate larger chunks while the tunnel retains its smaller bound and exact resume position',async t=>{
   const f=await fixture(t,{tunnelHostname:'remote.example',allowLan:true,maxFileBytes:20*1024*1024}),cookie=await f.login(),cloudHeaders={Host:'remote.example'},content=crypto.randomBytes(9*1024*1024+31);
   const u=(await f.request('/api/files/uploads',{method:'POST',cookie,body:{name:'large-local.bin',size:content.length}})).json;assert.equal(u.chunkBytes,8*1024*1024);
