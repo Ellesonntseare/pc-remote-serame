@@ -1,11 +1,13 @@
 # PC Remote — Serame's personal remote app
 
+Version 1.6 adds Spatial Workspace, Mission Control, separate camera/microphone sharing and recording. See [the feature and verification guide](docs/mission-control.md) and [reference artwork notes](docs/design-artwork.md).
+
 ## Start the updated app
 
 Installed project: `C:\Users\elles\Downloads\pc-remote-redesigned\PC-Remote-Serame-Complete\pc-remote-android`
 
 1. Close the previous PC Remote host window.
-2. Run **start-cloudflare.bat** from that folder for `remote.teamtrader.co.za`, or **start.bat** for a private LAN.
+2. Run **start-cloudflare.bat** for both `remote.teamtrader.co.za` and local Wi-Fi access, or **start.bat** to use your saved configuration.
 3. Wait for dependencies and the Windows desktop agent to build. Keep the host and Cloudflare connector running.
 4. Reload the site on your phone and sign in with **serame**.
 
@@ -15,7 +17,7 @@ Node.js 20+ and the .NET 8 SDK are required. Initial setup needs internet access
 
 The password eye shows or conceals the text you enter. **Remember me** remembers an owner login for 30 days using an HttpOnly cookie; it does not save the password in browser storage. Disconnect revokes that login.
 
-Guests use **guest**, then wait for an owner signed in with **serame** to approve them. Requests appear in a popup and under **Guests** in the header.
+Guests use **guest**, then wait for an owner signed in with **serame** to approve them. Requests open the full Guest Access page, also available from **Security** on desktop. The notification bell indicates pending requests.
 
 **Select all** checks every permission, and shows a partial selection when some are enabled. The guest sees a **Guest account** ribbon and remaining time. Under **Guests**, the owner can extend an active session by 15, 30 or 60 minutes; a two-minute warning also offers **Extend 30 min**. Extensions update existing screen, input, audio and voice connection deadlines without reconnecting. Extend before expiry: an ended or revoked session needs a fresh approval. Remaining access is capped at eight hours, and extension never changes permissions.
 
@@ -127,7 +129,7 @@ The default owner password is built into the host, not browser JavaScript. Overr
 }
 ```
 
-Omit `tunnelHostname` for LAN use. `transferDirectory`, `screen` and `delaySeconds` remain supported. See `CLOUDFLARE.md`. Do not expose the raw host port publicly.
+LAN access is enabled by default for the launcher, including when `tunnelHostname` is configured. Set `allowLan: false` for a loopback-only tunnel origin. `transferDirectory`, `screen` and `delaySeconds` remain supported. See `CLOUDFLARE.md`. Do not expose the raw host port publicly.
 
 Private configuration, remembered-session tokens, private keys, actual transferred files, dependencies and build output are excluded from Git. Remembered login files contain token hashes, not passwords.
 
@@ -154,7 +156,7 @@ The owner selects **Control** to tap the picture, drag for a swipe, or right-cli
 
 Each grant is limited to one requesting PC connection and ten minutes. Stop from the phone panel or the Android sharing notification. Closing the PC viewer, changing its selected phone, ending sharing, signing out, disconnecting or revoking the guest ends control. Rotation invalidates commands for the previous display; commands are acknowledged individually and are never replayed after a timeout. The Accessibility service does not log interface text or collect accessibility events. Android may require Allow restricted settings for a sideloaded app before Accessibility can be enabled. This must be done manually on the phone.
 
-Install **PC-Remote-Android.apk** from this project folder on the Android phone (Android 8 or later). This build is version 1.4. Use **Open remote.teamtrader.co.za** for the HTTPS website, or connect to your private PC IPv4 address and port on Wi-Fi. Restart the Windows host with `start-cloudflare.bat` after this source update to load the updated screen relay.
+The Android source is version **1.6**, for Android 8 or later. GitHub Actions builds the installable APK after Android changes; see the **Build Android APK** workflow. Use **Connect to website** for the HTTPS website, or enter a private PC IPv4 address, `IP:port`, or full local URL. Restart the Windows host after updating its source. The installed Android app must also be updated to receive native picker, camera, fullscreen and file-saving fixes.
 
 Sign into the Android app as **guest**, have the owner approve it, then select **Share my screen**. Android asks for screen-sharing permission for every session. Android 14 and later now receive an explicit entire-display request instead of the default single-app picker. If your phone still offers a choice, select **Entire screen**. The foreground service displays a sharing notification with a Stop action. Press Home and open another app: capture and its native network connection continue while only the in-app thumbnail pauses. Rotation resizes the same capture session, including on Android 8–13. Frames are capped at 10 fps with the longest side limited to 960 pixels; actual rate depends on the phone and network. The PC owner opens **Guest screens** to view it. A late viewer immediately receives the latest frame, even if the phone is showing a still screen. One frame per active share is kept in memory and cleared on stop or revocation; it is never saved to disk. Laser/drawing annotations appear on the app preview.
 

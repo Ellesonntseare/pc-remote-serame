@@ -85,6 +85,12 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     if(!['volup','voldown','mute','playpause','next','prev'].includes(action))throw Error('Invalid media command.');
     return request('--media',{action});
   }
-  return {listApps,focusApp,sendMedia,openAudio,close};
+  async function openLink(value){
+    if(typeof value!=='string'||value.length>4096||/[\u0000-\u0020\u007f]/.test(value))throw Error('Use a valid http or https link.');
+    let url;try{url=new URL(value);}catch{throw Error('Use a valid http or https link.');}
+    if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('Use a valid http or https link.');
+    return request('--open-link',{url:url.href});
+  }
+  return {listApps,focusApp,sendMedia,openLink,openAudio,close};
 }
 module.exports={createNativeFeatures,AudioPacketReader,validFormat};

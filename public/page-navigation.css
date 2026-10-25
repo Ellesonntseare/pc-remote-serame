@@ -1,0 +1,55 @@
+/* Feature navigation occupies the screen, with one consistent way back. */
+body.pcrPageOpen{overflow:hidden}
+dialog.pcrPage[open],#rsSettings.pcrPage:not(.hide),#remoteOptions[open]>.remoteOptionsPanel{
+  position:fixed!important;inset:0!important;box-sizing:border-box!important;
+  width:100%!important;max-width:none!important;height:100vh!important;height:100dvh!important;max-height:none!important;
+  margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;
+  padding:calc(18px + env(safe-area-inset-top)) max(20px,calc((100vw - 1040px)/2)) calc(28px + env(safe-area-inset-bottom))!important;
+  overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain;
+  background:radial-gradient(ellipse at 85% 0,#28565824,transparent 55%),#142230!important;color:#e9f1f8;
+  scrollbar-width:thin;scrollbar-color:#476170 transparent;
+}
+dialog.pcrPage::backdrop{background:#142230!important;backdrop-filter:none!important}
+dialog.pcrPage[open],#rs.pcrPage:not(.hide),#rsSettings.pcrPage:not(.hide),#remoteOptions[open]>.remoteOptionsPanel{animation:none!important;opacity:1!important;transform:none!important}
+.pcrPageCurrent .pcrPageHeader{animation:pcrPageContentEnter .2s ease-out}
+.pcrPage .pcrPageHeader,#remoteOptions .pcrPageHeader{
+  display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:16px!important;
+  width:100%;position:relative;margin:0 0 24px!important;padding:0 0 18px!important;
+  border-bottom:1px solid #9dbbc329!important;flex-wrap:nowrap;
+}
+.pcrPage .pcrPageHeader>.pageHeading{flex:1;min-width:0}
+.pcrPage .pcrPageHeader h2{margin:0;font-size:clamp(21px,3vw,28px);line-height:1.2;letter-spacing:-.5px}
+.pcrPage .pcrPageHeader .pageSymbol{display:none}
+.pcrPage .pcrPageHeader .pcrPageBack,#remoteOptions .pcrPageBack{
+  display:inline-flex!important;align-items:center;justify-content:center;gap:6px!important;flex:0 0 auto!important;
+  width:auto!important;min-width:76px!important;height:44px!important;min-height:44px!important;
+  padding:10px 12px!important;border:1px solid #a2c5cd38!important;border-radius:12px!important;
+  background:#233d50!important;box-shadow:none!important;color:#d9edf3!important;font:600 12px/1 system-ui,sans-serif!important;
+  cursor:pointer;touch-action:manipulation;
+}
+.pcrPage .pcrPageBack svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pcrPage .pcrPageBack:focus-visible{outline:2px solid #7ee3d5;outline-offset:3px}
+.pcrPage h2:focus{outline:none}
+#rsSettings.pcrPage:not(.hide){display:block!important;z-index:120!important;backdrop-filter:none!important}
+#rsSettings.pcrPage .controlSheet{width:100%!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;overflow:visible!important}
+#remoteOptions[open]>.remoteOptionsPanel{z-index:48!important;display:block!important;transform:none!important;font:14px/1.5 system-ui,sans-serif}
+#remoteOptions .remoteOptionsPanel>strong[hidden]{display:none!important}
+#remoteOptions .pcrPageHeader h2{margin:0;color:#eef7fa;font-size:25px;font-weight:600}
+#remoteOptions .remoteOptionsPanel .workspaceMenuGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:700px;margin:0 auto}
+#remoteOptions .remoteOptionsPanel .workspaceMenuGrid>button{min-height:104px}
+#remoteOptions .remoteOptionsPanel .workspaceMenuGrid>.pcrMenuWide{grid-column:1/-1}
+#remoteOptions .menuGroupTitle{text-align:left;font-weight:600;font-size:12px;color:#a7c2ce;padding:20px 0 2px}
+dialog.pcrPage .nativeAppList,dialog.pcrPage .filesList{max-height:none!important}
+#sessionTools.pcrPage[open]{display:grid;align-content:start}
+#installHelp.pcrPage .installWorkspace{text-align:left;display:flex;align-items:center;gap:16px}
+#installHelp.pcrPage .installPhoneSymbol{margin:0;width:55px;height:55px;flex:0 0 55px;padding:12px}
+#installHelp.pcrPage>.pcrPageHeader .installPhoneSymbol{display:none}
+@media(max-width:480px){
+  dialog.pcrPage[open],#rsSettings.pcrPage:not(.hide),#remoteOptions[open]>.remoteOptionsPanel{padding-left:16px!important;padding-right:16px!important}
+  .pcrPage .pcrPageHeader,#remoteOptions .pcrPageHeader{gap:12px!important;margin-bottom:20px!important}
+  .pcrPage .pcrPageHeader .pageHeading :is(.nativeEyebrow,.filesEyebrow,.guestEyebrow){display:none}
+  #remoteOptions .remoteOptionsPanel .workspaceMenuGrid{gap:9px}
+  #remoteOptions .remoteOptionsPanel .workspaceMenuGrid>button{min-height:96px}
+}
+@keyframes pcrPageContentEnter{from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
+@media(prefers-reduced-motion:reduce){.pcrPageCurrent .pcrPageHeader{animation:none}}

@@ -4,6 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TrustedOriginTest {
+    @Test fun localConnectionAcceptsPlainAddressesAndFullUrls(){
+        assertEquals(Pair("192.168.8.100",7666),TrustedOrigin.localTarget(" 192.168.8.100 ",7666))
+        assertEquals(Pair("10.0.0.2",8000),TrustedOrigin.localTarget("http://10.0.0.2:8000/",7666))
+        assertEquals(Pair("172.20.0.2",7666),TrustedOrigin.localTarget("172.20.0.2:7666",9000))
+        for(value in listOf("https://192.168.8.100","http://user@192.168.8.100","8.8.8.8","http://192.168.8.100/other","http://192.168.8.100:99999","192.168.8.999"))assertNull(value,TrustedOrigin.localTarget(value,7666))
+    }
     @Test fun approvedPrivateNetworksStayBoundToTheirOrigin() {
         assertEquals("http://192.168.1.2:7666", TrustedOrigin.normalize("http://192.168.1.2:7666/path"))
         assertEquals("http://10.0.0.2:7666", TrustedOrigin.normalize("http://10.0.0.2:7666/"))

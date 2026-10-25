@@ -1,0 +1,77 @@
+/* Control layout informed by Remote Mouse's input toolbar and Unified Remote's
+   task-based remotes. Keep equal-sized targets and a clear reading order. */
+:root { color-scheme: dark; --workspace-base: #101820; --workspace-surface: #1c2833; --workspace-edge: #ffffff15; }
+html { scrollbar-gutter: stable; }
+body { background: #101820; padding: 0 14px 24px; }
+.app.controlWorkspace { max-width: 620px; min-height: 100dvh; padding: 0 6px 24px; border-radius: 0; background: none; box-shadow: none; font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.controlWorkspace .topbar { padding: max(18px,env(safe-area-inset-top)) 0 17px; border-color: var(--workspace-edge); }
+.controlWorkspace .brandLogo { width: 37px; height: 37px; }
+.controlWorkspace .brandtext strong { font-size: 19px; font-weight: 650; }
+.controlWorkspace .brandtext span { color: #8fa3b4; font-size: 11px; margin-top: 3px; }
+.controlWorkspace #unpairBtn, .controlWorkspace #guestManageButton { min-height: 40px; font: 500 11px system-ui; text-transform: none; padding: 8px 10px; background: #21303c; border-color: #ffffff15; box-shadow: none; }
+.controlWorkspace .hero { padding-top: 18px; }
+.controlWorkspace .connectedSummary { flex-direction: row; justify-content: flex-start; min-height: 60px; gap: 13px; margin-bottom: 23px; }
+.controlWorkspace .connectedDeviceIcon { flex: 0 0 48px; width: 48px; height: 48px; background: #223440; border: 1px solid #a5d0d621; border-radius: 14px; box-shadow: none; color: #88cfc7; }
+.controlWorkspace .connectedDeviceIcon svg { width: 29px; height: 29px; }
+.controlWorkspace .connectedDeviceCopy { flex: 1; width: auto; text-align: left; }
+.controlWorkspace .connectedDeviceCopy .eyebrow { text-align: left; font: 500 10px system-ui; text-transform: uppercase; letter-spacing: 1px; color: #92a6b6; margin-bottom: 5px; }
+.controlWorkspace .connectedDeviceCopy #name { text-align: left; font-size: clamp(20px,5vw,27px); letter-spacing: -.7px; font-weight: 650; }
+.controlWorkspace .connectedDeviceCopy .online { justify-content: flex-start; font: 11px system-ui; margin-top: 7px; color: #8ed9bb; }
+.workspaceSectionHeading { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 12px; gap: 10px; }
+.workspaceSectionHeading h2 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: -.15px; }
+.workspaceSectionHeading>span { color: #8197a9; font-size: 10px; }
+.controlWorkspace .heroactions, .controlWorkspace.guestDashboard .heroactions { grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-areas: none; grid-template-rows: none; grid-auto-rows: minmax(84px,auto); gap: 10px; grid-auto-flow: row dense; }
+.controlWorkspace .heroactions .dashboardAudioStack { display: contents; }
+.controlWorkspace .heroactions .quick, .controlWorkspace.guestDashboard .heroactions .quick { grid-area: auto; grid-column: auto; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; min-height: 84px; height: 100%; padding: 13px 11px; text-align: left; border: 1px solid #ffffff15; border-radius: 14px; box-shadow: 0 2px 0 #00000012; background: #1d2a35; font-family: inherit; }
+.controlWorkspace .heroactions .quick:hover { background: #263b48; border-color: #91d4cc55; }
+.controlWorkspace .heroactions .quick .dashboardTileIcon { flex: 0 0 34px; width: 34px; height: 34px; padding: 5px; margin: 0; background: none; border: 0; border-radius: 0; color: #84cdc5; box-shadow: none; filter: none; }
+.controlWorkspace .heroactions .quick .dashboardTileCopy { display: block; min-width: 0; }
+.controlWorkspace .heroactions .quick .dashboardTileCopy strong { font: 600 12px/1.35 system-ui; letter-spacing: -.15px; text-transform: none; color: #e5edf3; }
+.controlWorkspace .heroactions .quick .dashboardTileCopy small { display: block; margin-top: 4px; color: #92a7b7; font: 10px/1.4 system-ui; }
+.controlWorkspace .heroactions .quick[data-dashboard-tile=screen], .controlWorkspace .heroactions .quick[data-dashboard-tile=keyboard] { background: #233d43; border-color: #80cfc534; box-shadow: none; }
+.controlWorkspace .heroactions .quick[data-dashboard-tile=screen] .dashboardTileIcon, .controlWorkspace .heroactions .quick[data-dashboard-tile=keyboard] .dashboardTileIcon { color: #a1e6d4; }
+.controlWorkspace .heroactions .quick[data-dashboard-tile=power] .dashboardTileIcon { color: #c1cbd4; }
+.controlWorkspace .heroactions .dashboardPowerChevron { display: none; }
+.controlWorkspace .heroactions .quick.homeSoloTile { grid-column: 1/-1; }
+.controlWorkspace .heroactions .quick:is([hidden],.hide,[data-pcr-denied=true],[data-home-hidden=true]) { display: none!important; }
+.workspaceHomeEmpty{padding:24px 18px;border:1px dashed #89b8ba55;border-radius:15px;text-align:center;color:#c7dedf}.workspaceHomeEmpty[hidden]{display:none}.workspaceHomeEmpty strong{font-size:14px}.workspaceHomeEmpty p{margin:8px 0 16px;font-size:12px;line-height:1.5;color:#9bb0bf}.workspaceHomeEmpty button{min-height:44px;padding:10px 16px;border:1px solid #82cfba55;border-radius:11px;background:#2d544c;color:#d7f8e9;font:600 12px system-ui;cursor:pointer}
+.controlWorkspace .mediaWrap { margin-top: 22px; padding: 0; border: 0; background: none; }
+.controlWorkspace .mediaWrap>.section { margin-bottom: 10px; }
+.controlWorkspace .mediaWrap .section h2 { color: #c9d6df; font: 600 13px system-ui; }
+.controlWorkspace .mediaGrid { gap: 8px; }
+.controlWorkspace .media { min-height: 48px; height: auto; border: 1px solid #ffffff12; border-radius: 11px; box-shadow: none; background: #1d2a35; }
+.controlWorkspace .media small { font: 10px system-ui; }
+.controlWorkspace .media.play { background: #315850; border-color: #8fd9b628; }
+.controlWorkspace .dashboardStatus { margin-top: 20px; padding: 14px; border: 1px solid #ffffff12; border-radius: 14px; background: #19252f; grid-template-columns: 1fr 1fr .8fr; }
+.controlWorkspace .dashboardStatus .section h2 { font-family: system-ui; font-size: 11px; color: #8da3b3; }
+.controlWorkspace .dashboardStatus .statvalue { font-size: 20px; }
+.controlWorkspace .dashboardRing { flex-basis: 36px; width: 36px; height: 36px; }
+.controlWorkspace .dashboardRing::after { inset: 5px; background: #19252f; }
+.controlWorkspace .dashboardPower { margin-top: 12px; background: #19252f; border-color: #ffffff12; }
+.controlWorkspace .dashboardPower>summary { min-height: 48px; padding: 15px; text-transform: none; font-family: system-ui; }
+.controlWorkspace .dashboardPower .action { min-height: 64px; background: #24333e; border-color: #ffffff14; box-shadow: none; }
+.controlWorkspace .activity { margin-top: 12px; background: #19252f; border-color: #ffffff12; box-shadow: none; }
+.controlWorkspace .appFooter { margin-top: 18px; }
+.controlWorkspace #installPhone { min-height: 44px; border-color: #ffffff12; background: transparent; font-family: system-ui; }
+/* Tap targets remain usable on short screens and with large text settings. */
+.dockQuickKeys>button { min-height: 44px; }
+.remoteSwipeDock .rskeys { max-height: 148px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+@media(max-width:360px) {
+  body { padding-left: 10px; padding-right: 10px; }
+  .app.controlWorkspace { padding-left: 0; padding-right: 0; }
+  .controlWorkspace .brandtext span { font-size: 9px; }
+  .controlWorkspace .brandtext strong { font-size: 16px; }
+  .controlWorkspace .heroactions { gap: 8px; }
+  .controlWorkspace .heroactions .quick { padding: 12px 8px; gap: 6px; }
+  .controlWorkspace .heroactions .quick .dashboardTileIcon { flex-basis: 27px; width: 27px; height: 27px; padding: 2px; }
+  .controlWorkspace .heroactions .quick .dashboardTileCopy strong { font-size: 11px; }
+  .controlWorkspace .heroactions .quick .dashboardTileCopy small { font-size: 9px; }
+  .controlWorkspace .dashboardStatus { gap: 8px; padding: 11px; }
+  .controlWorkspace .dashboardStatus .stat { gap: 6px; }
+  .controlWorkspace .dashboardRing { flex-basis: 29px; width: 29px; height: 29px; }
+}
+@media(hover:hover) and (pointer:fine) {
+  .controlWorkspace .heroactions .quick:hover { transform: translateY(-2px); }
+}
+@media(prefers-reduced-motion:reduce) { .controlWorkspace .heroactions .quick { transform: none!important; } }
+.controlWorkspace .heroactions .quick .dashboardTileCopy strong{font-size:14px;line-height:1.35}.controlWorkspace .heroactions .quick .dashboardTileCopy{margin-top:0}

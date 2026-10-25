@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#07090F">
+    android:background="#020D17">
 
     <ScrollView
         android:id="@+id/connectScreen"
@@ -16,27 +16,29 @@
             android:orientation="vertical"
             android:gravity="center_vertical">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="▣  PC REMOTE" android:textColor="#93B4FF" android:textStyle="bold"
-                android:letterSpacing="0.17" android:textSize="15sp" android:layout_marginBottom="22dp" />
+                android:text="PC REMOTE  /  YOUR WORKSPACE" android:textColor="#34DDE9" android:textStyle="bold"
+                android:letterSpacing="0.13" android:textSize="11sp" android:layout_marginBottom="30dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Your PC. Your phone. Connected."
-                android:textColor="#F7F9FF" android:textSize="29sp" android:textStyle="bold"
+                android:text="Your PC.\nWithin reach."
+                android:textColor="#F7F9FF" android:textSize="36sp" android:textStyle="bold"
                 android:layout_marginBottom="12dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Connect through your website, or use the PC's address on your Wi-Fi."
-                android:textColor="#A4ADC2" android:textSize="14sp" android:lineSpacingExtra="4dp"
+                android:textColor="#A3C1D8" android:textSize="14sp" android:lineSpacingExtra="4dp"
                 android:layout_marginBottom="26dp" />
             <Button android:id="@+id/connectWebsite" android:layout_width="match_parent"
-                android:layout_height="56dp" android:text="Open remote.teamtrader.co.za" android:textAllCaps="false"
-                android:textSize="14sp" android:textColor="#FFFFFF" android:background="@drawable/connect_background"
-                android:layout_marginBottom="24dp" />
+                android:layout_height="56dp" android:text="Connect to website  →" android:textAllCaps="false"
+                android:textSize="15sp" android:textStyle="bold" android:textColor="#001522" android:background="@drawable/connect_background"
+                android:layout_marginBottom="10dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="remote.teamtrader.co.za" android:gravity="center" android:textSize="11sp" android:textColor="#71A4C2" android:layout_marginBottom="32dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="OR CONNECT ON YOUR LOCAL NETWORK" android:textColor="#58BBD6" android:textSize="10sp" android:letterSpacing="0.11" android:layout_marginBottom="22dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="PC IP ADDRESS" android:textColor="#BAC8DE" android:textStyle="bold"
                 android:textSize="12sp" android:layout_marginBottom="8dp" />
             <EditText android:id="@+id/ipAddress" android:layout_width="match_parent"
                 android:layout_height="56dp" android:singleLine="true" android:selectAllOnFocus="true"
-                android:inputType="numberDecimal" android:hint="192.168.8.105"
-                android:textColor="#FFFFFF" android:textColorHint="#7D8BA1" android:textSize="19sp"
+                android:inputType="textUri" android:hint="192.168.8.100 or http://192.168.8.100:7666"
+                android:textColor="#FFFFFF" android:textColorHint="#668BA5" android:textSize="14sp"
                 android:padding="12dp" android:background="@drawable/field_background"
                 android:layout_marginBottom="18dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -48,14 +50,17 @@
                 android:background="@drawable/field_background" android:layout_marginBottom="20dp" />
             <Button android:id="@+id/connect" android:layout_width="match_parent"
                 android:layout_height="56dp" android:text="Connect to my PC" android:textAllCaps="false"
-                android:textSize="15sp" android:textStyle="bold" android:textColor="#FFFFFF"
+                android:textSize="15sp" android:textStyle="bold" android:textColor="#001522"
                 android:background="@drawable/connect_background" />
             <TextView android:id="@+id/error" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:textColor="#FF9AA7"
                 android:textSize="13sp" android:layout_marginTop="16dp" />
-            <EditText android:id="@+id/wakeMac" android:layout_width="match_parent" android:layout_height="56dp" android:singleLine="true" android:hint="PC MAC address · AA:BB:CC:DD:EE:FF" android:inputType="textNoSuggestions" android:textColor="#FFFFFF" android:textColorHint="#7D8BA1" android:textSize="14sp" android:padding="12dp" android:background="@drawable/field_background" android:layout_marginTop="20dp" />
-            <Button android:id="@+id/wakePc" android:layout_width="match_parent" android:layout_height="52dp" android:text="Wake my PC on this Wi-Fi" android:textAllCaps="false" />
+            <Button android:id="@+id/wakeOptions" android:layout_width="match_parent" android:layout_height="48dp" android:text="Wake-on-LAN  +" android:textColor="#81DDEA" android:textAllCaps="false" android:background="@drawable/field_background" android:layout_marginTop="20dp" />
+            <LinearLayout android:id="@+id/wakeOptionsPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+            <EditText android:id="@+id/wakeMac" android:layout_width="match_parent" android:layout_height="56dp" android:singleLine="true" android:hint="PC MAC · AA:BB:CC:DD:EE:FF" android:inputType="textNoSuggestions" android:textColor="#FFFFFF" android:textColorHint="#7D8BA1" android:textSize="14sp" android:padding="12dp" android:background="@drawable/field_background" android:layout_marginTop="14dp" />
+            <Button android:id="@+id/wakePc" android:layout_width="match_parent" android:layout_height="52dp" android:text="Wake my PC on this Wi-Fi" android:textAllCaps="false" android:textColor="#BDECF7" android:background="@drawable/field_background" android:layout_marginTop="10dp" android:layout_marginBottom="10dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Wake a compatible PC on the same Wi-Fi network." android:textColor="#8E9BB5" android:textSize="12sp" />
+            </LinearLayout>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Sign in with your app password. Approved guests can share their phone screen after granting Android's screen-sharing permission."
                 android:textColor="#8E9BB5" android:textSize="12sp" android:lineSpacingExtra="3dp"

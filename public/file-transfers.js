@@ -3,6 +3,36 @@
   const dialog=document.createElement('dialog');dialog.id='filesDialog';dialog.setAttribute('aria-labelledby','filesTitle');
   dialog.innerHTML='<div class="filesHeader"><div><span class="filesEyebrow">YOUR PERSONAL DROP</span><h2 id="filesTitle">Files & text<span>↗</span></h2><p>From this device to your PC. And back.</p></div><button class="filesIconButton" id="filesClose" aria-label="Close file transfers">✕</button></div><div class="filesTabs" role="tablist" aria-label="Transfer type"><button role="tab" aria-selected="true" aria-controls="filesPane" id="filesTab">Files</button><button role="tab" aria-selected="false" aria-controls="textPane" id="textTab">Text</button></div><section id="filesPane" role="tabpanel" aria-labelledby="filesTab"><div id="filesDrop" class="filesDrop"><div class="filesUploadIcon">↥</div><strong>Drop it here.</strong><span>Any file type. No converting.</span><button type="button" class="filesPrimary" id="filesChoose">Choose files</button><input type="file" id="filesInput" multiple hidden></div><div class="filesListHeader"><div><h3>On your PC</h3><span id="filesCount">Loading files…</span></div><div><button type="button" class="filesSmallButton" id="filesFolder">Open PC folder</button><button type="button" class="filesIconButton" id="filesRefresh" aria-label="Refresh files">↻</button></div></div><label class="filesSearch"><span aria-hidden="true">⌕</span><input type="search" id="filesSearch" placeholder="Find a file" aria-label="Search shared files"></label><div id="filesList" class="filesList"></div><p class="filesFolderPath" id="filesFolderPath"></p></section><section id="textPane" role="tabpanel" aria-labelledby="textTab" hidden><div class="filesTextIntro"><span>✎</span><h3>A thought. A link. A whole page.</h3><p>Send your text to the PC as a .txt file.</p></div><label for="filesNoteName">File name</label><input id="filesNoteName" class="filesField" placeholder="Quick note.txt" maxlength="160"><label for="filesNote">Your text</label><textarea id="filesNote" class="filesField" rows="7" placeholder="Type or paste anything here…"></textarea><button type="button" class="filesPrimary filesSendText" id="filesSendText">Send text to PC <span>↗</span></button></section><div id="filesProgress" class="filesProgress" hidden><div><span id="filesProgressName"></span><button id="filesCancel" type="button">Cancel</button></div><progress id="filesProgressBar" max="100" value="0"></progress><span id="filesProgressLabel"></span></div><p id="filesStatus" class="filesStatus" role="status" aria-live="polite"></p>';
   document.body.append(dialog);const el=id=>document.getElementById(id);
+  const folderInput=document.createElement('input');folderInput.type='file';folderInput.id='filesFolderInput';folderInput.multiple=true;folderInput.hidden=true;folderInput.setAttribute('webkitdirectory','');folderInput.setAttribute('directory','');
+  const folderButton=document.createElement('button');folderButton.type='button';folderButton.id='filesChooseFolder';folderButton.className='filesSmallButton';folderButton.textContent='Send a folder';
+  const pickers=document.createElement('div');pickers.className='filesPickers';el('filesChoose').before(pickers);pickers.append(el('filesChoose'),folderButton,folderInput);
+  // A real, directly tapped file input works in WebViews that ignore a hidden
+  // input's synthetic click. Keep the button as the visual and keyboard fallback.
+  const pickerSlot=document.createElement('span');pickerSlot.className='filesPickerSlot';el('filesChoose').before(pickerSlot);pickerSlot.append(el('filesChoose'),el('filesInput'));el('filesInput').hidden=false;el('filesInput').setAttribute('aria-label','Choose files to send to your PC');el('filesChoose').tabIndex=-1;el('filesChoose').setAttribute('aria-hidden','true');
+  el('filesDrop').querySelector('strong').textContent='Send to your PC';el('filesDrop').querySelector('strong+span').textContent='Choose files or a folder. Drop them here on a computer.';
+  const directions=document.createElement('nav');directions.className='filesDirections';directions.setAttribute('aria-label','File transfer direction');
+  for(const [value,label]of [['all','All transfers'],['send','Send to PC'],['receive','Receive here']]){const button=document.createElement('button');button.type='button';button.dataset.direction=value;button.textContent=label;button.setAttribute('aria-pressed',String(value==='all'));button.addEventListener('click',()=>{el('filesPane').dataset.direction=value;for(const other of directions.querySelectorAll('button'))other.setAttribute('aria-pressed',String(other===button));if(value==='receive')void refresh();});directions.append(button);}el('filesPane').prepend(directions);el('filesPane').querySelector('.filesListHeader h3').textContent='Receive on this device';el('textTab').textContent='Text & links';
+  const folderHint=document.createElement('p');folderHint.className='filesFolderHint';folderHint.textContent='Folders keep their structure. On phones without a folder picker, choose files or send a ZIP.';el('filesDrop').append(folderHint);
+  const notifyRow=document.createElement('label');notifyRow.className='filesNotify';notifyRow.innerHTML='<input type="checkbox" id="filesNotify"><span>Notify me when a transfer finishes</span>';el('filesPane').append(notifyRow);
+  const batchList=document.createElement('ol');batchList.id='filesBatchList';batchList.className='filesBatchList';batchList.hidden=true;el('filesProgress').before(batchList);
+  const filePaths=new WeakMap();let folders=[];
+  function selectedPath(file,fallback){return fallback||filePaths.get(file)||file.webkitRelativePath||file.name;}
+  const notificationKey='pcr_transfer_notifications';try{el('filesNotify').checked=localStorage.getItem(notificationKey)==='true'&&globalThis.Notification?.permission==='granted';}catch{}
+  el('filesNotify').addEventListener('change',async()=>{
+    const input=el('filesNotify');if(input.checked){
+      if(!('Notification' in window)){input.checked=false;status('This browser does not support transfer notifications.',true);return;}
+      const epoch=authEpoch;let permission=Notification.permission;try{if(permission==='default')permission=await Notification.requestPermission();}catch{permission='denied';}
+      if(epoch!==authEpoch||!dialog.isConnected)return;if(permission!=='granted'){input.checked=false;status('Notifications are off. Transfer progress stays here.');}
+    }
+    try{localStorage.setItem(notificationKey,String(input.checked));}catch{}
+  });
+  async function finishedNotice(count){
+    if(!count||!el('filesNotify')?.checked||globalThis.Notification?.permission!=='granted')return;
+    const title=count===1?'File sent to your PC':count+' files sent to your PC';
+    const options={body:'Your transfer is ready in the PC transfer folder.',tag:'pcr-file-transfer'};
+    try{const notice=new Notification(title,options);notice.onclick=()=>{window.focus();notice.close();};}
+    catch{try{const registration=await navigator.serviceWorker?.getRegistration?.();if(registration)await registration.showNotification(title,options);}catch{}}
+  }
   el('textPane').innerHTML='<div class="filesTextIntro"><span>⇄</span><h3>Copy here. Paste there.</h3><p>Text between your phone and PC, in both directions.</p></div><label for="filesNote">Your text</label><textarea id="filesNote" class="filesField" rows="6" maxlength="250000" placeholder="Type or paste your text here…"></textarea><div class="clipboardActions"><button type="button" id="clipboardSend" class="filesPrimary">Send to PC clipboard ↗</button><button type="button" id="clipboardGet" class="filesSmallButton">Get PC clipboard ↙</button></div><div class="clipboardLocal"><button type="button" id="clipboardPaste">Paste from this device</button><button type="button" id="clipboardCopy">Copy to this device</button></div><details class="textFileExtras"><summary>Save text as a file</summary><label for="filesNoteName">File name</label><input id="filesNoteName" class="filesField" placeholder="Quick note.txt" maxlength="160"><button type="button" class="filesSmallButton filesSendText" id="filesSendText">Save .txt on PC ↗</button></details>';
   const historySection=document.createElement('section');historySection.className='clipboardHistory';historySection.innerHTML='<div class="clipboardHistoryHeader"><div><h3>Snippets & history</h3><span>Saved on this device · pinned text stays at the top</span></div><button type="button" id="clipboardClear">Clear unpinned</button></div><label class="filesSearch"><span aria-hidden="true">⌕</span><input type="search" id="clipboardSearch" placeholder="Search saved text" aria-label="Search snippets and clipboard history"></label><div id="clipboardHistoryList"></div>';el('textPane').append(historySection);
   const HISTORY_KEY='pcr_clipboard_history_v1';let history=[];
@@ -33,8 +63,10 @@
   document.querySelector('.heroactions').append(home);
   const remote=document.createElement('button');remote.type='button';remote.textContent='Files';remote.dataset.filesButton='true';remote.addEventListener('click',open);document.querySelector('.rsbot').append(remote);home.addEventListener('click',open);
   let files=[],maxBytes=2*1024*1024*1024,batch=null,previousFocus=null;
+  let transferRows=[],lastTransferNotice=0;
+  function publishTransfer(index,patch,force=false){if(transferRows[index])Object.assign(transferRows[index],patch);const now=Date.now();if(!force&&now-lastTransferNotice<150)return;lastTransferNotice=now;window.dispatchEvent(new CustomEvent('pcr:transfers',{detail:transferRows.map(row=>({...row}))}));}
   const TRANSFER_KEY='pcr_pending_uploads_v1',fileCache=new Map();let pending=[];
-  function loadPending(){try{const saved=JSON.parse(localStorage.getItem(TRANSFER_KEY)||'[]');if(Array.isArray(saved))pending=saved.filter(u=>u&&/^[a-f0-9]{32}$/.test(u.id)&&/^[a-f0-9]{64}$/.test(u.resumeSecret)&&typeof u.name==='string'&&u.name.length<=180&&Number.isSafeInteger(u.size)&&u.size>=0&&Number.isFinite(u.modified)&&Number.isFinite(u.expires)&&u.expires>Date.now()&&Number.isSafeInteger(u.received)&&u.received>=0&&u.received<=u.size&&typeof u.fingerprint==='string'&&u.fingerprint.length<=100).slice(0,8);}catch{}}
+  function loadPending(){try{const saved=JSON.parse(localStorage.getItem(TRANSFER_KEY)||'[]');if(Array.isArray(saved))pending=saved.filter(u=>u&&/^[a-f0-9]{32}$/.test(u.id)&&/^[a-f0-9]{64}$/.test(u.resumeSecret)&&typeof u.name==='string'&&u.name.length<=180&&(!u.relativePath||typeof u.relativePath==='string'&&u.relativePath.length<=800)&&Number.isSafeInteger(u.size)&&u.size>=0&&Number.isFinite(u.modified)&&Number.isFinite(u.expires)&&u.expires>Date.now()&&Number.isSafeInteger(u.received)&&u.received>=0&&u.received<=u.size&&typeof u.fingerprint==='string'&&u.fingerprint.length<=100).slice(0,8);}catch{}}
   const recovery=document.createElement('section');recovery.className='filesRecovery';recovery.innerHTML='<h3>Interrupted transfers</h3><p>Resume from the last saved chunk. After reopening this page, choose the original file to continue. Kept for 7 days.</p><div id="filesPending"></div><input type="file" id="filesResumeInput" hidden>';el('filesDrop').after(recovery);let reselectId=null;
   function savePending(){if(window.PCRAuth?.signedIn&&window.PCRAuth.role==='owner')try{localStorage.setItem(TRANSFER_KEY,JSON.stringify(pending));}catch{status('Device storage is full. Keep this page open to resume this transfer.',true);}renderPending();}
   function forgetPending(id){pending=pending.filter(u=>u.id!==id);fileCache.delete(id);savePending();}
@@ -44,7 +76,9 @@
   }
   async function fingerprint(file){
     if(!globalThis.crypto?.subtle)return 'metadata-only';
-    const sample=await new Blob([file.slice(0,65536),file.slice(Math.max(0,file.size-65536))]).arrayBuffer();const hash=await crypto.subtle.digest('SHA-256',sample);return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+    const blob=new Blob([file.slice(0,65536),file.slice(Math.max(0,file.size-65536))]);
+    const sample=typeof blob.arrayBuffer==='function'?await blob.arrayBuffer():await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('This file could not be read. Choose it again from your device.'));reader.readAsArrayBuffer(blob);});
+    const hash=await crypto.subtle.digest('SHA-256',sample);return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
   }
   el('filesResumeInput').addEventListener('change',async()=>{const file=el('filesResumeInput').files[0],u=pending.find(p=>p.id===reselectId);if(!file||!u)return;if(file.name!==u.name||file.size!==u.size||file.lastModified!==u.modified||(u.fingerprint!=='metadata-only'&&await fingerprint(file)!==u.fingerprint)){status('Choose the same original file: its name, size, date or contents differ.',true);return;}fileCache.set(u.id,file);void send([file],u);});renderPending();
   const preview=document.createElement('dialog');preview.id='filePreviewDialog';preview.setAttribute('aria-labelledby','filePreviewTitle');preview.innerHTML='<header><div><span class="filesEyebrow">FILE PREVIEW</span><h2 id="filePreviewTitle"></h2></div><button type="button" class="filesIconButton" id="filePreviewClose" aria-label="Close preview">✕</button></header><div id="filePreviewBody"></div><footer><span id="filePreviewHint">Preview unavailable? Download the original file.</span><a id="filePdfViewer" class="filesSmallButton" target="_blank" rel="noopener noreferrer" hidden>Open PDF viewer ↗</a><a id="filePreviewDownload" class="filesSmallButton">Download original ↓</a></footer>';document.body.append(preview);let previewFocus=null;
@@ -65,17 +99,18 @@
   function render(){
     const list=el('filesList'),query=el('filesSearch').value.trim().toLowerCase();list.replaceChildren();
     const visible=files.filter(file=>file.name.toLowerCase().includes(query));
+    for(const folder of folders.filter(folder=>folder.name.toLowerCase().includes(query))){const row=document.createElement('div');row.className='filesRow filesFolderRow';const icon=document.createElement('span');icon.className='filesType folder';icon.textContent='▤';const info=document.createElement('div');info.className='filesInfo';const title=document.createElement('strong');title.textContent=folder.name;const detail=document.createElement('span');detail.textContent=folder.count+' files · '+size(folder.size);info.append(title,detail);const download=document.createElement('a');download.className='filesSmallButton filesFolderDownload';download.href='/api/files/folder?name='+encodeURIComponent(folder.name);download.textContent='Save ZIP';download.setAttribute('download',folder.name+'.zip');row.append(icon,info,download);list.append(row);}
     if(!visible.length){const empty=document.createElement('div');empty.className='filesEmpty';empty.textContent=query?'No matching files.':'A clear space for your next file. Upload one, or add files to the PC folder.';list.append(empty);return;}
     for(const file of visible){
       const row=document.createElement('div');row.className='filesRow';const [symbol,type]=kind(file.name),icon=document.createElement('span');icon.className='filesType '+type;icon.textContent=symbol;
       const info=document.createElement('div');info.className='filesInfo';const name=document.createElement('strong');name.textContent=file.name;name.title=file.name;const detail=document.createElement('span');detail.textContent=size(file.size)+' · '+new Date(file.modified).toLocaleDateString(undefined,{month:'short',day:'numeric'});info.append(name,detail);
-      row.append(icon,info);if(file.preview){const view=document.createElement('button');view.type='button';view.className='filesSmallButton';view.textContent='Preview';view.setAttribute('aria-label','Preview '+file.name);view.addEventListener('click',()=>openPreview(file));row.append(view);}const download=document.createElement('a');download.className='filesDownload';download.href='/api/files/download?name='+encodeURIComponent(file.name);download.download=file.name;download.textContent='↓';download.title='Download '+file.name;download.setAttribute('aria-label','Download '+file.name);row.append(download);list.append(row);
+      row.append(icon,info);if(file.preview){const view=document.createElement('button');view.type='button';view.className='filesSmallButton';view.textContent='Preview';view.setAttribute('aria-label','Preview '+file.name);view.addEventListener('click',()=>openPreview(file));row.append(view);}const download=document.createElement('a');download.className='filesDownload';download.href='/api/files/download?name='+encodeURIComponent(file.name);download.download=file.name.split('/').at(-1);download.textContent='↓';download.title='Download '+file.name;download.setAttribute('aria-label','Download '+file.name);download.draggable=true;download.addEventListener('dragstart',event=>{event.dataTransfer?.setData('DownloadURL','application/octet-stream:'+download.download+':'+download.href);});row.append(download);list.append(row);
     }
   }
   async function refresh(){
-    const epoch=authEpoch;if(!window.PCRCanAccess?.('download')){files=[];render();return;}
-    try{const data=await api('/api/files');if(epoch!==authEpoch)return;if(!data.ok)throw Error(data.error||'Sign in again to see your files.');files=data.files;maxBytes=data.maxBytes;el('filesCount').textContent=data.total+' '+(data.total===1?'file':'files');el('filesFolderPath').textContent=window.PCRAuth?.role==='guest'?'Shared transfer folder':data.folder;render();}
-    catch(e){status(e.message,true);el('filesCount').textContent='Files unavailable';}
+    const epoch=authEpoch;if(!dialog.isConnected)return;if(!window.PCRCanAccess?.('download')){files=[];folders=[];render();return;}
+    try{const data=await api('/api/files');if(epoch!==authEpoch||!dialog.isConnected)return;if(!data.ok)throw Error(data.error||'Sign in again to see your files.');files=data.files;folders=Array.isArray(data.folders)?data.folders:[];maxBytes=data.maxBytes;el('filesCount').textContent=data.total+' '+(data.total===1?'file':'files')+(data.truncated?' · first 2,000 shown':'');el('filesFolderPath').textContent=window.PCRAuth?.role==='guest'?'Shared transfer folder':data.folder;render();}
+    catch(e){if(epoch!==authEpoch||!dialog.isConnected)return;status(e.message,true);el('filesCount').textContent='Files unavailable';}
   }
   async function open(event){
     if(!dialog.open){
@@ -95,7 +130,7 @@
   function chunk(upload,file,start,end,job){
     return new Promise((resolve,reject)=>{
       const xhr=job.xhr=new XMLHttpRequest();xhr.open('PUT','/api/files/uploads/'+upload.id+'?offset='+start);xhr.setRequestHeader('X-PCR','1');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.timeout=180000;
-      xhr.upload.addEventListener('progress',e=>{if(e.lengthComputable){const loaded=Math.min(file.size,start+e.loaded);el('filesProgressBar').value=file.size?100*loaded/file.size:100;el('filesProgressLabel').textContent=size(loaded)+' / '+size(file.size);}});
+      xhr.upload.addEventListener('progress',e=>{if(e.lengthComputable){const loaded=Math.min(file.size,start+e.loaded);el('filesProgressBar').value=file.size?100*loaded/file.size:100;el('filesProgressLabel').textContent=size(loaded)+' / '+size(file.size);publishTransfer(job.index,{percent:file.size?100*loaded/file.size:100,state:'sending'});}});
       xhr.onload=()=>{job.xhr=null;let data;try{data=JSON.parse(xhr.responseText);}catch{return reject(Error('The host did not accept this upload. Sign in again and retry.'));}if(xhr.status>=200&&xhr.status<300&&data.ok)resolve(data);else reject(Error(data.error||'Upload failed.'));};
       xhr.onerror=()=>reject(Error('Connection interrupted. Use Resume / Retry to continue from the last saved chunk.'));xhr.ontimeout=()=>reject(Error('Upload timed out. Use Resume / Retry when the connection improves.'));xhr.onabort=()=>reject(Error(job.cancelled?'Upload cancelled.':'Upload paused. Use Resume / Retry to continue.'));xhr.send(file.slice(start,end));
     });
@@ -103,32 +138,50 @@
   async function send(list,resuming=null){
     if(!window.PCRCanAccess?.('upload')){status('Sending files was not approved.',true);return;}
     if(batch){status('Finish or cancel the current transfer first.',true);return;}
+    if(list.length>2000){status('Choose up to 2,000 files per batch.',true);return;}
     const job=batch={cancelled:false,paused:false,id:null,xhr:null,epoch:authEpoch};el('filesProgress').hidden=false;renderPending();let completed=0;
+    batchList.replaceChildren();batchList.hidden=false;const rows=new Map();transferRows=list.slice(0,20).map(file=>({name:file.name,percent:0,state:'queued'}));publishTransfer(-1,{},true);
+    for(const [index,file]of list.slice(0,20).entries()){const row=document.createElement('li');const name=document.createElement('span'),state=document.createElement('small');name.textContent=selectedPath(file,resuming?.relativePath);state.textContent='Queued';row.append(name,state);batchList.append(row);rows.set(index,row);}
+    if(list.length>20){const more=document.createElement('li');more.textContent='And '+(list.length-20)+' more files';batchList.append(more);}
     try{
-      for(const file of list){
-        if(job.cancelled)break;if(file.size>maxBytes)throw Error(file.name+' is larger than '+size(maxBytes)+'.');
-        el('filesProgressName').textContent=file.name;el('filesProgressBar').value=0;status('Sending '+(completed+1)+' of '+list.length+'…');
+      for(const [index,file]of list.entries()){
+        job.index=index;publishTransfer(index,{state:'sending'},true);
+        if(job.cancelled)throw Error('Upload cancelled.');if(file.size>maxBytes)throw Error(file.name+' is larger than '+size(maxBytes)+'.');
+        const relativePath=selectedPath(file,resuming?.relativePath),row=rows.get(index);if(row){row.dataset.state='active';row.querySelector('small').textContent='Sending';}
+        el('filesProgressName').textContent=(index+1)+' / '+list.length+' · '+relativePath;el('filesProgressBar').value=0;status('Sending '+(completed+1)+' of '+list.length+'…');
         // Selecting the same file again recovers its saved transfer instead of silently starting over.
-        let saved=resuming||pending.find(u=>u.name===file.name&&u.size===file.size&&u.modified===file.lastModified),upload;
+        let saved=resuming||pending.find(u=>u.name===file.name&&(u.relativePath||u.name)===relativePath&&u.size===file.size&&u.modified===file.lastModified),upload;
         if(saved){if(saved.fingerprint!=='metadata-only'&&await fingerprint(file)!==saved.fingerprint)throw Error('The selected file contents changed. Choose the original file or discard its interrupted transfer.');upload=await api('/api/files/uploads/'+saved.id+'/resume',{method:'POST',body:JSON.stringify({resumeSecret:saved.resumeSecret})});if(!upload.ok)throw Error(upload.error||'Could not resume. Sign in to the same account and retry.');if(upload.name!==file.name||upload.size!==file.size)throw Error('The saved transfer belongs to a different file.');saved.received=upload.received;saved.expires=upload.expires;savePending();}
         else{
           if(pending.length>=8)throw Error('Resume or discard an interrupted transfer before starting another.');
-          const identity=await fingerprint(file);upload=await api('/api/files/uploads',{method:'POST',body:JSON.stringify({name:file.name,size:file.size})});if(!upload.ok)throw Error(upload.error||'Could not start the transfer.');
-          if(job.epoch!==authEpoch)throw Error('Account changed. Transfer stopped.');saved={id:upload.id,resumeSecret:upload.resumeSecret,name:file.name,size:file.size,modified:file.lastModified,fingerprint:identity,received:upload.received,expires:upload.expires};pending.unshift(saved);savePending();
+          const identity=await fingerprint(file);upload=await api('/api/files/uploads',{method:'POST',body:JSON.stringify({name:file.name,relativePath,size:file.size})});if(!upload.ok)throw Error(upload.error||'Could not start the transfer.');
+          if(job.epoch!==authEpoch)throw Error('Account changed. Transfer stopped.');saved={id:upload.id,resumeSecret:upload.resumeSecret,name:file.name,relativePath,size:file.size,modified:file.lastModified,fingerprint:identity,received:upload.received,expires:upload.expires};pending.unshift(saved);savePending();
         }
         if(job.epoch!==authEpoch)throw Error('Account changed. Transfer stopped.');fileCache.set(upload.id,file);job.id=upload.id;el('filesProgressBar').value=file.size?100*upload.received/file.size:100;el('filesProgressLabel').textContent=size(upload.received)+' / '+size(file.size);
         let response=upload,offset=upload.received;
         while(offset<file.size&&!job.cancelled&&!job.paused){response=await chunk(upload,file,offset,Math.min(file.size,offset+upload.chunkBytes),job);if(job.epoch!==authEpoch)throw Error('Account changed. Transfer stopped.');offset=response.received;saved.received=offset;savePending();}
-        if(job.cancelled)throw Error('Upload cancelled.');if(job.paused)throw Error('Upload paused. Use Resume / Retry to continue.');if(!response.complete)throw Error('The PC did not finish this file. Use Resume / Retry to check it.');forgetPending(upload.id);job.id=null;completed++;await refresh();resuming=null;
+        if(job.cancelled)throw Error('Upload cancelled.');if(job.paused)throw Error('Upload paused. Use Resume / Retry to continue.');if(!response.complete)throw Error('The PC did not finish this file. Use Resume / Retry to check it.');forgetPending(upload.id);job.id=null;completed++;publishTransfer(job.index,{percent:100,state:'complete'},true);if(row){row.dataset.state='complete';row.querySelector('small').textContent='Sent';}resuming=null;
       }
       status(completed+' '+(completed===1?'file sent':'files sent')+' to your PC.');
-    }catch(e){status(e.message,true);}
-    finally{if(job.epoch===authEpoch&&job.cancelled&&job.id){await api('/api/files/uploads/'+job.id,{method:'DELETE'}).catch(()=>{});forgetPending(job.id);}batch=null;el('filesProgress').hidden=true;el('filesInput').value='';renderPending();}
+      if(job.epoch===authEpoch&&completed===list.length)void finishedNotice(completed);
+    }catch(e){if(job.epoch===authEpoch&&dialog.isConnected){publishTransfer(job.index,{state:job.cancelled?'cancelled':'paused'},true);status(e.message,true);const active=batchList.querySelector('[data-state=active]');if(active){active.dataset.state='paused';active.querySelector('small').textContent=job.cancelled?'Cancelled':'Paused';}}}
+    finally{if(job.epoch===authEpoch&&job.cancelled&&job.id){await api('/api/files/uploads/'+job.id,{method:'DELETE'}).catch(()=>{});forgetPending(job.id);}batch=null;if(dialog.isConnected){el('filesProgress').hidden=true;el('filesInput').value='';folderInput.value='';renderPending();if(completed&&job.epoch===authEpoch)await refresh();}}
   }
   el('filesChoose').addEventListener('click',()=>el('filesInput').click());el('filesInput').addEventListener('change',()=>{const selected=Array.from(el('filesInput').files);if(selected.length)void send(selected);});
+  folderButton.addEventListener('click',()=>folderInput.click());folderInput.addEventListener('change',()=>{const selected=Array.from(folderInput.files);if(selected.length)void send(selected);});
   el('filesCancel').addEventListener('click',()=>{if(batch){batch.cancelled=true;batch.xhr?.abort();}});
   const pause=document.createElement('button');pause.type='button';pause.textContent='Pause';pause.addEventListener('click',()=>{if(batch){batch.paused=true;batch.xhr?.abort();}});el('filesCancel').before(pause);
-  const drop=el('filesDrop');for(const event of ['dragenter','dragover'])drop.addEventListener(event,e=>{e.preventDefault();drop.classList.add('dragging');});drop.addEventListener('dragleave',()=>drop.classList.remove('dragging'));drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('dragging');const selected=Array.from(e.dataTransfer.files);if(selected.length)void send(selected);});
+  async function droppedFiles(transfer){
+    const entries=Array.from(transfer.items||[]).map(item=>item.webkitGetAsEntry?.()).filter(Boolean);if(!entries.length)return Array.from(transfer.files||[]);
+    const result=[];let visited=0;
+    async function walk(entry,parent='',depth=0){
+      if(++visited>4000||depth>12)throw Error('Choose a smaller folder with at most twelve levels.');const relative=parent+entry.name;
+      if(entry.isFile){const file=await new Promise((resolve,reject)=>entry.file(resolve,reject));if(result.length>=2000)throw Error('Choose up to 2,000 files per batch.');filePaths.set(file,relative);result.push(file);}
+      else if(entry.isDirectory){const reader=entry.createReader();for(;;){const children=await new Promise((resolve,reject)=>reader.readEntries(resolve,reject));if(!children.length)break;for(const child of children)await walk(child,relative+'/',depth+1);}}
+    }
+    for(const entry of entries)await walk(entry);return result;
+  }
+  const drop=el('filesDrop');for(const event of ['dragenter','dragover'])drop.addEventListener(event,e=>{e.preventDefault();drop.classList.add('dragging');});drop.addEventListener('dragleave',()=>drop.classList.remove('dragging'));drop.addEventListener('drop',async e=>{e.preventDefault();drop.classList.remove('dragging');const epoch=authEpoch;try{const selected=await droppedFiles(e.dataTransfer);if(epoch!==authEpoch||!dialog.isConnected)return;if(selected.length)void send(selected);else status('This folder has no files to send.');}catch(error){if(epoch===authEpoch&&dialog.isConnected)status(error.message,true);}});
   el('filesSendText').addEventListener('click',()=>{const text=el('filesNote').value;if(!text){status('Add some text first.',true);return;}let name=el('filesNoteName').value.trim()||'Quick note.txt';if(!/\.txt$/i.test(name))name+='.txt';void send([new File([text],name,{type:'text/plain;charset=utf-8'})]);});
   el('clipboardSend').addEventListener('click',async()=>{
     const button=el('clipboardSend');button.disabled=true;
@@ -145,6 +198,6 @@
   });
   el('clipboardPaste').addEventListener('click',async()=>{const epoch=authEpoch;try{const text=await navigator.clipboard.readText();if(epoch!==authEpoch||!dialog.open)return;el('filesNote').value=text;status('Text pasted. Send it to the PC when ready.');}catch{if(epoch===authEpoch&&dialog.open)status('Long-press this text field and choose Paste, or press Ctrl+V.');}});
   let authEpoch=0,account='';
-  function accountChanged(){const next=window.PCRAuth?.signedIn?(window.PCRAuth.role==='owner'?'owner':'guest:'+window.PCRAuth.guestId):'';if(next===account)return;account=next;authEpoch++;if(batch){batch.cancelled=true;batch.xhr?.abort();}history=[];pending=[];files=[];fileCache.clear();el('filesNote').value='';el('filesSearch').value='';el('clipboardSearch').value='';el('filesFolderPath').textContent='';el('filesStatus').textContent='';if(next==='owner'){loadHistory();loadPending();}historySection.hidden=next!=='owner';renderHistory();renderPending();render();close();window.PCRGuestAccess?.applyPermissions();}
+  function accountChanged(){const next=window.PCRAuth?.signedIn?(window.PCRAuth.role==='owner'?'owner':'guest:'+window.PCRAuth.guestId):'';if(next===account)return;account=next;authEpoch++;transferRows=[];publishTransfer(-1,{},true);if(batch){batch.cancelled=true;batch.xhr?.abort();}history=[];pending=[];files=[];folders=[];batchList.replaceChildren();batchList.hidden=true;fileCache.clear();el('filesNote').value='';el('filesSearch').value='';el('clipboardSearch').value='';el('filesFolderPath').textContent='';el('filesStatus').textContent='';if(next==='owner'){loadHistory();loadPending();}historySection.hidden=next!=='owner';renderHistory();renderPending();render();close();window.PCRGuestAccess?.applyPermissions();}
   window.addEventListener('pcr:auth',accountChanged);accountChanged();
 })();

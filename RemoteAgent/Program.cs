@@ -26,6 +26,21 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Length==1&&args[0]=="--open-link")
+        {
+            try
+            {
+                using var reader=new StreamReader(Console.OpenStandardInput(),new UTF8Encoding(false,true));
+                string raw=reader.ReadToEnd();if(raw.Length>8192)throw new ArgumentException("Link is too long.");
+                using var body=JsonDocument.Parse(raw);string value=body.RootElement.GetProperty("url").GetString()??"";
+                if(value.Length>4096||value.Any(char.IsControl)||value.Any(char.IsWhiteSpace)||!Uri.TryCreate(value,UriKind.Absolute,out var uri)||
+                   (uri.Scheme!=Uri.UriSchemeHttp&&uri.Scheme!=Uri.UriSchemeHttps)||!string.IsNullOrEmpty(uri.UserInfo))throw new ArgumentException("Use an http or https link.");
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri){UseShellExecute=true});
+                Console.WriteLine("{\"ok\":true}");
+            }
+            catch(Exception ex){Console.WriteLine(JsonSerializer.Serialize(new {ok=false,error="Could not open link. "+ex.Message}));Environment.ExitCode=1;}
+            return;
+        }
         if(args.Length==1&&args[0]=="--media"){MediaKeys.Run();return;}
         if(args.Length==1&&args[0] is "--ocr" or "--clipboard-image-read" or "--clipboard-image-write"){ImageTools.Run(args[0]);return;}
         if(args.Length==1&&args[0]=="--capture-probe")
@@ -302,9 +317,9 @@ internal static class Program
                 Native.SetCursorPos(primary.Left + Math.Clamp(Number(words[0]), 0, primary.Width - 1),
                     primary.Top + Math.Clamp(Number(words[1]), 0, primary.Height - 1));
                 break;
-            case "wheel":
+            case "wheel": case "hwheel":
                 if (words.Length != 1) return;
-                Native.mouse_event(0x0800, 0, 0, Number(words[0]), UIntPtr.Zero);
+                Native.mouse_event(parts[0]=="hwheel"?0x1000u:0x0800u, 0, 0, Number(words[0]), UIntPtr.Zero);
                 break;
             case "click": case "down": case "up":
                 if (words.Length != 1 || words[0].Length != 1) return;

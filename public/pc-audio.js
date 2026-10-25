@@ -72,6 +72,7 @@
     document.body.append(dialog);bar.append(button);
     const select=name=>dialog.querySelector('[data-'+name+']'),status=dialog.querySelector('.nativeAudioStatus');
     const player=new PcAudioPlayer({onState:state=>{
+      window.dispatchEvent(new CustomEvent('pcr:audio-state',{detail:{state:state.state}}));
       if(state.message)status.textContent=state.message;const active=state.state==='connecting'||state.state==='playing';
       button.textContent=active?'Audio on':'Audio';button.setAttribute('aria-pressed',String(active));select('start').disabled=active;select('start').textContent=state.state==='error'?'Try again':'Start PC audio';select('stop').disabled=!active;select('mute').disabled=!active;select('mute').textContent=state.muted?'Unmute':'Mute';select('mute').setAttribute('aria-pressed',String(state.muted));
     }});

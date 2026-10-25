@@ -1,1 +1,41 @@
-#webrtcVideoHome[hidden]{display:none!important}#webrtcVideoHome{background:linear-gradient(110deg,#183d3a,#192b40)}#webrtcVideoDialog{width:min(960px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;border:0;border-radius:24px;background:#101c28;color:#e6f3f9;padding:22px;font:13px/1.5 system-ui;box-shadow:0 30px 100px #0009}#webrtcVideoDialog::backdrop{background:#030b13cf;backdrop-filter:blur(8px)}#webrtcVideoDialog header{display:flex;justify-content:space-between;align-items:start}#webrtcVideoDialog header span{font-size:9px;letter-spacing:1.6px;color:#76cfad}#webrtcVideoDialog h2{font-size:25px;margin:5px 0;letter-spacing:-.8px}#webrtcVideoDialog button{border:0;border-radius:11px;background:#21384b;color:#bdd7e5;padding:11px 14px;font:600 12px system-ui;cursor:pointer}#webrtcVideoDialog [data-watch]{background:#65d8ae;color:#11352a}#webrtcVideoDialog [data-publish]{background:#315179}#webrtcVideoDialog [data-close]{padding:8px 11px}#webrtcVideoDialog button:disabled{opacity:.4}#webrtcVideoDialog button[hidden]{display:none}#webrtcVideoDialog video{display:block;width:100%;height:min(51vh,540px);min-height:190px;object-fit:contain;background:#04090e;border-radius:15px}.rtcHint{font-size:12px;color:#90acbf;margin:8px 0 18px}.rtcActions{display:flex;gap:7px;flex-wrap:wrap;margin-top:15px}.rtcStatus{font-size:12px;color:#95dbc0}.rtcStats{font-size:10px;color:#789eb0;overflow-wrap:anywhere}#webrtcVideoDialog[open]{animation:dialogArrive .25s ease both}@media(prefers-reduced-motion:reduce){#webrtcVideoDialog[open]{animation:none}}
+#webrtcVideoHome[hidden]{display:none!important}
+#webrtcVideoDialog{width:min(1040px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;border:0;border-radius:20px;background:#101820;color:#e8f1f4;padding:22px;font:13px/1.5 system-ui}
+#webrtcVideoDialog *{box-sizing:border-box}
+#webrtcVideoDialog [hidden]{display:none!important}
+#webrtcVideoDialog header{display:flex;justify-content:space-between;align-items:start}
+#webrtcVideoDialog header span{font-size:9px;letter-spacing:1.6px;color:#91b7ad}
+#webrtcVideoDialog h2{font-size:25px;margin:5px 0;letter-spacing:-.8px}
+#webrtcVideoDialog button{border:1px solid #accbd522;border-radius:10px;background:#233846;color:#d0e2ea;padding:11px 14px;font:600 12px system-ui;cursor:pointer;min-height:42px;touch-action:manipulation}
+#webrtcVideoDialog button:hover{background:#2b4656}
+#webrtcVideoDialog button:focus-visible,#webrtcVideoDialog input:focus-visible{outline:2px solid #8adabe;outline-offset:3px}
+#webrtcVideoDialog [data-watch]{background:#88d3b7;color:#102d24;border-color:transparent}
+#webrtcVideoDialog [data-publish]{background:#2e4a5a}
+#webrtcVideoDialog [data-stop]{background:none}
+#webrtcVideoDialog button:disabled{opacity:.4;cursor:default}
+.rtcHint{font-size:12px;color:#a2b8c6;margin:8px 0 18px;max-width:68ch}
+.rtcPlayer{position:relative;overflow:hidden;border-radius:16px;border:1px solid #a2c4d426;background:#060b10;isolation:isolate}
+#webrtcVideoDialog video{display:block;width:100%;height:min(54dvh,540px);min-height:190px;object-fit:contain;background:#060b10}
+.rtcLiveBadge{position:absolute;left:16px;top:15px;z-index:2;display:flex;align-items:center;gap:7px;font-size:9px;font-weight:650;letter-spacing:1.2px;color:#b5c9cc;padding:7px 9px;background:#081018ba;border-radius:7px;pointer-events:none}
+.rtcLiveBadge i{width:5px;height:5px;border-radius:50%;background:#7d9a9a}
+.rtcPlayer.hasStream .rtcLiveBadge i{background:#9ce5bf}
+.rtcPlayerEmpty{position:absolute;inset:0 0 65px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:9px;padding:48px 20px;text-align:center;background:radial-gradient(ellipse at 50% 80%,#23474760,transparent 70%),#0b131b;pointer-events:none}
+.rtcPlayerMark{display:grid;place-items:center;width:54px;height:54px;border:1px solid #aacfc433;border-radius:50%;color:#b0d4c8;font-size:17px;padding-left:3px;margin-bottom:7px}
+.rtcPlayerEmpty strong{font-size:clamp(19px,4vw,30px);font-weight:600;letter-spacing:-.6px;color:#e3ecec}
+.rtcPlayerEmpty>span:last-child{font-size:12px;max-width:32ch;color:#89a1af}
+.rtcPlayerBar{display:flex;align-items:center;gap:8px;min-height:65px;padding:10px 12px;border-top:1px solid #a8cad315;background:#101e28}
+#webrtcVideoDialog .rtcPlayerBar button{padding:8px 12px;white-space:nowrap;font-size:11px;min-height:40px;background:#223441}
+.rtcVolume{display:flex;align-items:center;gap:8px;flex:1;min-width:60px;max-width:220px;color:#91acba;font-size:10px}
+.rtcVolume input{accent-color:#98d2bd;min-width:0;width:100%;height:24px;cursor:pointer}
+#webrtcVideoDialog [data-fullscreen]{margin-left:auto}
+#webrtcVideoDialog .rtcTapPlay{position:absolute;inset:0;margin:auto;width:max-content;max-width:90%;height:48px;z-index:3;background:#96d8bfe8;color:#0c2c21;border-color:#bcead6}
+.rtcAudioStatus{font-size:11px;color:#96b7ae;min-height:17px;margin:12px 0}
+.rtcActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.rtcStatus{font-size:12px;color:#b5c6d1;margin:16px 0}
+.rtcDiagnostics{border-top:1px solid #a6c6d31c;padding-top:14px;color:#819cae;font-size:11px}
+.rtcDiagnostics summary{cursor:pointer;padding:3px 0}
+.rtcStats{font-size:10px;color:#96adba;overflow-wrap:anywhere}
+.rtcPlayer:fullscreen{display:flex;flex-direction:column;justify-content:center;border:0;border-radius:0;background:#000;width:100vw;height:100dvh}
+#webrtcVideoDialog .rtcPlayer:fullscreen video{height:calc(100dvh - 65px);max-height:none;min-height:0;flex:1}
+.rtcPlayer:fullscreen .rtcPlayerBar{flex-shrink:0;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+@media(max-width:480px){.rtcPlayerBar{gap:6px;padding:10px 8px}.rtcVolume{max-width:105px;gap:0}.rtcVolume>span{display:none}#webrtcVideoDialog .rtcPlayerBar button{padding:8px 9px}#webrtcVideoDialog [data-fullscreen] span{display:none}#webrtcVideoDialog video{height:40dvh;min-height:190px}.rtcActions{display:grid;grid-template-columns:1fr 1fr}.rtcActions button{min-height:46px;font-size:11px;padding:10px 8px}.rtcHint{line-height:1.6}.rtcLiveBadge{left:10px;top:10px;font-size:8px}.rtcPlayerEmpty{padding:45px 18px}}
+@media(max-height:480px) and (orientation:landscape){#webrtcVideoDialog video{height:65dvh;min-height:140px}.rtcPlayerEmpty{padding:25px}.rtcPlayerMark{display:none}}

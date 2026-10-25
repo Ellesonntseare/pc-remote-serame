@@ -206,6 +206,16 @@ test('live edits validate bounded replacement operations and Unicode',()=>{
   assert.equal(validInput('edit '+Buffer.from('{broken').toString('base64')),false);
   assert.equal(validInput('edit /w=='),false);
 });
+test('the visible host can serve its LAN address and exact tunnel hostname together with password and origin guards',async()=>{
+  const app=createApp({port:0,password:'local-check',tunnelHostname:'remote.example.com',allowLan:true,disableAgent:true,disableActions:true});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const port=app.server.address().port;
+  try{
+    const lan=await request(port,'/api/ping');assert.equal(lan.status,200);assert.equal(lan.data.requirePassword,true);
+    const signIn=await request(port,'/api/pair','POST',{password:'local-check'});assert.equal(signIn.status,200);assert.doesNotMatch(signIn.headers['set-cookie'][0],/; Secure/);const cookie=signIn.headers['set-cookie'][0].split(';')[0];assert.equal((await request(port,'/api/status','GET',undefined,{Cookie:cookie})).status,200);
+    const cloud=await request(port,'/api/pair','POST',{password:'local-check'},{Host:'remote.example.com',Origin:'https://remote.example.com'});assert.equal(cloud.status,200);assert.match(cloud.headers['set-cookie'][0],/; Secure/);
+    assert.equal((await request(port,'/api/ping','GET',undefined,{Host:'evil.example'})).status,403);assert.equal((await request(port,'/api/ping','GET',undefined,{Origin:'https://evil.example'})).status,403);
+    assert.equal((await request(port,'/api/status','GET')).status,401);
+  }finally{app.stop();await close(app);}
+});
 
 
 test('HD screen mode selects the native-quality agent preset',async()=>{

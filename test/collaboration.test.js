@@ -1,5 +1,5 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),{WebSocket}=require('ws'),{createApp}=require('../server'),{validStroke}=require('../collaboration');
+const test=require('node:test'),assert=require('node:assert/strict'),{WebSocket}=require('ws'),{createApp}=require('../server'),{validStroke,validNotes}=require('../collaboration');
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function fixture(t){const app=createApp({password:'serame',disableAgent:true,disableActions:true});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port,sockets=[];
   async function call(route,{method='GET',body,cookie}={}){const response=await fetch(base+route,{method,headers:{'X-PCR':'1',...cookie&&{Cookie:cookie},'Content-Type':'application/json'},...body&&{body:JSON.stringify(body)}});return {status:response.status,json:await response.json(),cookie:response.headers.getSetCookie()[0]?.split(';')[0]};}
@@ -22,3 +22,33 @@ test('whiteboards are scoped to one guest session and do not leak to other guest
   phone.send(JSON.stringify({type:'stroke',color:'#69e3ba',width:3,points:[{x:.2,y:.3},{x:.6,y:.7}]}));assert.equal((await next(owner,v=>v.type==='stroke')).points.length,2);await delay(30);assert.equal(outsider.queue.some(v=>v.type==='stroke'),false);owner.send(JSON.stringify({type:'board-clear'}));assert.deepEqual((await next(phone,v=>v.type==='board')).strokes,[]);
 });
 test('guest collaboration requires an approved permission',async t=>{const f=await fixture(t),guest=await f.guest({screen:true});assert.equal((await f.call('/api/collaboration/config',{cookie:guest})).status,403);});
+
+test('notes validate bounded text, checklist identities and exact fields',()=>{
+  const document={text:'A useful note',items:[{id:'first',text:'Check this',done:false}]};assert.equal(validNotes(document),true);
+  for(const bad of [{...document,text:'x'.repeat(8001)},{...document,items:Array.from({length:51},(_,i)=>({id:String(i),text:'x',done:false}))},{...document,items:[document.items[0],document.items[0]]},{...document,items:[{id:'../x',text:'x',done:false}]},{...document,items:[{id:'a',text:'x',done:'true'}]},{...document,owner:true}])assert.equal(validNotes(bad),false);
+});
+
+test('session chat is two-way, permission gated and isolated from every other guest room',async t=>{
+  const f=await fixture(t),guest=await f.guest({chat:true}),other=await f.guest({chat:true}),owner=f.socket(f.owner),phone=f.socket(guest),outsider=f.socket(other);const ready=await next(phone,v=>v.type==='ready');await next(owner,v=>v.type==='ready');await next(outsider,v=>v.type==='ready');
+  assert.equal((await f.call('/api/collaboration/config',{cookie:guest})).status,200);phone.send(JSON.stringify({type:'chat-join'}));await next(phone,v=>v.type==='chat');owner.send(JSON.stringify({type:'chat-join',room:ready.room}));await next(owner,v=>v.type==='chat');outsider.send(JSON.stringify({type:'chat-join',room:ready.room}));await next(outsider,v=>v.type==='chat');
+  phone.send(JSON.stringify({type:'chat-send',text:'<script>plain text</script>'}));const message=await next(owner,v=>v.type==='chat-message');assert.equal(message.message.text,'<script>plain text</script>');assert.equal(message.message.from,'Guest');owner.send(JSON.stringify({type:'chat-send',text:'Reply from owner'}));assert.equal((await next(phone,v=>v.type==='chat-message'&&v.message.from==='Owner')).message.text,'Reply from owner');await delay(30);assert.equal(outsider.queue.some(v=>v.type==='chat-message'),false);
+  phone.send(JSON.stringify({type:'chat-send',text:'x'.repeat(1001)}));await delay(30);assert.equal(owner.queue.some(v=>v.type==='chat-message'&&v.message.text.length>1000),false);
+  phone.send(JSON.stringify({type:'chat-join'}));assert.equal((await next(phone,v=>v.type==='chat')).messages.length,2,'rejoining does not reset the conversation');
+});
+
+test('notes use compare-and-swap revisions, reject cross-room writes and clear on guest revocation',async t=>{
+  const f=await fixture(t),guest=await f.guest({notes:true}),other=await f.guest({notes:true}),owner=f.socket(f.owner),phone=f.socket(guest),outsider=f.socket(other);const ready=await next(phone,v=>v.type==='ready');await next(owner,v=>v.type==='ready');await next(outsider,v=>v.type==='ready');phone.send(JSON.stringify({type:'notes-join'}));await next(phone,v=>v.type==='notes');owner.send(JSON.stringify({type:'notes-join',room:ready.room}));await next(owner,v=>v.type==='notes');outsider.send(JSON.stringify({type:'notes-join',room:ready.room}));await next(outsider,v=>v.type==='notes');
+  const document={text:'Shared plan',items:[{id:'first',text:'Verify the screen',done:false}]};phone.send(JSON.stringify({type:'notes-update',baseRevision:0,document}));const saved=await next(owner,v=>v.type==='notes'&&v.revision===1);assert.deepEqual(saved.document,document);
+  owner.send(JSON.stringify({type:'notes-update',baseRevision:0,document:{text:'Stale edit',items:[]}}));const conflict=await next(owner,v=>v.type==='notes-conflict');assert.equal(conflict.revision,1);assert.deepEqual(conflict.document,document);
+  owner.send(JSON.stringify({type:'notes-update',baseRevision:1,document:{text:'Resolved',items:[{...document.items[0],done:true}]}}));assert.equal((await next(phone,v=>v.type==='notes'&&v.revision===2)).document.items[0].done,true);await delay(30);assert.equal(outsider.queue.some(v=>v.type==='notes'&&v.revision>0),false);
+  const session=(await f.call('/api/session',{cookie:guest})).json;await f.call('/api/guest/revoke',{method:'POST',cookie:f.owner,body:{id:session.guestId}});assert.equal((await next(owner,v=>v.type==='shared-ended')).room,ready.room);await delay(30);assert.notEqual(phone.readyState,WebSocket.OPEN);
+});
+
+test('voice-only guests cannot join chat or notes, and default permissions grant neither',async t=>{
+  const f=await fixture(t),guest=await f.guest({voice:true}),phone=f.socket(guest);await next(phone,v=>v.type==='ready');const session=(await f.call('/api/session',{cookie:guest})).json;assert.equal(session.permissions.chat,false);assert.equal(session.permissions.notes,false);phone.send(JSON.stringify({type:'chat-join'}));phone.send(JSON.stringify({type:'notes-join'}));phone.send(JSON.stringify({type:'chat-send',text:'Unapproved'}));await delay(50);assert.equal(phone.queue.some(v=>['chat','notes','chat-message'].includes(v.type)),false);
+});
+
+test('shared history survives tab/channel changes and clears after the last participant disconnects',async t=>{
+  const f=await fixture(t),guest=await f.guest({chat:true}),phone=f.socket(guest);await next(phone,value=>value.type==='ready');phone.send(JSON.stringify({type:'chat-join'}));await next(phone,value=>value.type==='chat');phone.send(JSON.stringify({type:'chat-send',text:'Session memory'}));await next(phone,value=>value.type==='chat-message');phone.send(JSON.stringify({type:'shared-leave'}));phone.send(JSON.stringify({type:'chat-join'}));assert.equal((await next(phone,value=>value.type==='chat')).messages.length,1);
+  phone.close();await new Promise(resolve=>phone.once('close',resolve));const replacement=f.socket(guest);await next(replacement,value=>value.type==='ready');replacement.send(JSON.stringify({type:'chat-join'}));assert.deepEqual((await next(replacement,value=>value.type==='chat')).messages,[]);
+});

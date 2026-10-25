@@ -15,6 +15,14 @@ test('audio framing survives arbitrary partial/coalesced reads and enforces pack
   const bad=Buffer.alloc(5);bad[0]=0;bad.writeUInt32BE(999999,1);assert.throws(()=>new AudioPacketReader(()=>{}).push(bad),/Invalid/);
   const incomplete=new AudioPacketReader(()=>{});incomplete.push(Buffer.from([1]));assert.throws(()=>incomplete.end(),/incomplete/);
 });
+test('PC links pass validated URLs as JSON to a fixed helper mode without shell interpolation',async()=>{
+  const f=fixture();
+  for(const bad of ['file:///C:/Windows','javascript:alert(1)','https://name:secret@example.com','https://example.com/a\ncalc.exe','https://example.com/ a'])await assert.rejects(f.service.openLink(bad),/valid http/);
+  assert.equal(f.calls.length,0);
+  const pending=f.service.openLink('https://example.com/?text=%22%26calc.exe'),call=f.calls[0];assert.deepEqual(call.args,['--open-link']);assert.equal(call.options.shell,undefined);
+  const chunks=[];for await(const chunk of call.child.stdin)chunks.push(chunk);assert.deepEqual(JSON.parse(Buffer.concat(chunks)),{url:'https://example.com/?text=%22%26calc.exe'});
+  call.child.stdout.end('{"ok":true}');call.child.emit('close',0);assert.deepEqual(await pending,{ok:true});f.service.close();
+});
 test('audio rejects microphone formats and invalid sample configurations',()=>{
   assert.equal(validFormat(format),true);for(const bad of [{...format,source:'microphone'},{...format,encoding:'pcm16'},{...format,channels:8},{...format,sampleRate:0}])assert.equal(!!validFormat(bad),false);
 });

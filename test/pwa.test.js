@@ -25,7 +25,7 @@ test('install manifest, icons and service worker are available before pairing',a
     const worker=await request(port,'/sw.js');assert.equal(worker.status,200);assert.match(worker.headers['content-type'],/^text\/javascript/);assert.equal(worker.headers['service-worker-allowed'],'/');assert.equal(worker.headers['cache-control'],'no-store');
     assert.doesNotMatch(worker.body.toString(),/caches\.(?:open|match|put)/,'worker must not cache paired pages or API responses');
     for(const file of ['/pwa.js','/pwa.css','/icons/apple-touch-icon.png'])assert.equal((await request(port,file)).status,200);
-    const page=await request(port,'/');assert.match(page.body.toString(),/id="installPhone"/);assert.match(page.body.toString(),/rel="manifest"[^>]*crossorigin="use-credentials"/);
+    const page=await request(port,'/');assert.doesNotMatch(page.body.toString(),/id="installPhone"/,'the retired install-to-phone footer stays removed');assert.match(page.body.toString(),/rel="manifest"[^>]*crossorigin="use-credentials"/);
     assert.equal((await request(port,'/api/status')).status,401,'install assets must not bypass API authentication');
     assert.equal((await request(port,'/sw.js',{Host:'evil.example'})).status,403,'install assets retain hostname guard');
   }finally{app.stop();await new Promise(resolve=>app.server.close(resolve));}

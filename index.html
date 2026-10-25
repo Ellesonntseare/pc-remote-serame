@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="appBooting">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#07090f">
+<meta name="theme-color" content="#020c15">
 <link rel="manifest" href="/manifest.json" crossorigin="use-credentials">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="icon" type="image/svg+xml" href="/brand.svg">
@@ -44,8 +44,19 @@
 <link rel="stylesheet" href="/file-transfers.css">
 <link rel="stylesheet" href="/desktop-controls.css">
 <script src="/desktop-controls.js" defer></script>
+<script src="/camera-sharing.js" defer></script>
+<script src="/media-recording.js" defer></script>
+<script src="/workspace-ui.js" defer></script>
+<script src="/workspace-settings.js" defer></script>
+<script src="/device-links.js" defer></script>
+<script src="/device-input.js" defer></script>
+<script src="/typing-controls.js" defer></script>
+<script src="/home-panels.js" defer></script>
+<script src="/mission-control.js" defer></script>
+<script src="/page-navigation.js" defer></script>
 <title>PC Remote</title>
 <style>
+html.appBooting .app{visibility:hidden}html.appBooting #pairGate{visibility:hidden}#appBoot{position:fixed;inset:0;z-index:5;display:grid;place-content:center;gap:16px;background:#101820;color:#9db6c4;text-align:center;font:13px system-ui}#appBoot span{width:28px;height:28px;margin:auto;border:2px solid #8bbaa52a;border-top-color:#8ddcc6;border-radius:50%;animation:bootSpin .8s linear infinite}@keyframes bootSpin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){#appBoot span{animation:none}}
 :root{--bg:#07090f;--panel:#10131c;--panel2:#151925;--line:rgba(255,255,255,.08);--text:#f7f8fb;--muted:#8b93a6;--blue:#4f7cff;--green:#37d996;--red:#ff5361;--amber:#ffb84d;--purple:#a879ff;--shadow:0 24px 70px rgba(0,0,0,.4)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html{background:var(--bg)}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% -10%,#17213d 0,#0b0f19 34%,#07090f 70%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:18px 16px 42px}button,input{font:inherit}.app{width:100%;max-width:480px;margin:auto}.topbar{display:flex;align-items:center;justify-content:space-between;margin:4px 2px 18px}.brand{display:flex;gap:11px;align-items:center}.brandmark{width:38px;height:38px;border:1px solid var(--line);background:linear-gradient(145deg,#1a2440,#0d111b);border-radius:12px;display:grid;place-items:center;box-shadow:0 8px 25px #0006}.brandmark svg{width:20px}.brandtext strong{display:block;font-size:15px;letter-spacing:.2px}.brandtext span{display:block;color:var(--muted);font-size:11px;margin-top:2px}.connection{display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid var(--line);background:#0d1119cc;border-radius:999px;color:#b8c0d0;font-size:11px}.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
 .card{border:1px solid var(--line);background:linear-gradient(145deg,rgba(21,25,37,.94),rgba(11,14,22,.94));border-radius:24px;box-shadow:var(--shadow)}.hero{padding:22px;margin-bottom:13px;position:relative;overflow:hidden}.hero:after{content:"";position:absolute;width:180px;height:180px;border-radius:50%;right:-75px;top:-80px;background:#4f7cff1a;filter:blur(4px)}.eyebrow{color:#8390aa;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;font-weight:800}.hero h1{font-size:27px;line-height:1.05;margin:8px 0 5px;letter-spacing:-.8px}.hero p{margin:0;color:var(--muted);font-size:13px}.online{display:inline-flex;align-items:center;gap:6px;color:#b7f6dd;font-size:11px;margin-top:16px}.heroactions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:18px}.quick{border:1px solid var(--line);background:#171c29;border-radius:15px;color:#dce2ee;padding:12px;text-align:left;font-size:12px;font-weight:700}.quick span{display:block;color:var(--muted);font-size:10px;font-weight:500;margin-top:3px}
@@ -108,8 +119,18 @@
 #rsSettings .closeSettings{min-width:46px;background:#283d64}
 </style>
 <link rel="stylesheet" href="/app-refinements.css">
+<link rel="stylesheet" href="/workspace-ui.css">
+<link rel="stylesheet" href="/workspace-settings.css">
+<link rel="stylesheet" href="/device-links.css">
+<link rel="stylesheet" href="/device-input.css">
+<link rel="stylesheet" href="/typing-controls.css">
+<link rel="stylesheet" href="/home-panels.css">
+<link rel="stylesheet" href="/page-navigation.css">
+<link rel="stylesheet" href="/mission-control.css">
+<link rel="stylesheet" href="/camera-sharing.css">
 </head>
 <body>
+<div id="appBoot" role="status" aria-live="polite"><span aria-hidden="true"></span>Connecting to your workspace…</div>
 <div id="pairGate" class="hide" aria-label="Pair phone with Windows PC">
   <form id="pairForm" class="pairCard">
     <img class="pairLogo" src="/brand.svg" alt="PC Remote logo" width="64" height="64">
@@ -163,7 +184,6 @@
     <section class="card activity"><div class="activityHead"><strong>History</strong><span id="activityCount">0 events</span></div><div class="log" id="log">Nothing yet</div></section>
     </div></details>
   </main>
-  <footer class="appFooter"><button type="button" id="installPhone" aria-haspopup="dialog">Install to phone</button></footer>
 </div>
 
 <div id="rs" class="hide">
@@ -201,8 +221,11 @@
 const $=id=>document.getElementById(id);let msgTimer;
 function msg(t){const e=$('msg');e.textContent=t;e.classList.add('show');clearTimeout(msgTimer);msgTimer=setTimeout(()=>e.classList.remove('show'),2200)}
 async function api(path,opt={}){const r=await fetch(path,{...opt,headers:{'Content-Type':'application/json','X-PCR':'1'}});const d=await r.json().catch(()=>({}));return{status:r.status,...d}}
-let paired=false,passwordMode=true,authGeneration=0;
-function connectionLight(text){$('conn').textContent=text;const e=$('conn').parentElement;e.dataset.state=text==='Connected'?'online':text==='Connecting'?'connecting':'offline';e.setAttribute('aria-label',text);e.title=text;}
+let paired=false,passwordMode=true,authGeneration=0,statusPollGeneration=-1,activityLogKey='',uiReady=false,authReady=false;
+function finishBoot(){if(!uiReady||!authReady)return;document.documentElement.classList.remove('appBooting');$('appBoot')?.remove();}
+document.addEventListener('DOMContentLoaded',()=>{uiReady=true;finishBoot();},{once:true});
+window.addEventListener('pcr:auth',()=>{authReady=true;queueMicrotask(finishBoot);});
+function connectionLight(text){$('conn').textContent=text;const e=$('conn').parentElement;e.dataset.state=text==='Connected'?'online':text==='Connecting'?'connecting':'offline';e.setAttribute('aria-label',text);e.title=text;window.dispatchEvent(new CustomEvent('pcr:connection',{detail:{state:e.dataset.state,text}}));}
 function concealPassword(){$('pin').type=passwordMode?'password':'text';$('passwordPeek').setAttribute('aria-pressed','false');$('passwordPeek').setAttribute('aria-label','Show password');}
 $('passwordPeek').addEventListener('click',()=>{const visible=$('pin').type==='password';$('pin').type=visible?'text':'password';$('passwordPeek').setAttribute('aria-pressed',String(visible));$('passwordPeek').setAttribute('aria-label',visible?'Hide password':'Show password');});
 function configureLogin(d){passwordMode=d.requirePassword===true;concealPassword();$('passwordPeek').hidden=!passwordMode;$('loginTitle').textContent=passwordMode?'Welcome back.':'Connect to your PC';$('loginDescription').textContent=passwordMode?'Your PC, wherever you are. Sign in to continue.':'Enter the pairing PIN shown on your PC.';$('loginLabel').textContent=passwordMode?'Password':'Pairing PIN';$('pin').name=passwordMode?'password':'pin';$('pin').autocomplete=passwordMode?'current-password':'one-time-code';$('pin').inputMode=passwordMode?'text':'numeric';$('pin').maxLength=passwordMode?256:8;$('pin').placeholder=passwordMode?'Enter your password':'8-digit PIN';$('rememberChoice').hidden=!passwordMode;$('pairSubmit').textContent=passwordMode?'Sign in ↗':'Connect';}
@@ -214,8 +237,10 @@ async function unpair(){rsClose();try{await api('/api/unpair',{method:'POST',bod
 async function send(action,button){if(button){button.disabled=true;button.setAttribute('aria-busy','true');}msg('Sending command…');try{const d=await api('/api/cmd',{method:'POST',body:JSON.stringify({action})});if(d.status===401){showPair('Your session has expired. Pair again.');return;}msg(d.msg||d.error||'Command sent');poll()}catch{msg('PC not reachable')}finally{if(button){button.disabled=false;button.removeAttribute('aria-busy');}}}
 const fmtUp=s=>{const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`};
 async function poll(){
-  if(document.hidden||!paired)return;
+  if(document.hidden||!paired||statusPollGeneration===authGeneration)return;
   const generation=authGeneration;
+  const requestStarted=performance.now();
+  statusPollGeneration=generation;
   try{
     const d=await api('/api/status');
     if(!paired||generation!==authGeneration)return;
@@ -226,14 +251,20 @@ async function poll(){
     $('t-cpu').textContent=Number.isFinite(d.cpu)?d.cpu+'%':'—';$('b-cpu').style.width=(Number.isFinite(d.cpu)?Math.min(100,d.cpu):0)+'%';
     $('t-mem').textContent=Number.isFinite(d.mem)?d.mem+'%':'—';$('b-mem').style.width=(Number.isFinite(d.mem)?Math.min(100,d.mem):0)+'%';$('t-up').textContent=Number.isFinite(d.uptime)?fmtUp(d.uptime):'—';
     window.PCRDashboard?.updateStats(d);
+    window.dispatchEvent(new CustomEvent('pcr:status',{detail:{...d,responseTime:Math.round(performance.now()-requestStarted)}}));
     const logs=d.log||[];$('activityCount').textContent=logs.length+' event'+(logs.length===1?'':'s');
-    $('log').replaceChildren(...(logs.length?logs.map(l=>{
+    const nextLogKey=generation+':'+JSON.stringify(logs);
+    if(nextLogKey!==activityLogKey){
+      activityLogKey=nextLogKey;
+      $('log').replaceChildren(...(logs.length?logs.map(l=>{
       const row=document.createElement('div'),time=document.createElement('b');time.textContent=new Date(l.t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       const glyph=document.createElement('span');glyph.className='historyGlyph';glyph.setAttribute('aria-hidden','true');glyph.innerHTML=window.PCRDashboard?.icon(/signed in|paired/i.test(l.text)?'person':'monitor')||'';const copy=document.createElement('span');copy.className='historyCopy';copy.textContent=l.text;row.className='historyRow';row.append(time,glyph,copy);
       if(l.preview){const details=document.createElement('details'),summary=document.createElement('summary'),preview=document.createElement('pre');summary.textContent='Preview text';preview.textContent=l.preview;details.className='activityTextPreview';details.append(summary,preview);row.append(details);}
       return row;
-    }):[document.createTextNode('Nothing yet')]));
+      }):[document.createTextNode('Nothing yet')]));
+    }
   }catch{if(!paired||generation!==authGeneration)return;connectionLight('Offline');$('onlineText').textContent='PC not reachable';}
+  finally{if(statusPollGeneration===generation)statusPollGeneration=-1;}
 }
 document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{const a=b.dataset.a,q=b.dataset.q;if(q){$('q').textContent=q;$('modal').classList.add('on');$('yes').onclick=()=>{closeM();send(a,b)}}else send(a,b)});
 function closeM(){$('modal').classList.remove('on')}setInterval(poll,5000);document.addEventListener('visibilitychange',poll);init();
@@ -246,7 +277,7 @@ const DEFAULT_SHORTCUTS=['key 27','combo 18,9','key 13','key 8','combo 17,67','c
 const validShortcuts=()=>KEYS.map(k=>k[1]);
 function loadShortcuts(){try{const a=JSON.parse(ls('pcr_shortcuts_v1')||'null');if(Array.isArray(a)&&a.length<=16&&a.every(v=>validShortcuts().includes(v)))return a;}catch{}return DEFAULT_SHORTCUTS.slice()}
 let shortcuts=loadShortcuts();
-let showKeys=ls('pcr_keys_visible')!=='false';
+let showKeys=ls('pcr_keys_visible')==='true';
 let sens=Math.min(2.5,Math.max(0.5,Number(ls('pcr_sensitivity')||1)||1));
 let cols=['3','4','5'].includes(ls('pcr_keycols'))?ls('pcr_keycols'):'4';
 let keyHeight=['44','56'].includes(ls('pcr_keyheight'))?ls('pcr_keyheight'):'44';
@@ -294,11 +325,12 @@ function qc(c){
   if(window.PCRCanAccess&&!window.PCRCanAccess('control'))return;
   if(!rs.on)return;
   if(!/^up [lrm]$/.test(c) && !rsCanPoint())return;
+  if(/^(click|down|dbl)\b/.test(c))window.PCRDeviceInput?.haptic();
   window.PCRCursor?.preview(c);
   window.PCRPrecisionLens?.preview(c);
   if(liveTyping && !live.paused && /^(click|down|dbl|key|combo)\b/.test(c))rsResetTypingContext(false);
   const l=qq[qq.length-1],[a,x,y]=c.split(' ');
-  if(l&&l.startsWith(a+' ')&&(a==='mv'||a==='wheel'||a==='abs')){const[,lx,ly]=l.split(' ');qq[qq.length-1]=a==='abs'?c:a==='wheel'?'wheel '+(+lx + +x):'mv '+(+lx + +x)+' '+(+ly + +y)}else qq.push(c);
+  if(l&&l.startsWith(a+' ')&&['mv','wheel','hwheel','abs'].includes(a)){const[,lx,ly]=l.split(' ');qq[qq.length-1]=a==='abs'?c:a==='wheel'||a==='hwheel'?a+' '+(+lx + +x):'mv '+(+lx + +x)+' '+(+ly + +y)}else qq.push(c);
   flush();
 }
 let pointerFrame=0,lastPointerSend=0;

@@ -45,7 +45,7 @@ function createSmartQuality({now=Date.now}={}){
       else if(kind==='abs'&&Number.isFinite(x)&&Number.isFinite(y)){
         if(lastAbsolute&&(lastAbsolute.x!==x||lastAbsolute.y!==y))moved=true;
         lastAbsolute={x,y};
-      }else if(kind==='wheel'&&b===undefined&&Number.isFinite(x)&&x!==0)moved=true;
+      }else if((kind==='wheel'||kind==='hwheel')&&b===undefined&&Number.isFinite(x)&&x!==0)moved=true;
     }
     if(!moved)return;
     const at=time();record(motionSamples,at,300);

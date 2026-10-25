@@ -27,6 +27,34 @@ async function fixture(t,appOptions={}){const dir=await fs.mkdtemp(path.join(__d
   return {page};
 }
 async function login(window,password){const doc=window.document;doc.getElementById('pin').value=password;doc.getElementById('rememberMe').checked=false;doc.getElementById('pairForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));}
+test('dashboard keyboard opens the remote editor directly and common keys stay within reach',async t=>{
+  const f=await fixture(t),window=await f.page({phone:true}),doc=window.document;
+  await login(window,'serame');await until(()=>window.PCRAuth?.signedIn);
+  window.eval('rsRun=function(){rs.m={w:1920,h:1080};}');
+  const keyboard=doc.getElementById('homeKeyboard');assert.equal(keyboard.dataset.pcrDenied,'false');keyboard.click();
+  await until(()=>window.PCRPages.current==='rs');
+  assert.equal(doc.activeElement,doc.getElementById('typeText'));
+  assert.equal(doc.getElementById('typeText').readOnly,false);
+  for(const id of ['rsKeyboard','keyToggle','rsk'])assert.ok(doc.getElementById('remoteSwipeDock').contains(doc.getElementById(id)));
+  assert.equal(doc.getElementById('remoteOptions').contains(doc.getElementById('rsKeyboard')),false);
+  assert.equal(doc.getElementById('rsk').classList.contains('hide'),true,'first use keeps optional shortcuts collapsed');
+  assert.ok(doc.getElementById('remoteScrollRail'));
+});
+
+test('status polling keeps expanded history and avoids overlapping requests',async t=>{
+  const f=await fixture(t),window=await f.page();await login(window,'serame');await until(()=>window.PCRAuth?.signedIn&&window.eval('statusPollGeneration===-1'));
+  const original=window.fetch,logs=[{t:12345,text:'Text sent',preview:'An expanded preview'}];let pending=null,calls=0;
+  window.fetch=(route,options)=>{
+    if(route!=='/api/status')return original(route,options);
+    calls++;const response={status:200,json:async()=>({cpu:12,mem:30,uptime:60,log:logs})};
+    return pending?new Promise(resolve=>{pending=()=>resolve(response);}):Promise.resolve(response);
+  };
+  await window.poll();const preview=window.document.querySelector('.activityTextPreview'),row=preview.parentElement;preview.open=true;
+  await window.poll();assert.equal(window.document.querySelector('.activityTextPreview'),preview);assert.equal(preview.open,true);assert.equal(preview.parentElement,row);
+  pending=true;const first=window.poll();await window.poll();assert.equal(calls,3,'a second refresh shares the in-flight status request');pending();await first;
+  assert.equal(window.eval('statusPollGeneration'),-1);
+});
+
 test('password eye toggles visibility, owner tools mount, and Presentation mode always restores controls',async t=>{
   const f=await fixture(t),window=await f.page(),doc=window.document,input=doc.getElementById('pin'),eye=doc.getElementById('passwordPeek');input.value='sample';assert.equal(input.type,'password');eye.click();assert.equal(input.type,'text');assert.equal(eye.getAttribute('aria-label'),'Hide password');eye.click();assert.equal(input.type,'password');
   assert.equal(doc.querySelector('.pairHelp,.guestLoginNote'),null,'requested bottom login text is removed');
@@ -35,8 +63,8 @@ test('password eye toggles visibility, owner tools mount, and Presentation mode 
 });
 
 test('reference dashboard keeps its feature actions, power toggle and live status meters functional',async t=>{
-  const f=await fixture(t),window=await f.page();await login(window,'serame');await until(()=>window.PCRAuth?.signedIn&&window.PCRDashboard);const doc=window.document;assert.ok(doc.querySelector('.referenceDashboard .connectedSummary #name'));assert.equal(doc.querySelector('.mediaWrap').parentElement.id,'main');assert.equal(doc.querySelector('.activity').parentElement.id,'main');assert.ok(doc.querySelector('.dashboardStatus>.section'));assert.ok(doc.querySelector('.dashboardAudioStack #pcAudioHome'));assert.ok(doc.querySelector('.dashboardAudioStack #webrtcVideoHome'));
-  const drawer=doc.getElementById('powerDrawer'),power=doc.querySelector('.dashboardPowerTile'),wasOpen=drawer.open;power.click();assert.equal(drawer.open,!wasOpen);power.click();assert.equal(drawer.open,wasOpen);
+  const f=await fixture(t),window=await f.page();await login(window,'serame');await until(()=>window.PCRAuth?.signedIn&&window.PCRDashboard);const doc=window.document;assert.ok(doc.querySelector('.referenceDashboard .connectedSummary #name'));assert.equal(doc.querySelector('.mediaWrap').parentElement.id,'homePanelMedia');assert.equal(doc.querySelector('.activity').parentElement.id,'homePanelHistory');assert.ok(doc.querySelector('.dashboardStatus>.section'));assert.ok(doc.querySelector('.heroactions>#pcAudioHome'));assert.ok(doc.querySelector('.heroactions>#webrtcVideoHome'));
+  const drawer=doc.getElementById('powerDrawer'),power=doc.querySelector('.dashboardPowerTile'),powerPage=doc.getElementById('powerPage');assert.ok(powerPage.contains(drawer));assert.equal(powerPage.open,false);power.click();assert.equal(powerPage.open,true);assert.equal(window.PCRPages.current,'powerPage');powerPage.querySelector('[data-close]').click();assert.equal(powerPage.open,false);
   doc.querySelector('.filesHome').click();await until(()=>doc.getElementById('filesDialog').open);doc.getElementById('filesClose').click();assert.equal(doc.getElementById('filesDialog').open,false);window.PCRDashboard.updateStats({cpu:16,mem:61});assert.equal(doc.getElementById('cpuDial').getAttribute('aria-label'),'CPU 16%');assert.equal(doc.getElementById('memoryDial').getAttribute('aria-label'),'Memory 61%');
 });
 
@@ -78,7 +106,7 @@ test('swiping dock sends relative motion, tap, scroll and drag while Hold-to-con
   const f=await fixture(t),window=await f.page({phone:true}),doc=window.document;await login(window,'serame');await until(()=>window.PCRAuth?.signedIn&&window.PCRSwipeDock&&window.PCRHoldControl);window.eval("rs.on=1;rs.m={w:1920,h:1080};$('rs').classList.remove('hide');liveTyping=false;flush=()=>{};qq=[]");
   const pad=doc.getElementById('remoteSwipePad');pad.setPointerCapture=()=>{};pad.getBoundingClientRect=()=>({left:0,top:0,width:360,height:80});const pointer=(target,type,id,x=60,y=30)=>{const event=new window.MouseEvent(type,{button:0,clientX:x,clientY:y,bubbles:true,cancelable:true});Object.defineProperty(event,'pointerId',{value:id});Object.defineProperty(event,'pointerType',{value:'touch'});target.dispatchEvent(event);};const commands=()=>Array.from(window.eval('qq'));const clear=()=>window.eval('qq=[]');
   pointer(pad,'pointerdown',1);pointer(pad,'pointermove',1,90,35);assert.ok(commands().some(c=>c.startsWith('mv ')));pointer(pad,'pointerup',1,90,35);assert.equal(commands().some(c=>c.startsWith('click')),false);clear();pointer(pad,'pointerdown',2);pointer(pad,'pointerup',2);assert.deepEqual(commands(),['click l']);clear();
-  doc.querySelector('.dockMouseButton[data-mouse-button="l"]').click();doc.querySelector('.dockMouseButton[data-mouse-button="r"]').click();assert.deepEqual(commands(),['click l','click r']);clear();const options=doc.getElementById('remoteOptions');assert.equal(doc.getElementById('screenTools').contains(options),true);assert.equal(options.contains(doc.getElementById('rsk')),true);assert.equal(options.contains(doc.querySelector('.rsbot')),true);options.open=true;const keysBefore=doc.getElementById('rsk').classList.contains('hide');doc.getElementById('keyToggle').click();assert.notEqual(doc.getElementById('rsk').classList.contains('hide'),keysBefore);assert.equal(options.open,true);doc.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(options.open,false);
+  doc.querySelector('.dockMouseButton[data-mouse-button="l"]').click();doc.querySelector('.dockMouseButton[data-mouse-button="r"]').click();assert.deepEqual(commands(),['click l','click r']);clear();const options=doc.getElementById('remoteOptions');assert.equal(doc.getElementById('screenTools').contains(options),true);assert.equal(options.contains(doc.getElementById('rsk')),false);assert.equal(doc.getElementById('remoteSwipeDock').contains(doc.getElementById('rsk')),true);assert.equal(options.contains(doc.querySelector('.rsbot')),true);options.open=true;const keysBefore=doc.getElementById('rsk').classList.contains('hide');doc.getElementById('keyToggle').click();assert.notEqual(doc.getElementById('rsk').classList.contains('hide'),keysBefore);assert.equal(options.open,true);doc.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(options.open,false);
   pointer(pad,'pointerdown',3);pointer(pad,'pointerdown',4,100,30);pointer(pad,'pointermove',3,60,40);assert.ok(commands().some(c=>c.startsWith('wheel ')));pointer(pad,'pointerup',3);pointer(pad,'pointerup',4);clear();
   pointer(pad,'pointerdown',5);await new Promise(r=>setTimeout(r,480));assert.ok(commands().includes('down l'));pointer(pad,'pointerup',5);assert.equal(commands().at(-1),'up l');clear();
   const toggle=doc.querySelector('#rsSettings .holdPreference input');toggle.click();assert.equal(window.localStorage.getItem('pcr_hold_control'),'true');pointer(pad,'pointerdown',6);pointer(pad,'pointermove',6,100);pointer(pad,'pointerup',6);assert.deepEqual(commands(),[]);
@@ -96,7 +124,7 @@ test('guest waits for owner approval, privacy defaults hide sensitive panels, an
   const f=await fixture(t),owner=await f.page(),guest=await f.page();await login(owner,'serame');await until(()=>owner.PCRAuth?.signedIn);owner.localStorage.setItem('pcr_clipboard_history_v1',JSON.stringify([{text:'Owner private sample',source:'test',time:Date.now(),pinned:true}]));
   await login(guest,'guest');await until(()=>!guest.document.querySelector('.guestWaitingPanel').hidden);assert.equal(guest.PCRAuth?.signedIn,false);
   await until(()=>owner.document.querySelector('.guestRequestCard'));const card=owner.document.querySelector('.guestRequestCard');assert.equal(card.querySelector('[data-permission="screen"]').checked,true);assert.equal(card.querySelector('[data-permission="control"]').checked,false);assert.equal(card.querySelector('[data-permission="download"]').checked,false);card.querySelector('.guestDuration select').value='15';card.querySelector('.guestApprove').click();await until(()=>guest.PCRAuth?.role==='guest');
-  for(const selector of ['.stats','.activity','.filesHome','#pcAudioHome','#pcAppsButton','#rsm','.dashboardPowerTile','#powerDrawer','.mediaWrap'])assert.equal(guest.getComputedStyle(guest.document.querySelector(selector)).display,'none',selector);
+  for(const selector of ['.stats','.activity','.filesHome','#pcAudioHome','#pcAppsButton','#homeKeyboard','#homeApps','#rsm','.dashboardPowerTile','#powerDrawer','.mediaWrap'])assert.equal(guest.getComputedStyle(guest.document.querySelector(selector)).display,'none',selector);
   assert.notEqual(guest.getComputedStyle(guest.document.querySelector('.hero')).display,'none','guest can still open approved screen viewing');
   assert.equal(guest.document.getElementById('name').textContent,'Shared PC');assert.equal(guest.document.querySelector('.guestScreenHome').hidden,false);assert.equal(guest.document.getElementById('guestManageButton').hidden,true);
   // A role switch in the same browser must not render the owner's saved text.

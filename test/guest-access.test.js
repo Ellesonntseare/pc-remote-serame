@@ -47,3 +47,15 @@ test('bad permission payloads never grant access or consume the pending request'
   for(const permissions of [{owner:true},{control:'true'},[],null])assert.equal((await f.request('/api/guest/decide',{cookie:owner,method:'POST',body:{id,approve:true,permissions}})).status,400);
   assert.equal((await f.request('/api/guest/poll',{cookie:pending,method:'POST',body:{}})).json.state,'pending');
 });
+
+test('ending all confirmed guests is owner-only, validates ids, closes clients and preserves later guests',async t=>{
+  const {WebSocket}=require('ws'),f=await fixture(t),owner=await f.owner(),anotherOwner=await f.owner(),first=await approve(f,owner,{voice:true}),second=await approve(f,owner,{screen:true}),ids=[first.id,second.id],later=await approve(f,owner,{screen:true});
+  const socket=new WebSocket('ws://127.0.0.1:'+f.port+'/api/collaboration',{headers:{Origin:'http://127.0.0.1:'+f.port,Cookie:first.cookie}});socket.on('error',()=>{});t.after(()=>socket.terminate());await new Promise((resolve,reject)=>{socket.once('open',resolve);socket.once('error',reject);});
+  for(const [cookie,expected]of [[undefined,401],[first.cookie,403]])assert.equal((await f.request('/api/guest/revoke-all',{cookie,method:'POST',body:{ids}})).status,expected);
+  assert.equal((await f.request('/api/guest/revoke-all',{cookie:owner,method:'POST',body:{ids},headers:{'X-PCR':'0'}})).status,403);
+  assert.equal((await f.request('/api/guest/revoke-all',{cookie:owner,method:'POST',body:{ids},headers:{Origin:'https://wrong.example'}})).status,403);
+  for(const bad of [[],['wrong'],ids.concat(ids),Array(51).fill(first.id)])assert.equal((await f.request('/api/guest/revoke-all',{cookie:owner,method:'POST',body:{ids:bad}})).status,400);
+  const ended=await f.request('/api/guest/revoke-all',{cookie:owner,method:'POST',body:{ids}});assert.equal(ended.status,200);assert.equal(ended.json.revoked,2);await new Promise(resolve=>{if(socket.readyState!==WebSocket.OPEN)resolve();else socket.once('close',resolve);});
+  for(const guest of [first,second])assert.equal((await f.request('/api/session',{cookie:guest.cookie})).status,401);
+  for(const cookie of [owner,anotherOwner,later.cookie])assert.equal((await f.request('/api/session',{cookie})).status,200);
+});

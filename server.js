@@ -11,6 +11,9 @@ const ScreenPacketReader = require('./public/screen-packets');
 const {createFileTransfers}=require('./file-transfers');
 const nativeClipboard=require('./native-clipboard');
 const {createNativeFeatures}=require('./native-features');
+const {createDeviceLinks}=require('./device-links');
+const {createAssetCache}=require('./asset-cache');
+const {createSystemMetrics}=require('./system-metrics');
 const {createSmartQuality}=require('./smart-quality');
 const {createGuestRequests}=require('./guest-requests');
 const {can}=require('./guest-permissions');
@@ -35,6 +38,10 @@ function sessionExpiry(until,expire,{now=Date.now,setTimer=setTimeout,clearTimer
 }
 // Explicit public asset map: no arbitrary filesystem paths or paired data.
 const PWA_ASSETS = new Map([
+  ...['mission-control','camera-sharing'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
+  ['/media-recording.js',['media-recording.js','text/javascript; charset=utf-8']],
+  ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
+  ...['workspace-settings','device-links','device-input','typing-controls','home-panels'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/screen-packets.js', ['screen-packets.js', 'text/javascript; charset=utf-8']],
   ['/screen-renderer.js', ['screen-renderer.js', 'text/javascript; charset=utf-8']],
   ['/remote-cursor.js', ['remote-cursor.js', 'text/javascript; charset=utf-8']],
@@ -42,8 +49,8 @@ const PWA_ASSETS = new Map([
   ['/file-transfers.css', ['file-transfers.css', 'text/css; charset=utf-8']],
   ['/brand.svg', ['brand.svg', 'image/svg+xml']],
   ['/app-refinements.css', ['app-refinements.css', 'text/css; charset=utf-8']],
-  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','guest-screen.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
-  ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
+  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','guest-screen.js','workspace-ui.js','page-navigation.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
+  ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css','workspace-ui.css','page-navigation.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
   ['/input-transport.js', ['input-transport.js', 'text/javascript; charset=utf-8']],
   ['/pwa.js', ['pwa.js', 'text/javascript; charset=utf-8']],
   ['/pwa.css', ['pwa.css', 'text/css; charset=utf-8']],
@@ -108,7 +115,7 @@ function validInput(c) {
   if(typeof c !== 'string' || c.length > 90000) return false;
   const [verb, ...rest] = c.split(' '), v=rest.join(' ');
   if (['mv','abs'].includes(verb)) return /^-?\d{1,6} -?\d{1,6}$/.test(v);
-  if (verb === 'wheel') return /^-?\d{1,5}$/.test(v);
+  if (verb === 'wheel' || verb === 'hwheel') return /^-?\d{1,5}$/.test(v);
   if (['click','down','up'].includes(verb)) return /^[lrm]$/.test(v);
   if (verb === 'dbl') return v === '';
   if (['key','keydown','keyup'].includes(verb)) return /^\d{1,3}$/.test(v) && Number(v)<=255;
@@ -140,8 +147,10 @@ function validInput(c) {
   return false;
 }
 function createApp(options={}) {
+  const assets=createAssetCache();
   const rtcServers=iceServers(options.webRtcIceServers);
   const tunnelHostname = tunnelHost(options.tunnelHostname);
+  const allowLan=options.allowLan??!tunnelHostname;
   const requirePin = options.requirePin ?? !!options.pin;
   const requirePassword=typeof options.password==='string'&&options.password.length>0;
   const passwordSalt=crypto.randomBytes(16),passwordHash=requirePassword?crypto.scryptSync(options.password,passwordSalt,32):null;
@@ -158,6 +167,7 @@ function createApp(options={}) {
   const nativeFeatures=options.nativeFeatures||createNativeFeatures({root:ROOT});
   const audioSockets=new Set();
   const accountContext=requirePassword?crypto.createHash('sha256').update('pc-remote-owner-v1\0'+options.password).digest('hex'):undefined;
+  const deviceLinks=createDeviceLinks({openLink:url=>nativeFeatures.openLink(url),readClipboard:()=>options.clipboardProvider?options.clipboardProvider.get():nativeClipboard(ROOT,'get')});
   const smart=createSmartQuality();
   const fileTransfers=createFileTransfers({directory:options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers'),maxBytes:options.maxFileBytes});
   const sessionKey=token=>crypto.createHash('sha256').update(token).digest('hex');
@@ -187,14 +197,14 @@ function createApp(options={}) {
   };
   const auth=(req)=>{
     const token=sessionKey(cookie(req)), s=sessions.get(token);
-    if(!s || (!s.persistent&&s.ip!==req.socket.remoteAddress) || s.until<Date.now()) {sessions.delete(token);return null;}
+    if(!s || (!s.persistent&&s.ip!==req.socket.remoteAddress) || s.until<Date.now()) {sessions.delete(token);if(s)deviceLinks.revoke(token);return null;}
     return token;
   };
   const requiresHeader=(req)=>req.headers['x-pcr']==='1';
   const permits=(token,key)=>can(sessions.get(token),key);
   const accessInfo=token=>({role:sessions.get(token).role||'owner',until:sessions.get(token).until,...(sessions.get(token).role==='guest'?{permissions:sessions.get(token).permissions||{},guestId:sessions.get(token).guestId}:{})});
   const isTunnelRequest=req=>!!tunnelHostname&&loopbackIP(req.socket.remoteAddress)&&sameHost(req.headers.host,new Set([tunnelHostname]));
-  const allowedRequest=req=>tunnelHostname?isTunnelRequest(req):privateIP(req.socket.remoteAddress)&&sameHost(req.headers.host,hostnames);
+  const allowedRequest=req=>isTunnelRequest(req)||allowLan&&privateIP(req.socket.remoteAddress)&&(sameHost(req.headers.host,hostnames)||sameHost(req.headers.host,new Set([(req.socket.localAddress||'').replace(/^::ffff:/,'')])));
   function videoPacket(type,value){
     const payload=Buffer.from(JSON.stringify(value)),header=Buffer.alloc(5);
     header[0]=type;header.writeUInt32BE(payload.length,1);return Buffer.concat([header,payload]);
@@ -289,7 +299,7 @@ function createApp(options={}) {
     agent=p;agentPreset=preset;agentBuffer=new ScreenPacketReader(MAX_PACKET);agentReady=false;
     p.stdin.on('error',()=>{});
     p.stderr.on('data',d=>console.error('[Desktop agent]',String(d).trim()));
-    p.on('error',e=>{console.error('Desktop agent failed:',e.message);for(const v of viewers)try{v.res.end();}catch{};viewers.clear();endAgent();});
+    p.on('error',e=>{if(agent!==p)return;console.error('Desktop agent failed:',e.message);for(const v of viewers)try{v.res.end();}catch{};viewers.clear();endAgent();});
     p.stdout.on('data',data=>{
       if(agent!==p)return;
       try{agentBuffer.feed(data,(type,payload)=>{
@@ -409,6 +419,7 @@ function createApp(options={}) {
     return nativeFeatures.sendMedia(action).then(result=>callback(null,result),callback);
   }
   let prevCpu=os.cpus(),cpu=0;
+  const systemMetrics=createSystemMetrics({disabled:options.disableAgent===true,read:options.readSystemMetrics});
   const cpuClock=setInterval(()=>{const now=os.cpus();let total=0,idle=0;now.forEach((c,i)=>{for(const k in c.times)total+=c.times[k]-(prevCpu[i]?.times[k]||0);idle+=c.times.idle-(prevCpu[i]?.times.idle||0);});cpu=total?Math.max(0,Math.round(100*(1-idle/total))):0;prevCpu=now;},3000);
   cpuClock.unref();
   const server=http.createServer(async(req,res)=>{
@@ -423,9 +434,9 @@ function createApp(options={}) {
     try{pathname=new URL(req.url,'http://localhost').pathname;}catch{return respond(res,400,{error:'Bad URL'});}
     try{
       if(req.method==='GET'&&(pathname==='/'||pathname==='/index.html')){
-        const page=fs.readFileSync(path.join(ROOT,'index.html'));
-        res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' ws://${req.headers.host} wss://${req.headers.host}; worker-src 'self'; media-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'`,'X-Content-Type-Options':'nosniff'});
-        return res.end(page);
+        const page=await assets.get(path.join(ROOT,'index.html'),'text/html',req.headers['accept-encoding']);
+        res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Vary':'Accept-Encoding',...page.encoding&&{'Content-Encoding':page.encoding},'Content-Length':page.body.length,'Content-Security-Policy':`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' ws://${req.headers.host} wss://${req.headers.host}; worker-src 'self'; media-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'`,'X-Content-Type-Options':'nosniff'});
+        return res.end(page.body);
       }
       if(req.method==='GET'&&(pathname==='/manifest.json'||pathname==='/manifest.webmanifest'))return respond(res,200,{
         id:'/',name:'PC Remote',short_name:'PC Remote',description:'Control your own Windows PC from your phone.',
@@ -439,10 +450,18 @@ function createApp(options={}) {
       if(req.method==='GET'&&PWA_ASSETS.has(pathname)){
         const [filename,type]=PWA_ASSETS.get(pathname);
         let asset;
-        try{asset=fs.readFileSync(path.join(ROOT,'public',filename));}
+        try{asset=await assets.get(path.join(ROOT,'public',filename),type,req.headers['accept-encoding']);}
         catch(e){if(e.code==='ENOENT')return respond(res,404,{error:'App file missing. Extract the complete update and restart the Windows host.'});throw e;}
-        res.writeHead(200,{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...(pathname==='/sw.js'?{'Service-Worker-Allowed':'/'}:{})});
-        return res.end(asset);
+        // Revalidate public code and artwork on every use, while letting a phone
+        // retain unchanged bytes. Sessions, HTML, API data and the worker never
+        // enter this cache path. Hash the content so an update cannot reuse a tag.
+        const worker=pathname==='/sw.js';
+        const etag=worker?null:asset.etag;
+        const headers={'Content-Type':type,'Cache-Control':worker?'no-store':'private, no-cache','Vary':'Accept-Encoding',...asset.encoding&&{'Content-Encoding':asset.encoding},'X-Content-Type-Options':'nosniff',...(worker?{'Service-Worker-Allowed':'/'}:{ETag:etag})};
+        const validators=String(req.headers['if-none-match']||'').split(',').map(value=>value.trim().replace(/^W\//,''));
+        if(!worker&&(validators.includes(etag)||validators.includes('*'))){res.writeHead(304,headers);return res.end();}
+        res.writeHead(200,{...headers,'Content-Length':asset.body.length});
+        return res.end(asset.body);
       }
       if(req.method==='GET'&&pathname==='/api/ping'){
         const token=auth(req),paired=!!token;
@@ -491,12 +510,13 @@ function createApp(options={}) {
       }
       const token=auth(req);
       if(!token)return respond(res,401,{error:'Pair your phone first'});
+      if(await deviceLinks.handle(req,res,{pathname,token,role:sessions.get(token)?.role,guestId:sessions.get(token)?.guestId,accountContext,canClipboard:permits(token,'clipboard'),readJson:jsonBody,respond}))return;
       if(req.method==='GET'&&pathname==='/api/session'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
         return respond(res,200,{ok:true,...accessInfo(token)});
       }
       if(req.method==='GET'&&pathname==='/api/collaboration/config'){
-        if(!requiresHeader(req)||!permits(token,'voice')&&!permits(token,'whiteboard'))return respond(res,403,{error:'Collaboration access was not approved.'});
+        if(!requiresHeader(req)||!['voice','whiteboard','chat','notes'].some(key=>permits(token,key)))return respond(res,403,{error:'Collaboration access was not approved.'});
         return respond(res,200,{ok:true,iceServers:rtcServers});
       }
       if(pathname==='/api/ocr'||pathname==='/api/clipboard/image'){
@@ -525,8 +545,17 @@ function createApp(options={}) {
         }
         if(req.method==='POST'&&pathname==='/api/guest/revoke'){
           const body=await jsonBody(req,4096);let revoked=false;
-          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);guestScreens.revoke(key);webRtcVideo.revoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
+          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
           record(ip,'Guest access ended');return respond(res,200,{ok:true,revoked});
+        }
+        if(req.method==='POST'&&pathname==='/api/guest/revoke-all'){
+          const body=await jsonBody(req,4096),ids=body.ids;
+          if(!Array.isArray(ids)||ids.length<1||ids.length>50||new Set(ids).size!==ids.length||ids.some(id=>typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id)))return respond(res,400,{error:'Choose the active guests to end.'});
+          const selected=new Set(ids);let revoked=0;
+          for(const [key,session]of [...sessions])if(session.role==='guest'&&selected.has(session.guestId)){
+            sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);void fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked++;
+          }
+          record(ip,'Ended '+revoked+' guest sessions');return respond(res,200,{ok:true,revoked});
         }
         if(req.method==='POST'&&pathname==='/api/guest/extend'){
           const body=await jsonBody(req,1024),minutes=body.minutes;
@@ -541,7 +570,11 @@ function createApp(options={}) {
       }
       if(req.method==='GET'&&pathname==='/api/webrtc/config'){
         if(!requiresHeader(req)||!permits(token,'screen'))return respond(res,403,{error:'Screen viewing was not approved.'});
-        return respond(res,200,{ok:true,iceServers:rtcServers});
+        return respond(res,200,{ok:true,iceServers:rtcServers,audioAllowed:permits(token,'audio')});
+      }
+      if(req.method==='GET'&&pathname==='/api/camera/config'){
+        if(!requiresHeader(req)||sessions.get(token)?.role==='guest')return respond(res,403,{error:'Sign in as the owner on both devices to share a camera.'});
+        return respond(res,200,{ok:true,iceServers:rtcServers,audioAllowed:true});
       }
       if(req.method==='GET'&&pathname==='/api/apps'){
         if(!permits(token,'apps'))return respond(res,403,{error:'App switching was not approved.'});
@@ -583,11 +616,11 @@ function createApp(options={}) {
       if(await fileTransfers.handle(req,res,{pathname,token,accountContext:sessions.get(token)?.role==='guest'?undefined:accountContext,readJson:jsonBody,respond:(response,status,data,headers)=>respond(response,status,sessions.get(token)?.role==='guest'&&data.folder?{...data,folder:'Shared transfer folder'}:data,headers)}))return;
       if(req.method==='GET'&&pathname==='/api/status'){
         const guest=sessions.get(token).role==='guest';
-        return respond(res,200,{ok:true,name:guest?'Shared PC':hostname,...accessInfo(token),...(permits(token,'status')?{uptime:Math.round(os.uptime()),cpu,mem:Math.round(100*(1-os.freemem()/os.totalmem()))}:{}),log:guest?[]:activity.slice(0,6),screen:enabled&&process.platform==='win32'&&permits(token,'screen')});
+        return respond(res,200,{ok:true,name:guest?'Shared PC':hostname,...accessInfo(token),...(permits(token,'status')?{uptime:Math.round(os.uptime()),cpu,mem:Math.round(100*(1-os.freemem()/os.totalmem())),system:systemMetrics.get()}:{}),log:guest?[]:activity.slice(0,6),screen:enabled&&process.platform==='win32'&&permits(token,'screen')});
       }
       if(req.method==='POST'&&pathname==='/api/unpair'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
-        sessions.delete(token);saveSessions();void fileTransfers.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);collaboration.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
+        sessions.delete(token);saveSessions();void fileTransfers.revoke(token);deviceLinks.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);cameraRevoke(token);collaboration.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
         record(ip,'Phone unpaired');return respond(res,200,{ok:true},{'Set-Cookie':`${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`});
       }
       if(req.method==='GET'&&pathname==='/api/screen'){
@@ -629,6 +662,8 @@ function createApp(options={}) {
   const audioStream=new WebSocketServer({noServer:true,maxPayload:1024,perMessageDeflate:false});
   const guestScreens=createGuestScreen({sessions,auth,sessionExpiry});
   const webRtcVideo=createWebRtcVideo({sessions,auth,sessionExpiry});
+  const cameraChannels=new Map(['pc','phone'].map(room=>[room,createWebRtcVideo({sessions,auth,sessionExpiry})]));
+  function cameraRevoke(token){for(const channel of cameraChannels.values())channel.revoke(token);}
   const collaboration=createCollaboration({sessions,auth,sessionExpiry});
   function rejectUpgrade(socket,status,message) {
     socket.on('error',()=>{});
@@ -638,7 +673,7 @@ function createApp(options={}) {
   server.on('upgrade',(req,socket,head)=>{
     socket.on('error',()=>{});
     let pathname;try{pathname=new URL(req.url,'http://localhost').pathname;}catch{return rejectUpgrade(socket,400,'Bad URL');}
-    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video','/api/collaboration'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
+    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video','/api/collaboration','/api/camera'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
     if(!allowedRequest(req))return rejectUpgrade(socket,403,'Input stream host rejected');
     try{
       const origin=new URL(req.headers.origin);
@@ -646,8 +681,15 @@ function createApp(options={}) {
     }catch{return rejectUpgrade(socket,403,'Request origin required');}
     const token=auth(req);
     if(!token)return rejectUpgrade(socket,401,'Pair your phone first');
+    if(pathname==='/api/camera'){
+      if(sessions.get(token)?.role==='guest')return rejectUpgrade(socket,403,'Camera sharing is available only to the owner');
+      const query=new URL(req.url,'http://localhost').searchParams,channel=cameraChannels.get(query.get('room'));
+      if(!channel)return rejectUpgrade(socket,400,'Choose the PC or phone camera channel');
+      const role=query.get('role');if(!['publish','watch'].includes(role))return rejectUpgrade(socket,400,'Invalid camera role');
+      channel.upgrade(req,socket,head,token,role==='publish');return;
+    }
     if(pathname==='/api/collaboration'){
-      if(!permits(token,'voice')&&!permits(token,'whiteboard'))return rejectUpgrade(socket,403,'Collaboration was not approved');
+      if(!['voice','whiteboard','chat','notes'].some(key=>permits(token,key)))return rejectUpgrade(socket,403,'Collaboration was not approved');
       collaboration.upgrade(req,socket,head,token);return;
     }
     if(pathname==='/api/webrtc-video'){
@@ -725,8 +767,8 @@ function createApp(options={}) {
       });
     });
   });
-  function stop(){endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();collaboration.revoke();}
-  server.on('close',()=>{clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();collaboration.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
+  function stop(){endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();cameraRevoke();collaboration.revoke();}
+  server.on('close',()=>{systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();for(const channel of cameraChannels.values())channel.close();collaboration.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   return {server,pin,port,addresses:interfaces,stop};
 }
 if(require.main===module){
@@ -734,11 +776,12 @@ if(require.main===module){
   let config={};
   try {config=JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8'));}
   catch(e) { if(e.code!=='ENOENT'){console.error('Cannot load config.json:',e.message);process.exit(1);} }
-  const app=createApp({screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,password:typeof config.password==='string'&&config.password?config.password:'serame',sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC"});
-  app.server.listen(app.port,config.tunnelHostname?'127.0.0.1':'0.0.0.0',()=>{
+  const allowLan=config.allowLan!==false;
+  const app=createApp({screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:typeof config.password==='string'&&config.password?config.password:'serame',sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC"});
+  app.server.listen(app.port,allowLan?'0.0.0.0':'127.0.0.1',()=>{
     const actual=app.server.address().port;
     const ip=app.addresses.find(a=>a.startsWith('192.168.'))||app.addresses[0]||'127.0.0.1';
-    console.log(`\nPC Remote — personal Windows host\nPhone URL: ${config.tunnelHostname?'https://'+tunnelHost(config.tunnelHostname):'http://'+ip+':'+actual}\n${'Sign in with your app password. Remember me is available.'}\nKeep this terminal open; Ctrl+C stops sharing.\nNever forward port ${actual} to the internet.\n`);
+    console.log(`\nPC Remote — personal Windows host\n${allowLan?'Local phone URL: http://'+ip+':'+actual+'\n':''}${config.tunnelHostname?'Website: https://'+tunnelHost(config.tunnelHostname)+'\n':''}Sign in with your app password. Remember me is available.\nKeep this terminal open; Ctrl+C stops sharing.\nNever forward port ${actual} to the internet.\n`);
   });
   app.server.on('error',e=>{console.error(e.code==='EADDRINUSE'?'Port is in use. Close the previous PC Remote terminal before starting a new instance.':e.message);process.exitCode=1;});
 }

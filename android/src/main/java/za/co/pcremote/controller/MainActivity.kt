@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.PermissionRequest
@@ -26,6 +28,17 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import android.view.KeyEvent
+import android.view.HapticFeedbackConstants
+import android.view.inputmethod.InputMethodManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.SystemClock
+import android.webkit.URLUtil
+import java.net.HttpURLConnection
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import androidx.webkit.JavaScriptReplyProxy
@@ -46,6 +59,14 @@ class MainActivity : Activity() {
     private var controlDialog: AlertDialog? = null
     private var microphoneRequest: PermissionRequest? = null
     private var filesResult: ValueCallback<Array<Uri>>? = null
+    private var volumeControlEnabled = false
+    private var lastHaptic = 0L
+    private var lastMotion = 0L
+    private var gyroListener: SensorEventListener? = null
+    private var downloadRequest: Pair<String, String>? = null
+    private var screenshotBytes: ByteArray? = null
+    private var fullscreenView: View? = null
+    private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,17 +81,20 @@ class MainActivity : Activity() {
         address.setText(prefs.getString("ip", ""))
         portField.setText(prefs.getInt("port", 7666).toString())
         val wakeMac=findViewById<EditText>(R.id.wakeMac);wakeMac.setText(prefs.getString("wakeMac",""))
+        findViewById<Button>(R.id.wakeOptions).setOnClickListener { button ->
+            val options=findViewById<View>(R.id.wakeOptionsPanel);val show=options.visibility!=View.VISIBLE;options.visibility=if(show)View.VISIBLE else View.GONE;(button as Button).text=if(show)"Wake-on-LAN  −" else "Wake-on-LAN  +"
+        }
         findViewById<Button>(R.id.wakePc).setOnClickListener { button ->
             val mac=wakeMac.text.toString().trim();button.isEnabled=false
             Thread{val message=try{WakeOnLan.send(mac);prefs.edit().putString("wakeMac",mac).apply();"Wake signal sent. Wait for the PC, then connect."}catch(e:Exception){e.message?:"Could not send the wake signal."};runOnUiThread{error.text=message;button.isEnabled=true}}.start()
         }
         findViewById<Button>(R.id.connect).setOnClickListener {
-            val ip = address.text.toString().trim()
-            val port = portField.text.toString().toIntOrNull()
-            if (!TrustedOrigin.privateIp(ip) || port == null || port !in 1..65535) {
-                error.text = "Use your PC's private IPv4 address and a port from 1 to 65535."
+            val target=TrustedOrigin.localTarget(address.text.toString(),portField.text.toString().trim().toIntOrNull()?:7666)
+            if (target==null) {
+                error.text = "Use your PC's Wi-Fi IP, for example 192.168.8.100, or its full local address such as http://192.168.8.100:7666."
                 return@setOnClickListener
             }
+            val (ip,port)=target;address.setText(ip);portField.setText(port.toString())
             prefs.edit().putString("ip", ip).putInt("port", port).apply()
             error.text = ""
             connectTo("http://$ip:$port")
@@ -90,27 +114,55 @@ class MainActivity : Activity() {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.allowFileAccess = false
-        settings.allowContentAccess = false
+        // The system picker grants access to the selected content:// document.
+        // Keep file:// and cross-origin file access disabled.
+        settings.allowContentAccess = true
         settings.javaScriptCanOpenWindowsAutomatically = false
+        settings.mediaPlaybackRequiresUserGesture = true
         settings.setSupportMultipleWindows(false)
         settings.allowFileAccessFromFileURLs = false
         settings.allowUniversalAccessFromFileURLs = false
         settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
+        web.setDownloadListener { url, _, disposition, mime, _ ->
+            val parsed=runCatching{Uri.parse(url)}.getOrNull()
+            if(!isAllowed(url)||parsed?.path !in listOf("/api/files/download","/api/files/folder"))return@setDownloadListener
+            if(downloadRequest!=null){Toast.makeText(this,"Finish choosing where to save first.",Toast.LENGTH_SHORT).show();return@setDownloadListener}
+            val name=URLUtil.guessFileName(url,disposition,mime).replace(Regex("[\\\\/:*?\"<>|]"),"_").take(180)
+            downloadRequest=Pair(url,name)
+            try{startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime?:"application/octet-stream").putExtra(Intent.EXTRA_TITLE,name),505)}catch(_:Exception){downloadRequest=null;Toast.makeText(this,"No file-saving app is available.",Toast.LENGTH_LONG).show()}
+        }
         web.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
-                    if(!isAllowed(request.origin.toString()) || request.resources.any{it!=PermissionRequest.RESOURCE_AUDIO_CAPTURE}){request.deny();return@runOnUiThread}
-                    if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-                    else {microphoneRequest?.deny();microphoneRequest=request;requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),503)}
+                    val permissions=mediaPermissions(request)
+                    if(permissions==null||!isAllowed(web.url?:"")){request.deny();return@runOnUiThread}
+                    val missing=permissions.filter{checkSelfPermission(it)!=PackageManager.PERMISSION_GRANTED}
+                    if(missing.isEmpty())request.grant(request.resources)
+                    else {microphoneRequest?.deny();microphoneRequest=request;requestPermissions(missing.toTypedArray(),503)}
                 }
             }
+            override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                if(fullscreenView!=null||!isAllowed(web.url?:"")){callback.onCustomViewHidden();return}
+                fullscreenView=view;fullscreenCallback=callback
+                (findViewById<View>(android.R.id.content) as ViewGroup).addView(view,ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
+                web.visibility=View.GONE;window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            }
+            override fun onHideCustomView(){hideFullscreen()}
             override fun onPermissionRequestCanceled(request: PermissionRequest) { if(microphoneRequest===request)microphoneRequest=null }
             override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
-                if(!isAllowed(view.url?:""))return false
+                if(!isAllowed(view.url?:"")){callback.onReceiveValue(null);return true}
                 filesResult?.onReceiveValue(null);filesResult=callback
-                return try{startActivityForResult(params.createIntent(),504);true}catch(_:Exception){filesResult=null;callback.onReceiveValue(null);true}
+                val types=params.acceptTypes.flatMap{it.split(',')}.map{it.trim()}.filter{Regex("^[a-zA-Z0-9.+*-]+/[a-zA-Z0-9.+*-]+$").matches(it)}.distinct().take(30)
+                fun picker(action:String)=Intent(action).addCategory(Intent.CATEGORY_OPENABLE).setType(if(types.size==1)types[0]else "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply{
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE,params.mode==FileChooserParams.MODE_OPEN_MULTIPLE)
+                    if(types.size>1)putExtra(Intent.EXTRA_MIME_TYPES,types.toTypedArray())
+                }
+                try{startActivityForResult(picker(Intent.ACTION_OPEN_DOCUMENT),504)}catch(_:Exception){
+                    try{startActivityForResult(picker(Intent.ACTION_GET_CONTENT),504)}catch(_:Exception){filesResult=null;callback.onReceiveValue(null);Toast.makeText(this@MainActivity,"Android's file picker could not open. Enable the Files app and try again.",Toast.LENGTH_LONG).show()}
+                }
+                return true
             }
         }
         web.webViewClient = object : WebViewClient() {
@@ -119,12 +171,13 @@ class MainActivity : Activity() {
                 return !isAllowed(request.url.toString())
             }
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                volumeControlEnabled=false;stopAirMouse()
                 microphoneRequest?.deny();microphoneRequest=null;filesResult?.onReceiveValue(null);filesResult=null
                 pendingProjection = false; ScreenShareService.stopSharing(); shareReply = null
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
-                if (request.isForMainFrame) showConnect("Can't reach the PC. Check the Wi-Fi, IP, port and that start.bat is running.")
+                if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow PC Remote through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
             }
         }
         if (savedInstanceState != null) {
@@ -142,6 +195,43 @@ class MainActivity : Activity() {
             try {
                 val value = JSONObject(message.data ?: "{}")
                 when (value.optString("type")) {
+                    "haptic" -> { val now=SystemClock.elapsedRealtime();if(now-lastHaptic>=35){lastHaptic=now;web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)} }
+                    "volume-keys" -> { volumeControlEnabled=value.optBoolean("enabled",false) }
+                    "air-mouse" -> { if(value.optBoolean("enabled",false))startAirMouse()else stopAirMouse() }
+                    "keyboard" -> { web.requestFocus();(getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(web,InputMethodManager.SHOW_IMPLICIT) }
+                    "save-image" -> {
+                        val encoded=value.optString("data")
+                        if(downloadRequest==null&&encoded.length<=12*1024*1024){
+                            val bytes=runCatching{android.util.Base64.decode(encoded,android.util.Base64.DEFAULT)}.getOrNull()
+                            if(bytes!=null&&bytes.size>=8&&bytes.take(8)==listOf(137.toByte(),80.toByte(),78.toByte(),71.toByte(),13.toByte(),10.toByte(),26.toByte(),10.toByte())){
+                                val name="PC-Remote-"+System.currentTimeMillis()+".png";screenshotBytes=bytes;downloadRequest=Pair("",name)
+                                try{startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/png").putExtra(Intent.EXTRA_TITLE,name),505)}catch(_:Exception){downloadRequest=null;screenshotBytes=null}
+                            }
+                        }
+                    }
+                    "save-recording" -> {
+                        val encoded=value.optString("data");val mime=value.optString("mime")
+                        if(downloadRequest==null&&encoded.length<=44*1024*1024&&mime in listOf("video/webm","video/mp4")){
+                            val bytes=runCatching{android.util.Base64.decode(encoded,android.util.Base64.DEFAULT)}.getOrNull()
+                            val webm=bytes!=null&&bytes.size>=4&&bytes.take(4)==listOf(26.toByte(),69.toByte(),223.toByte(),163.toByte())
+                            val mp4=bytes!=null&&bytes.size>=12&&String(bytes,4,4,Charsets.US_ASCII)=="ftyp"
+                            if(bytes!=null&&((mime=="video/webm"&&webm)||(mime=="video/mp4"&&mp4))){
+                                val name="PC-Remote-"+System.currentTimeMillis()+if(mp4)".mp4"else".webm";screenshotBytes=bytes;downloadRequest=Pair("",name)
+                                try{startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE,name),505)}catch(_:Exception){downloadRequest=null;screenshotBytes=null;Toast.makeText(this,"No file-saving app is available.",Toast.LENGTH_LONG).show()}
+                            }
+                        }
+                    }
+                    "open-link" -> {
+                        val target=runCatching{URI(value.optString("url"))}.getOrNull()
+                        if(target!=null&&target.scheme in listOf("http","https")&&target.host!=null&&target.userInfo==null){try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(target.toASCIIString())))}catch(_:Exception){Toast.makeText(this,"No browser is available.",Toast.LENGTH_SHORT).show()}}
+                    }
+                    "wake-config" -> {
+                        val mac=value.optString("mac");if(runCatching{WakeOnLan.packet(mac)}.isSuccess){getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("wakeMac",mac).apply();findViewById<EditText>(R.id.wakeMac).setText(mac)}
+                    }
+                    "wake" -> {
+                        val mac=getSharedPreferences("pc_remote_android",MODE_PRIVATE).getString("wakeMac","").orEmpty()
+                        Thread{val message=try{WakeOnLan.send(mac);"Wake signal sent on your Wi-Fi. Wait a moment, then reconnect."}catch(e:Exception){e.message?:"Wake signal failed."};runOnUiThread{Toast.makeText(this,message,Toast.LENGTH_LONG).show()}}.start()
+                    }
                     "start" -> {
                         if (pendingProjection) return@addWebMessageListener
                         val cookie = CookieManager.getInstance().getCookie(selectedOrigin!!).orEmpty()
@@ -174,12 +264,34 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 501) requestProjection()
-        if(requestCode==503){val request=microphoneRequest;microphoneRequest=null;if(request!=null){if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED&&isAllowed(request.origin.toString())&&isAllowed(web.url?:""))request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) else request.deny()}}
+        if(requestCode==503){val request=microphoneRequest;microphoneRequest=null;if(request!=null){val required=mediaPermissions(request);if(required!=null&&required.all{checkSelfPermission(it)==PackageManager.PERMISSION_GRANTED}&&isAllowed(web.url?:""))request.grant(request.resources) else request.deny()}}
     }
     @Deprecated("MediaProjection consent result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if(requestCode==504){val callback=filesResult;filesResult=null;callback?.onReceiveValue(if(isAllowed(web.url?:""))WebChromeClient.FileChooserParams.parseResult(resultCode,data)else null);return}
+        if(requestCode==505){
+            val request=downloadRequest;downloadRequest=null;val destination=data?.data;val image=screenshotBytes;screenshotBytes=null
+            if(resultCode==RESULT_OK&&request!=null&&destination!=null&&image!=null){Thread{val message=try{contentResolver.openOutputStream(destination,"w")?.use{it.write(image)}?:throw IllegalStateException("Could not save screenshot.");"Screenshot saved."}catch(e:Exception){e.message?:"Could not save screenshot."};runOnUiThread{Toast.makeText(this,message,Toast.LENGTH_LONG).show()}}.start();return}
+            if(resultCode==RESULT_OK&&request!=null&&destination!=null&&isAllowed(request.first)){
+                val cookie=CookieManager.getInstance().getCookie(selectedOrigin.orEmpty()).orEmpty()
+                Thread{
+                    val message=try{
+                        val connection=java.net.URL(request.first).openConnection() as HttpURLConnection
+                        try{connection.instanceFollowRedirects=false;connection.connectTimeout=15000;connection.readTimeout=30000;connection.setRequestProperty("Cookie",cookie)
+                            if(connection.responseCode!=200)throw IllegalStateException("Download failed. Sign in and try again.")
+                            contentResolver.openOutputStream(destination,"w")?.use{output->connection.inputStream.use{input->input.copyTo(output,64*1024)}}?:throw IllegalStateException("Could not save this file.")
+                            "Saved "+request.second
+                        }finally{connection.disconnect()}
+                    }catch(e:Exception){e.message?:"Could not download the file."}
+                    runOnUiThread{Toast.makeText(this,message,Toast.LENGTH_LONG).show()}
+                }.start()
+            };return
+        }
+        if(requestCode==504){
+            val callback=filesResult;filesResult=null
+            val selected=if(resultCode==RESULT_OK&&isAllowed(web.url?:""))WebChromeClient.FileChooserParams.parseResult(resultCode,data)?.filter{it.scheme=="content"}?.distinct()?.take(2000)?.toTypedArray()else null
+            callback?.onReceiveValue(selected?.takeIf{it.isNotEmpty()});return
+        }
         if (requestCode != 502) return
         val requested = pendingProjection; pendingProjection = false
         if (!requested || !isAllowed(web.url ?: "")) return
@@ -195,6 +307,8 @@ class MainActivity : Activity() {
     }
 
     private fun showConnect(message: String) {
+        hideFullscreen()
+        volumeControlEnabled=false;stopAirMouse()
         pendingProjection = false; ScreenShareService.stopSharing()
         web.stopLoading()
         web.loadUrl("about:blank")
@@ -205,17 +319,20 @@ class MainActivity : Activity() {
 
     @Deprecated("Android navigation compatibility")
     override fun onBackPressed() {
+        if(fullscreenView!=null){hideFullscreen();return}
         if (web.visibility != View.VISIBLE) {
             super.onBackPressed()
             return
         }
-        // First Android back exits the remote desktop, next one returns to the PC address screen.
-        web.evaluateJavascript("typeof rs!=='undefined' && rs.on ? (rsClose(), 'closed') : 'home'") { result ->
+        // Follow the same page stack as the browser before leaving the connection.
+        web.evaluateJavascript("window.PCRPages ? (window.PCRPages.back() ? 'closed' : 'home') : (typeof rs!=='undefined' && rs.on ? (rsClose(), 'closed') : 'home')") { result ->
             if (result == "\"home\"") showConnect("")
         }
     }
 
     override fun onDestroy() {
+        hideFullscreen()
+        stopAirMouse();volumeControlEnabled=false
         microphoneRequest?.deny();microphoneRequest=null;filesResult?.onReceiveValue(null);filesResult=null
         controlDialog?.dismiss();controlDialog=null
         pendingProjection = false; ScreenShareService.stopSharing(); ScreenShareService.events = null; shareReply = null
@@ -230,6 +347,8 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        stopAirMouse()
+        if(isAllowed(web.url?:""))web.evaluateJavascript("window.PCRCamera?.stop()",null)
         // Only the in-app thumbnail pauses. The foreground service owns both
         // capture and the network connection while the user opens other apps.
         ScreenShareService.previewEnabled = false
@@ -251,4 +370,47 @@ class MainActivity : Activity() {
     }
     override fun onResume() { super.onResume();web.postDelayed({showControlRequest()},400) }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus);if(hasFocus)web.post{showControlRequest()} }
+
+    override fun onKeyDown(keyCode: Int,event: KeyEvent): Boolean {
+        if(volumeControlEnabled&&web.visibility==View.VISIBLE&&isAllowed(web.url?:"")&&keyCode in listOf(KeyEvent.KEYCODE_VOLUME_UP,KeyEvent.KEYCODE_VOLUME_DOWN)){
+            val action=if(keyCode==KeyEvent.KEYCODE_VOLUME_UP)"volup" else "voldown"
+            web.evaluateJavascript("window.PCRDeviceInput?.volume('$action')",null);return true
+        }
+        return super.onKeyDown(keyCode,event)
+    }
+    override fun onKeyUp(keyCode: Int,event: KeyEvent): Boolean {
+        if(volumeControlEnabled&&keyCode in listOf(KeyEvent.KEYCODE_VOLUME_UP,KeyEvent.KEYCODE_VOLUME_DOWN))return true
+        return super.onKeyUp(keyCode,event)
+    }
+    private fun stopAirMouse(){
+        gyroListener?.let{(getSystemService(SENSOR_SERVICE) as SensorManager).unregisterListener(it)};gyroListener=null;lastMotion=0
+    }
+    private fun mediaPermissions(request:PermissionRequest):List<String>?{
+        if(!isAllowed(request.origin.toString())||request.resources.isEmpty())return null
+        val permissions=mutableListOf<String>()
+        for(resource in request.resources)when(resource){
+            PermissionRequest.RESOURCE_AUDIO_CAPTURE->permissions.add(Manifest.permission.RECORD_AUDIO)
+            PermissionRequest.RESOURCE_VIDEO_CAPTURE->permissions.add(Manifest.permission.CAMERA)
+            else->return null
+        }
+        return permissions.distinct()
+    }
+    private fun hideFullscreen(){
+        fullscreenView?.let{(it.parent as? ViewGroup)?.removeView(it)};fullscreenView=null
+        val callback=fullscreenCallback;fullscreenCallback=null;callback?.onCustomViewHidden()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        if(selectedOrigin!=null)web.visibility=View.VISIBLE
+    }
+    private fun startAirMouse(){
+        stopAirMouse();val manager=getSystemService(SENSOR_SERVICE) as SensorManager;val sensor=manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+        if(sensor==null){web.evaluateJavascript("window.PCRDeviceInput?.motionUnavailable()",null);return}
+        gyroListener=object:SensorEventListener{
+            override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int){}
+            override fun onSensorChanged(event:SensorEvent){
+                val now=SystemClock.elapsedRealtime();if(lastMotion==0L){lastMotion=now;return};val delta=now-lastMotion;if(delta<24)return;lastMotion=now
+                val scale=delta.coerceAtMost(80)/1000.0*650;val dx=(-event.values[1]*scale).coerceIn(-100.0,100.0);val dy=(-event.values[0]*scale).coerceIn(-100.0,100.0)
+                web.evaluateJavascript("window.PCRDeviceInput?.motion($dx,$dy)",null)
+            }
+        };manager.registerListener(gyroListener,sensor,SensorManager.SENSOR_DELAY_GAME)
+    }
 }

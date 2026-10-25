@@ -3,6 +3,13 @@ package za.co.pcremote.controller
 import java.net.URI
 
 object TrustedOrigin {
+    fun localTarget(value:String,defaultPort:Int):Pair<String,Int>?=try{
+        val raw=value.trim()
+        val uri=URI(if(raw.startsWith("http://",true))raw else "http://$raw")
+        val host=uri.host
+        val port=if(uri.port==-1)defaultPort else uri.port
+        if(uri.scheme?.lowercase()=="http"&&host!=null&&privateIp(host)&&port in 1..65535&&uri.userInfo==null&&uri.query==null&&uri.fragment==null&&uri.path in listOf("","/"))Pair(host.split('.').joinToString("."){it.toInt().toString()},port)else null
+    }catch(_:Exception){null}
     fun normalize(value: String): String? = try {
         val uri = URI(value)
         val scheme = uri.scheme?.lowercase()

@@ -1,0 +1,96 @@
+'use strict';
+(() => {
+  const native = value => {try {window.PCRAndroid?.postMessage(JSON.stringify(value));} catch {}};
+  const hasNative = () => typeof window.PCRAndroid?.postMessage === 'function';
+  const read = (key, fallback) => {try {const value=localStorage.getItem(key);return value===null?fallback:value==='true';}catch{return fallback;}};
+  const write = (key,value) => {try{localStorage.setItem(key,String(value));}catch{}};
+  let vibration=read('pcr_haptics',true),volumeKeys=read('pcr_volume_keys',false),air=false,nativeAir=false,nativeVolume=false,lastHaptic=-100,lastOrientation=null,motionFrame=0,mx=0,my=0,volumePending=0,volumeBusy=false;
+  let latencyTimer=null,latencyAbort=null,latencyGeneration=0;
+  const samples=[];
+  let airButton,latencyLabel,settingsStatus;
+  const remoteActive=()=>typeof rs!=='undefined'&&rs.on&&!document.hidden&&!document.getElementById('rs').classList.contains('hide');
+  const canMove=()=>remoteActive()&&window.PCRCanAccess?.('control')&&!document.getElementById('rs').classList.contains('typing')&&(!window.PCRPages||window.PCRPages.current==='rs')&&rsCanPoint();
+  function haptic(){
+    if(!vibration||document.hidden||!window.PCRCanAccess?.('control'))return;
+    const now=performance.now();if(now-lastHaptic<40)return;lastHaptic=now;
+    if(hasNative())native({type:'haptic'});else navigator.vibrate?.(9);
+  }
+  function focusKeyboard(){if(hasNative())native({type:'keyboard'});}
+  function motion(dx,dy){
+    if(!air||!canMove()||![dx,dy].every(Number.isFinite))return;
+    mx+=Math.abs(dx)<.3?0:Math.max(-100,Math.min(100,dx));my+=Math.abs(dy)<.3?0:Math.max(-100,Math.min(100,dy));
+    if(!motionFrame)motionFrame=requestAnimationFrame(()=>{motionFrame=0;const x=Math.trunc(mx),y=Math.trunc(my);mx-=x;my-=y;if(air&&canMove()&&(x||y))qc('mv '+x+' '+y);});
+  }
+  function orientation(event){
+    if(!air||![event.alpha,event.beta].every(Number.isFinite))return;
+    if(lastOrientation){const dx=((event.alpha-lastOrientation.alpha+540)%360-180)*-8,dy=(event.beta-lastOrientation.beta)*8;motion(dx,dy);}
+    lastOrientation={alpha:event.alpha,beta:event.beta};
+  }
+  function stopAir(){
+    air=false;lastOrientation=null;mx=my=0;if(motionFrame)cancelAnimationFrame(motionFrame);motionFrame=0;
+    window.removeEventListener('deviceorientation',orientation);if(nativeAir){native({type:'air-mouse',enabled:false});nativeAir=false;}
+    if(airButton){airButton.setAttribute('aria-pressed','false');airButton.textContent='Air mouse';}
+  }
+  function motionUnavailable(){stopAir();msg('This phone does not report motion input. The trackpad is ready.');}
+  async function toggleAir(){
+    if(air){stopAir();return;}
+    if(!canMove()){msg('Open Screen Control before starting Air mouse.');return;}
+    try{
+      if(!hasNative()){
+        if(!window.DeviceOrientationEvent)throw Error('Motion input needs a supported phone browser or the Android app.');
+        if(typeof DeviceOrientationEvent.requestPermission==='function'&&await DeviceOrientationEvent.requestPermission()!=='granted')throw Error('Allow motion access to use Air mouse.');
+        window.addEventListener('deviceorientation',orientation);
+      }
+      air=true;lastOrientation=null;airButton.setAttribute('aria-pressed','true');airButton.textContent='Stop air mouse';if(hasNative()){nativeAir=true;native({type:'air-mouse',enabled:true});}msg('Move your phone to aim. Tap Left to click.');
+    }catch(error){stopAir();msg(error.message);}
+  }
+  function syncVolume(){const enabled=hasNative()&&volumeKeys&&!!window.PCRAuth?.signedIn&&!!window.PCRCanAccess?.('media')&&!document.hidden;if(enabled!==nativeVolume){nativeVolume=enabled;native({type:'volume-keys',enabled});}}
+  async function volume(action){
+    if(!volumeKeys||document.hidden||!window.PCRCanAccess?.('media')||!['volup','voldown'].includes(action))return;
+    volumePending=Math.max(-8,Math.min(8,volumePending+(action==='volup'?1:-1)));if(volumeBusy)return;
+    volumeBusy=true;
+    try{while(volumePending&&volumeKeys&&!document.hidden&&window.PCRCanAccess?.('media')){const next=volumePending>0?'volup':'voldown';volumePending+=volumePending>0?-1:1;const result=await api('/api/cmd',{method:'POST',body:JSON.stringify({action:next})});if(!result.ok)throw Error(result.error||'PC volume is unavailable.');}}
+    catch(error){volumePending=0;msg(error.message);}finally{volumeBusy=false;}
+  }
+  function stopLatency(){latencyGeneration++;clearTimeout(latencyTimer);latencyTimer=null;latencyAbort?.abort();latencyAbort=null;samples.length=0;}
+  async function measureLatency(){
+    if(!remoteActive())return;
+    const generation=latencyGeneration,start=performance.now(),abort=new AbortController();latencyAbort=abort;const timeout=setTimeout(()=>abort.abort(),3500);
+    try{const result=await api('/api/session',{signal:abort.signal});if(generation!==latencyGeneration)return;if(!result.ok)throw Error();samples.push(Math.round(performance.now()-start));if(samples.length>5)samples.shift();const sorted=samples.slice().sort((a,b)=>a-b),latency=sorted[Math.floor(sorted.length/2)];latencyLabel.textContent=latency+' ms';latencyLabel.dataset.slow=String(latency>180);latencyLabel.title='Round-trip time to your PC, including this connection. Screen decoding can add delay.';}
+    catch{if(generation===latencyGeneration)latencyLabel.textContent='Link…';}
+    finally{clearTimeout(timeout);if(generation===latencyGeneration){latencyAbort=null;if(remoteActive())latencyTimer=setTimeout(measureLatency,5000);}}
+  }
+  function startLatency(){if(!latencyTimer&&!latencyAbort&&remoteActive())void measureLatency();}
+  function screenshot(){
+    if(!remoteActive()||!window.PCRCanAccess?.('screen'))return;
+    const canvas=document.getElementById('rsc');if(!canvas.width||!canvas.height){msg('Wait for a PC picture first.');return;}
+    const name='PC-Remote-'+new Date().toISOString().replace(/[:.]/g,'-')+'.png';
+    if(hasNative()){const data=canvas.toDataURL('image/png').split(',')[1];if(data.length>12*1024*1024){msg('This screen image is too large. Reduce quality and try again.');return;}native({type:'save-image',name,data});return;}
+    canvas.toBlob(blob=>{if(!blob)return;const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);msg('Screenshot ready to save.');},'image/png');
+  }
+  async function saveWake(){
+    if(!hasNative()||window.PCRAuth?.role!=='owner')return;
+    try{const data=await api('/api/wake');if(!data.ok||window.PCRAuth?.role!=='owner')return;const selected=localStorage.getItem('pcr_wake_mac'),target=data.networks.find(item=>item.mac===selected)||data.networks.find(item=>item.mac&&item.mac!=='00:00:00:00:00:00'&&!/virtual|loopback|vpn|tailscale/i.test(item.name));if(target){native({type:'wake-config',mac:target.mac});if(settingsStatus)settingsStatus.textContent='Wake target saved for the Android connection screen. Use it on the PC’s Wi-Fi when the PC is asleep.';}}
+    catch{}
+  }
+  function mount(){
+    const header=document.querySelector('.remoteSwipeDockHeader'),bar=document.querySelector('.rsbot');if(!header||!bar)return;
+    latencyLabel=document.createElement('span');latencyLabel.className='remoteLatency';latencyLabel.textContent='Link…';header.append(latencyLabel);
+    airButton=document.createElement('button');airButton.type='button';airButton.id='remoteAirMouse';airButton.textContent='Air mouse';airButton.setAttribute('aria-pressed','false');airButton.addEventListener('click',toggleAir);document.querySelector('.dockQuickKeys').append(airButton);
+    const capture=document.createElement('button');capture.type='button';capture.id='remoteScreenshot';capture.textContent='Save screenshot';capture.addEventListener('click',screenshot);bar.append(capture);
+    const preferences=document.getElementById('workspaceSettingsPreferences');
+    if(preferences){
+      preferences.hidden=false;const title=document.createElement('h3');title.textContent='Phone controls';preferences.append(title);
+      for(const [key,label,detail,enabled]of [['haptic','Click vibration','A short tap when you select or start dragging on the PC.',vibration],['volume','Phone volume buttons','Use Android volume buttons for PC volume while this app is open.',volumeKeys]]){
+        const row=document.createElement('label');row.className='devicePreference';const copy=document.createElement('span'),strong=document.createElement('strong'),small=document.createElement('small'),input=document.createElement('input');strong.textContent=label;small.textContent=detail;copy.append(strong,small);input.type='checkbox';input.checked=enabled;input.id='devicePreference-'+key;input.disabled=key==='volume'&&!hasNative();input.addEventListener('change',()=>{if(key==='haptic'){vibration=input.checked;write('pcr_haptics',vibration);}else{volumeKeys=input.checked;write('pcr_volume_keys',volumeKeys);syncVolume();}});row.append(copy,input);preferences.append(row);
+      }
+      const description=document.createElement('p');description.textContent='Air mouse is beside the trackpad. Start it when you want motion control; it stops when you leave the remote.';settingsStatus=document.createElement('p');settingsStatus.className='deviceWakeStatus';preferences.append(description,settingsStatus);
+    }
+    const auth=()=>{stopAir();stopLatency();volumePending=0;airButton.hidden=!window.PCRCanAccess?.('control');capture.hidden=!window.PCRCanAccess?.('screen');syncVolume();startLatency();void saveWake();};
+    window.addEventListener('pcr:auth',auth);window.addEventListener('pcr:page',event=>{if(event.detail?.id!=='rs')stopAir();if(remoteActive())startLatency();else stopLatency();});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden){stopAir();stopLatency();volumePending=0;}else startLatency();syncVolume();});window.addEventListener('blur',stopAir);window.addEventListener('pagehide',()=>{stopAir();stopLatency();native({type:'volume-keys',enabled:false});});
+    auth();
+  }
+  window.PCRDeviceInput={haptic,motion,motionUnavailable,focusKeyboard,volume,stopAir,screenshot};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
+})();

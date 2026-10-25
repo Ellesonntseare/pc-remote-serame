@@ -3,11 +3,11 @@
     <style name="Theme.PCRemote" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">#07090F</item>
-        <item name="android:navigationBarColor">#07090F</item>
+        <item name="android:statusBarColor">#020D17</item>
+        <item name="android:navigationBarColor">#020D17</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowLightNavigationBar">false</item>
-        <item name="android:colorAccent">#4F7CFF</item>
-        <item name="android:windowBackground">#07090F</item>
+        <item name="android:colorAccent">#00D6E4</item>
+        <item name="android:windowBackground">#020D17</item>
     </style>
 </resources>
