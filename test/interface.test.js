@@ -30,7 +30,9 @@ async function login(window,password){const doc=window.document;doc.getElementBy
 test('dashboard keyboard opens the remote editor directly and common keys stay within reach',async t=>{
   const f=await fixture(t),window=await f.page({phone:true}),doc=window.document;
   await login(window,'serame');await until(()=>window.PCRAuth?.signedIn);
-  window.eval('rsRun=function(){rs.m={w:1920,h:1080};}');
+  // Model a Windows capture source on all CI hosts; input/capture are stubbed.
+  window.eval('rsRun=function(){rs.m={w:1920,h:1080};};$("screenBtn").classList.remove("hide");');
+  await until(()=>doc.getElementById('homeKeyboard').dataset.pcrDenied==='false');
   const keyboard=doc.getElementById('homeKeyboard');assert.equal(keyboard.dataset.pcrDenied,'false');keyboard.click();
   await until(()=>window.PCRPages.current==='rs');
   assert.equal(doc.activeElement,doc.getElementById('typeText'));

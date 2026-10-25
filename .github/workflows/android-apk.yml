@@ -9,6 +9,8 @@ on:
       - 'settings.gradle.kts'
       - 'gradle.properties'
       - '.github/workflows/android-apk.yml'
+      - 'server.js'
+      - 'test/**'
   workflow_dispatch:
 
 permissions:
@@ -51,6 +53,12 @@ jobs:
           key: pc-remote-android-debug-signing-v1
       - name: Build debug APK
         run: gradle :android:testDebugUnitTest :android:assembleDebug --no-daemon --stacktrace
+      - name: Verify APK signature and version
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/build/outputs/apk/debug/android-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/debug/android-debug.apk > apk-metadata.txt
+          sed -n '1,8p' apk-metadata.txt
+          sha256sum android/build/outputs/apk/debug/android-debug.apk
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:

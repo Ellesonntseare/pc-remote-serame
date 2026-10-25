@@ -408,14 +408,13 @@ function createApp(options={}) {
   }
   function act(action, callback) {
     if (options.disableActions) return callback(new Error('Disabled in tests'));
-    if (process.platform!=='win32')return callback(new Error('Requires Windows'));
     const delay=Math.max(0,Math.min(300,Number(options.delaySeconds ?? 10)||0));
     const cmd = {
       shutdown:['shutdown',['/s','/t',String(delay)]], restart:['shutdown',['/r','/t',String(delay)]],
       logoff:['shutdown',['/l']],sleep:['rundll32.exe',['powrprof.dll,SetSuspendState','0,1,0']],
       lock:['rundll32.exe',['user32.dll,LockWorkStation']],cancel:['shutdown',['/a']],
     };
-    if(cmd[action])return execFile(cmd[action][0],cmd[action][1],callback);
+    if(cmd[action]){if(process.platform!=='win32')return callback(new Error('Requires Windows'));return execFile(cmd[action][0],cmd[action][1],callback);}
     return nativeFeatures.sendMedia(action).then(result=>callback(null,result),callback);
   }
   let prevCpu=os.cpus(),cpu=0;
