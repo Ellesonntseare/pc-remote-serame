@@ -126,8 +126,9 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
     const centralOffset=offset;for(const bytes of central){await write(bytes);offset+=bytes.length;}
     const end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(entries.length,8);end.writeUInt16LE(entries.length,10);end.writeUInt32LE(offset-centralOffset,12);end.writeUInt32LE(centralOffset,16);await write(end);res.end();
   }
-  async function handle(req,res,{pathname,token,accountContext,readJson,respond}){
+  async function handle(req,res,{pathname,token,accountContext,readJson,respond,chunkBytes=CHUNK_BYTES}){
     if(pathname!=='/api/files'&&!pathname.startsWith('/api/files/'))return false;
+    const chunkLimit=Number.isSafeInteger(chunkBytes)?Math.max(CHUNK_BYTES,Math.min(8*CHUNK_BYTES,chunkBytes)):CHUNK_BYTES;
     try{
       const url=new URL(req.url,'http://localhost');
       if(req.method!=='GET'&&req.method!=='HEAD'&&req.headers['x-pcr']!=='1')throw problem(403,'Request header missing');
@@ -135,7 +136,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
       if(req.method==='GET'&&pathname==='/api/files'){
         const {files:list,truncated}=await listFiles(),groups=new Map();
         for(const file of list){const name=file.name.split('/')[0];if(!file.name.includes('/'))continue;const folder=groups.get(name)||{name,size:0,count:0};folder.size+=file.size;folder.count++;groups.set(name,folder);}
-        respond(res,200,{ok:true,folder:root,maxBytes,chunkBytes:CHUNK_BYTES,total:list.length,files:list,folders:[...groups.values()],truncated});return true;
+        respond(res,200,{ok:true,folder:root,maxBytes,chunkBytes:chunkLimit,total:list.length,files:list,folders:[...groups.values()],truncated});return true;
       }
       if(req.method==='GET'&&pathname==='/api/files/folder'){await archive(res,relativePath(url.searchParams.get('name')));return true;}
       if(['GET','HEAD'].includes(req.method)&&['/api/files/download','/api/files/preview'].includes(pathname)){
@@ -159,7 +160,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
         const u={id,token,account:typeof accountContext==='string'&&accountContext?digest(accountContext):null,secretHash:digest(secret),temp,name,relativePath:destination,size,received:0,busy:false,until:Date.now()+RETENTION_MS};
         try{await persist(u);}catch(e){await removeDisk(u).catch(()=>{});throw e;}uploads.set(id,u);
         const file=size===0?await finish(u):undefined;
-        respond(res,200,{ok:true,id,resumeSecret:secret,received:0,chunkBytes:CHUNK_BYTES,complete:size===0,expires:u.until,...file&&{file}});return true;
+        respond(res,200,{ok:true,id,resumeSecret:secret,received:0,chunkBytes:chunkLimit,complete:size===0,expires:u.until,...file&&{file}});return true;
       }
       const match=/^\/api\/files\/uploads\/([a-f0-9]{32})(\/resume)?$/.exec(pathname);
       if(match){
@@ -172,7 +173,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
           u.busy=true;try{u.token=token;u.until=Date.now()+RETENTION_MS;await persist(u);
             // Complete an upload whose last chunk committed before a process stop.
             if(!u.complete&&u.received===u.size)await finish(u);
-            respond(res,200,{ok:true,id:u.id,received:u.received,size:u.size,name:u.name,relativePath:u.relativePath||u.name,chunkBytes:CHUNK_BYTES,complete:!!u.complete,expires:u.until,...u.file&&{file:u.file}});
+            respond(res,200,{ok:true,id:u.id,received:u.received,size:u.size,name:u.name,relativePath:u.relativePath||u.name,chunkBytes:chunkLimit,complete:!!u.complete,expires:u.until,...u.file&&{file:u.file}});
           }finally{u.busy=false;}return true;
         }
         if(!u||u.token!==token||u.until<Date.now()||match[2])throw problem(404,'Upload not found. Use Resume to recover it.');
@@ -182,12 +183,12 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
         if(req.method==='PUT'){
           if(u.complete)throw problem(409,'This upload has already finished.');
           const offset=Number(url.searchParams.get('offset'));if(!url.searchParams.has('offset')||!Number.isSafeInteger(offset)||offset!==u.received)throw problem(409,'Upload position changed. Use Resume to check the saved position.');
-          const allowed=Math.min(CHUNK_BYTES,u.size-offset),length=Number(req.headers['content-length']);
+          const allowed=Math.min(chunkLimit,u.size-offset),length=Number(req.headers['content-length']);
           if(allowed<1||(req.headers['content-length']!==undefined&&(!Number.isSafeInteger(length)||length<1||length>allowed)))throw problem(413,'Upload chunk is too large.');
           u.busy=true;u.request=req;let bytes=0;
           try{
             const limit=new Transform({transform(chunk,encoding,done){bytes+=chunk.length;done(bytes>allowed?problem(413,'Upload chunk is too large.'):null,chunk);}});
-            await pipeline(req,limit,fs.createWriteStream(u.temp,{flags:'r+',start:offset}));
+            await pipeline(req,limit,fs.createWriteStream(u.temp,{flags:'r+',start:offset,highWaterMark:256*1024}));
             if(!bytes)throw problem(400,'Empty upload chunk');
             // Persist only fully received chunks. Truncate uncommitted bytes on failure/restart.
             const fh=await fsp.open(u.temp,'r+');try{await fh.sync();}finally{await fh.close();}

@@ -13,6 +13,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
+    "google-auth-library": "10.9.1",
     "ws": "8.22.0"
   },
   "devDependencies": {

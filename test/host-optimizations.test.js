@@ -30,7 +30,7 @@ function packet(type,value){
 
 test('public assets revalidate by content without retransferring unchanged bytes',async t=>{
   const {port}=await host(t);
-  for(const path of ['/desktop-controls.js','/desktop-controls.css','/icons/icon-192.png']){
+  for(const path of ['/desktop-controls.js','/desktop-controls.css','/client.js','/client-core.css','/client-ui.css','/icons/icon-192.png']){
     const asset=await request(port,path);
     assert.equal(asset.status,200);
     assert.equal(asset.headers['cache-control'],'private, no-cache');
@@ -61,7 +61,7 @@ test('the worker, page, manifest and protected responses remain uncached',async 
 });
 test('text responses compress once, preserve exact bytes and use separate cache validators per encoding',async t=>{
   const {port}=await host(t);
-  for(const path of ['/','/desktop-controls.js','/workspace-ui.css']){
+  for(const path of ['/','/desktop-controls.js','/workspace-ui.css','/client.js','/client-core.css','/client-ui.css']){
     const plain=await request(port,path),compressed=await request(port,path,{headers:{'Accept-Encoding':'gzip, deflate'}});
     assert.equal(compressed.headers['content-encoding'],'gzip');assert.equal(compressed.headers.vary,'Accept-Encoding');assert.deepEqual(gunzipSync(compressed.body),plain.body);assert.ok(compressed.body.length<plain.body.length*.5,'the text payload should be at least halved');
     if(path==='/'){assert.equal(compressed.headers['cache-control'],'no-store');assert.equal(compressed.headers.etag,undefined);}

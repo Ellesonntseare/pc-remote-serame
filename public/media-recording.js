@@ -17,7 +17,7 @@
   }
   function save(blob){
     const extension=blob.type.includes('mp4')?'mp4':'webm',name='PC-Remote-'+new Date().toISOString().replace(/[:.]/g,'-')+'.'+extension;
-    if(globalThis.PCRNativeScreen){if(blob.size>32*1024*1024){msg('This recording is too large to save in the Android app. Use the browser for longer recordings.');return;}const reader=new FileReader();reader.onload=()=>globalThis.PCRNativeScreen.postMessage(JSON.stringify({action:'save-recording',data:String(reader.result).split(',')[1],mime:blob.type.includes('mp4')?'video/mp4':'video/webm'}));reader.readAsDataURL(blob);}
+    if(globalThis.PCRAndroid){if(blob.size>32*1024*1024){msg('This recording is too large to save in the Android app. Use the browser for longer recordings.');return;}const reader=new FileReader();reader.onload=()=>globalThis.PCRAndroid.postMessage(JSON.stringify({type:'save-recording',data:String(reader.result).split(',')[1],mime:blob.type.includes('mp4')?'video/mp4':'video/webm'}));reader.readAsDataURL(blob);}
     else{const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
   }
   function mount(){
@@ -26,7 +26,7 @@
       const dialog=document.getElementById(id),video=dialog?.querySelector('video');if(!video)continue;
       const controls=document.createElement('div');controls.className='mediaRecordingControls';controls.innerHTML='<button type="button" data-record><i></i><span>Record</span></button><span role="status">Save a recording on this device.</span>';dialog.append(controls);
       const button=controls.querySelector('button'),label=controls.querySelector('[role=status]');let recording=false;
-      const recorder=new BoundedRecorder({limit:(globalThis.PCRNativeScreen?24:128)*1024*1024,onState:value=>{recording=value.recording;button.classList.toggle('isRecording',recording);button.querySelector('span').textContent=recording?'Stop & save':'Record';label.textContent=value.error|| (recording?'Recording · '+(value.bytes/1048576).toFixed(1)+' MB':'Recording stopped.');},onResult:blob=>{save(blob);label.textContent='Recording ready · '+(blob.size/1048576).toFixed(1)+' MB';}});
+      const recorder=new BoundedRecorder({limit:(globalThis.PCRAndroid?24:128)*1024*1024,onState:value=>{recording=value.recording;button.classList.toggle('isRecording',recording);button.querySelector('span').textContent=recording?'Stop & save':'Record';label.textContent=value.error|| (recording?'Recording · '+(value.bytes/1048576).toFixed(1)+' MB':'Recording stopped.');},onResult:blob=>{save(blob);label.textContent='Recording ready · '+(blob.size/1048576).toFixed(1)+' MB';}});
       button.onclick=()=>{if(recording){recorder.stop();return;}try{recorder.start(video.srcObject);}catch(error){label.textContent=error.message;}};
       dialog.addEventListener('close',()=>recorder.stop());window.addEventListener('pcr:auth',()=>recorder.stop(true));window.addEventListener('pagehide',()=>recorder.stop(true));
     }

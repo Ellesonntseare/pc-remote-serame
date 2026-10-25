@@ -22,6 +22,10 @@ test('only the owner can extend active guest access without changing permissions
 });
 test('view-only guest sees no private status, host name or history and cannot call unapproved APIs directly',async t=>{
   const f=await fixture(t),owner=await f.owner(),guest=await approve(f,owner);
+  assert.equal((await f.request('/api/local-network')).status,401);
+  assert.equal((await f.request('/api/local-network',{cookie:guest.cookie})).status,403);
+  assert.equal((await f.request('/api/local-network',{cookie:owner,headers:{'X-PCR':'0'}})).status,403);
+  const local=await f.request('/api/local-network',{cookie:owner});assert.equal(local.status,200);assert.equal(local.json.port,f.port);assert.equal(local.json.local,true);assert.ok(local.json.addresses.every(item=>/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(item.address)));
   const info=(await f.request('/api/status',{cookie:guest.cookie})).json;
   assert.equal(info.name,'Shared PC');assert.equal(info.permissions.screen,true);assert.deepEqual(info.log,[]);for(const key of ['cpu','mem','uptime'])assert.equal(Object.hasOwn(info,key),false);
   for(const [route,method,body]of [['/api/files','GET'],['/api/files/download?name=secret.txt','GET'],['/api/files/preview?name=secret.pdf','HEAD'],['/api/files/uploads','POST',{name:'x',size:1}],['/api/files/open-folder','POST',{}],['/api/apps','GET'],['/api/apps/focus','POST',{id:'x'}],['/api/clipboard','GET'],['/api/clipboard','POST',{text:'x'}],['/api/input','POST',{cmds:['mv 1 0']}],['/api/cmd','POST',{action:'shutdown'}],['/api/cmd','POST',{action:'mute'}]])assert.equal((await f.request(route,{cookie:guest.cookie,method,body})).status,403,route);

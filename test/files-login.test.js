@@ -26,6 +26,16 @@ test('password login is required and unchecked Remember me uses a browser-sessio
   const correct=await f.request('/api/pair',{method:'POST',body:{password:'serame',remember:false}});assert.equal(correct.status,200);assert.match(correct.headers['set-cookie'][0],/HttpOnly/);assert.doesNotMatch(correct.headers['set-cookie'][0],/Max-Age/);
   const cookie=correct.headers['set-cookie'][0].split(';')[0];assert.equal((await f.request('/api/status',{cookie})).status,200);await f.restart();assert.equal((await f.request('/api/status',{cookie})).status,401);
 });
+
+test('direct LAN uploads negotiate larger chunks while the tunnel retains its smaller bound and exact resume position',async t=>{
+  const f=await fixture(t,{tunnelHostname:'remote.example',allowLan:true,maxFileBytes:20*1024*1024}),cookie=await f.login(),cloudHeaders={Host:'remote.example'},content=crypto.randomBytes(9*1024*1024+31);
+  const u=(await f.request('/api/files/uploads',{method:'POST',cookie,body:{name:'large-local.bin',size:content.length}})).json;assert.equal(u.chunkBytes,8*1024*1024);
+  const first=await f.request('/api/files/uploads/'+u.id+'?offset=0',{method:'PUT',cookie,raw:true,body:content.subarray(0,u.chunkBytes)});assert.equal(first.status,200);assert.equal(first.json.received,u.chunkBytes);
+  const resumed=await f.request('/api/files/uploads/'+u.id+'/resume',{method:'POST',cookie,body:{resumeSecret:u.resumeSecret},headers:cloudHeaders});assert.equal(resumed.status,200);assert.equal(resumed.json.received,u.chunkBytes);assert.equal(resumed.json.chunkBytes,1024*1024);
+  const oversized=await f.request('/api/files/uploads/'+u.id+'?offset='+u.chunkBytes,{method:'PUT',cookie,raw:true,headers:cloudHeaders,body:content.subarray(u.chunkBytes)});assert.equal(oversized.status,413);
+  for(let offset=u.chunkBytes;offset<content.length;offset+=resumed.json.chunkBytes){const r=await f.request('/api/files/uploads/'+u.id+'?offset='+offset,{method:'PUT',cookie,raw:true,headers:cloudHeaders,body:content.subarray(offset,offset+resumed.json.chunkBytes)});assert.equal(r.status,200);}
+  const downloaded=await f.request('/api/files/download?name=large-local.bin',{cookie});assert.deepEqual(downloaded.bytes,content);
+});
 test('remembered login survives a host restart, stores only a token hash, and logout revokes it',async t=>{
   const f=await fixture(t),cookie=await f.login(true),stored=await fs.readFile(path.join(f.root,'sessions.json'),'utf8');
   assert.doesNotMatch(stored,/serame/);assert.ok(!stored.includes(cookie.split('=')[1]));

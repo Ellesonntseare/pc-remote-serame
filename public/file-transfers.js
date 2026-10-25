@@ -68,7 +68,7 @@
   const TRANSFER_KEY='pcr_pending_uploads_v1',fileCache=new Map();let pending=[];
   function loadPending(){try{const saved=JSON.parse(localStorage.getItem(TRANSFER_KEY)||'[]');if(Array.isArray(saved))pending=saved.filter(u=>u&&/^[a-f0-9]{32}$/.test(u.id)&&/^[a-f0-9]{64}$/.test(u.resumeSecret)&&typeof u.name==='string'&&u.name.length<=180&&(!u.relativePath||typeof u.relativePath==='string'&&u.relativePath.length<=800)&&Number.isSafeInteger(u.size)&&u.size>=0&&Number.isFinite(u.modified)&&Number.isFinite(u.expires)&&u.expires>Date.now()&&Number.isSafeInteger(u.received)&&u.received>=0&&u.received<=u.size&&typeof u.fingerprint==='string'&&u.fingerprint.length<=100).slice(0,8);}catch{}}
   const recovery=document.createElement('section');recovery.className='filesRecovery';recovery.innerHTML='<h3>Interrupted transfers</h3><p>Resume from the last saved chunk. After reopening this page, choose the original file to continue. Kept for 7 days.</p><div id="filesPending"></div><input type="file" id="filesResumeInput" hidden>';el('filesDrop').after(recovery);let reselectId=null;
-  function savePending(){if(window.PCRAuth?.signedIn&&window.PCRAuth.role==='owner')try{localStorage.setItem(TRANSFER_KEY,JSON.stringify(pending));}catch{status('Device storage is full. Keep this page open to resume this transfer.',true);}renderPending();}
+  function savePending(redraw=true){if(window.PCRAuth?.signedIn&&window.PCRAuth.role==='owner')try{localStorage.setItem(TRANSFER_KEY,JSON.stringify(pending));}catch{status('Device storage is full. Keep this page open to resume this transfer.',true);}if(redraw)renderPending();}
   function forgetPending(id){pending=pending.filter(u=>u.id!==id);fileCache.delete(id);savePending();}
   function renderPending(){
     recovery.hidden=!pending.length;const list=el('filesPending');list.replaceChildren();
@@ -159,7 +159,7 @@
         }
         if(job.epoch!==authEpoch)throw Error('Account changed. Transfer stopped.');fileCache.set(upload.id,file);job.id=upload.id;el('filesProgressBar').value=file.size?100*upload.received/file.size:100;el('filesProgressLabel').textContent=size(upload.received)+' / '+size(file.size);
         let response=upload,offset=upload.received;
-        while(offset<file.size&&!job.cancelled&&!job.paused){response=await chunk(upload,file,offset,Math.min(file.size,offset+upload.chunkBytes),job);if(job.epoch!==authEpoch)throw Error('Account changed. Transfer stopped.');offset=response.received;saved.received=offset;savePending();}
+        while(offset<file.size&&!job.cancelled&&!job.paused){response=await chunk(upload,file,offset,Math.min(file.size,offset+upload.chunkBytes),job);if(job.epoch!==authEpoch)throw Error('Account changed. Transfer stopped.');offset=response.received;saved.received=offset;savePending(false);}
         if(job.cancelled)throw Error('Upload cancelled.');if(job.paused)throw Error('Upload paused. Use Resume / Retry to continue.');if(!response.complete)throw Error('The PC did not finish this file. Use Resume / Retry to check it.');forgetPending(upload.id);job.id=null;completed++;publishTransfer(job.index,{percent:100,state:'complete'},true);if(row){row.dataset.state='complete';row.querySelector('small').textContent='Sent';}resuming=null;
       }
       status(completed+' '+(completed===1?'file sent':'files sent')+' to your PC.');

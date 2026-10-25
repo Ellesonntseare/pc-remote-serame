@@ -5,6 +5,9 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.Manifest
 import android.content.Intent
+import android.content.ClipboardManager
+import android.text.InputType
+import android.view.inputmethod.EditorInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.projection.MediaProjectionManager
@@ -67,6 +70,10 @@ class MainActivity : Activity() {
     private var screenshotBytes: ByteArray? = null
     private var fullscreenView: View? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+    private var connectionGeneration = 0
+    private var localMedia:LocalMediaCapture?=null
+    private var pendingLocalMedia:JSONObject?=null
+    private var localMediaId=""
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,9 +84,27 @@ class MainActivity : Activity() {
         error = findViewById(R.id.error)
         address = findViewById(R.id.ipAddress)
         portField = findViewById(R.id.port)
+        // An IP is text, not a decimal number. Numeric decimal key listeners
+        // silently reject the second and third dots on several Android IMEs.
+        address.inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         val prefs = getSharedPreferences("pc_remote_android", MODE_PRIVATE)
         address.setText(prefs.getString("ip", ""))
         portField.setText(prefs.getInt("port", 7666).toString())
+        findViewById<Button>(R.id.addressDot).setOnClickListener {
+            address.requestFocus();val text=address.text;val start=address.selectionStart.coerceAtLeast(0);val end=address.selectionEnd.coerceAtLeast(start);text.replace(start,end,".");address.setSelection((start+1).coerceAtMost(text.length))
+        }
+        findViewById<Button>(R.id.addressPaste).setOnClickListener {
+            val clipboard=getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            val text=clipboard.primaryClip?.takeIf{it.itemCount>0}?.getItemAt(0)?.coerceToText(this)?.toString()?.trim().orEmpty()
+            if(text.isNotBlank()){address.setText(text.take(160));address.setSelection(address.text.length);address.requestFocus()}else error.text="Copy your PC's IP address first."
+        }
+        findViewById<Button>(R.id.modeLocal).setOnClickListener{selectConnectionMode(false);address.requestFocus();(getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(address,InputMethodManager.SHOW_IMPLICIT)}
+        findViewById<Button>(R.id.modeWebsite).setOnClickListener{selectConnectionMode(true)}
+        findViewById<Button>(R.id.portToggle).setOnClickListener{val panel=findViewById<View>(R.id.portOptions);panel.visibility=if(panel.visibility==View.VISIBLE)View.GONE else View.VISIBLE}
+        selectConnectionMode(prefs.getBoolean("websiteMode",false))
+        findViewById<Button>(R.id.portToggle).text="Port "+portField.text+" · Change"
+        val connectEditor=TextView.OnEditorActionListener{_,action,event->if(action==EditorInfo.IME_ACTION_GO||event?.keyCode==KeyEvent.KEYCODE_ENTER&&event.action==KeyEvent.ACTION_DOWN){findViewById<Button>(R.id.connect).performClick();true}else false}
+        address.setOnEditorActionListener(connectEditor);portField.setOnEditorActionListener(connectEditor)
         val wakeMac=findViewById<EditText>(R.id.wakeMac);wakeMac.setText(prefs.getString("wakeMac",""))
         findViewById<Button>(R.id.wakeOptions).setOnClickListener { button ->
             val options=findViewById<View>(R.id.wakeOptionsPanel);val show=options.visibility!=View.VISIBLE;options.visibility=if(show)View.VISIBLE else View.GONE;(button as Button).text=if(show)"Wake-on-LAN  −" else "Wake-on-LAN  +"
@@ -89,15 +114,7 @@ class MainActivity : Activity() {
             Thread{val message=try{WakeOnLan.send(mac);prefs.edit().putString("wakeMac",mac).apply();"Wake signal sent. Wait for the PC, then connect."}catch(e:Exception){e.message?:"Could not send the wake signal."};runOnUiThread{error.text=message;button.isEnabled=true}}.start()
         }
         findViewById<Button>(R.id.connect).setOnClickListener {
-            val target=TrustedOrigin.localTarget(address.text.toString(),portField.text.toString().trim().toIntOrNull()?:7666)
-            if (target==null) {
-                error.text = "Use your PC's Wi-Fi IP, for example 192.168.8.100, or its full local address such as http://192.168.8.100:7666."
-                return@setOnClickListener
-            }
-            val (ip,port)=target;address.setText(ip);portField.setText(port.toString())
-            prefs.edit().putString("ip", ip).putInt("port", port).apply()
-            error.text = ""
-            connectTo("http://$ip:$port")
+            startLocalConnection(address.text.toString(),portField.text.toString().trim().toIntOrNull()?:7666)
         }
         findViewById<Button>(R.id.connectWebsite).setOnClickListener { connectTo("https://remote.teamtrader.co.za") }
         ScreenShareService.events = { value ->
@@ -173,8 +190,11 @@ class MainActivity : Activity() {
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 volumeControlEnabled=false;stopAirMouse()
                 microphoneRequest?.deny();microphoneRequest=null;filesResult?.onReceiveValue(null);filesResult=null
-                pendingProjection = false; ScreenShareService.stopSharing(); shareReply = null
+                stopLocalMedia();pendingProjection = false; ScreenShareService.stopSharing(); shareReply = null
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
+            }
+            override fun onPageFinished(view: WebView, url: String) {
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localMedia",true).put("version","1.7");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null)}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow PC Remote through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -186,7 +206,52 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun selectConnectionMode(website:Boolean){
+        connectionGeneration++
+        findViewById<View>(R.id.localConnectionPanel).visibility=if(website)View.GONE else View.VISIBLE
+        findViewById<View>(R.id.websiteConnectionPanel).visibility=if(website)View.VISIBLE else View.GONE
+        for((id,selected)in listOf(R.id.modeLocal to !website,R.id.modeWebsite to website)){
+            val button=findViewById<Button>(id);button.setBackgroundResource(if(selected)R.drawable.connect_background else R.drawable.field_background);button.setTextColor(android.graphics.Color.parseColor(if(selected)"#001522" else "#A5D5EA"));button.isSelected=selected
+        }
+        findViewById<Button>(R.id.connect).isEnabled=true;error.text=""
+        getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putBoolean("websiteMode",website).apply()
+        if(website)(getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(address.windowToken,0)
+    }
+
+    private fun localConnectionMessage(message:String,fromWeb:Boolean){
+        if(fromWeb&&isAllowed(web.url?:"")){val value=JSONObject().put("state","error").put("message",message);web.evaluateJavascript("window.PCRLocalConnection?.nativeStatus($value)",null)}else error.text=message
+    }
+
+    private fun startLocalConnection(value:String,defaultPort:Int,fromWeb:Boolean=false){
+        val target=TrustedOrigin.localTarget(value,defaultPort)
+        if(target==null){localConnectionMessage("Enter four numbers separated by three dots, such as 192.168.8.100. The port must be between 1 and 65535.",fromWeb);return}
+        val(ip,port)=target;val generation=++connectionGeneration
+        findViewById<Button>(R.id.connect).isEnabled=false
+        if(!fromWeb)error.text="Checking $ip on your local network…"
+        Thread{
+            var failure:String?=null;var connection:HttpURLConnection?=null
+            try{
+                val probe=java.net.URL("http://$ip:$port/api/ping").openConnection() as HttpURLConnection;connection=probe
+                probe.connectTimeout=1800;probe.readTimeout=2200;probe.instanceFollowRedirects=false;probe.setRequestProperty("X-PCR","1");probe.setRequestProperty("Accept","application/json")
+                val code=probe.responseCode
+                if(code!=200)throw IllegalStateException(if(code==403)"The PC rejected local access. Restart the updated Windows host with local access enabled." else "This address did not respond as PC Remote (HTTP $code). Check the IP and port.")
+                val output=java.io.ByteArrayOutputStream();probe.inputStream.use{input->val buffer=ByteArray(2048);while(true){val count=input.read(buffer);if(count<0)break;if(output.size()+count>16384)throw IllegalStateException("This address is not a PC Remote host.");output.write(buffer,0,count)}}
+                val result=JSONObject(output.toString("UTF-8"));if(!result.optBoolean("ok")||!result.has("requirePassword")&&!result.has("requirePin"))throw IllegalStateException("This address is not a PC Remote host.")
+            }catch(e:Exception){failure=if(e is IllegalStateException)e.message else "Can't reach $ip:$port. Use the same Wi-Fi, keep the PC host running, and allow Node/PC Remote on your Windows Private network."}finally{connection?.disconnect()}
+            runOnUiThread{
+                if(isFinishing||isDestroyed||generation!=connectionGeneration)return@runOnUiThread
+                findViewById<Button>(R.id.connect).isEnabled=true
+                val message=failure;if(message!=null){localConnectionMessage(message,fromWeb);return@runOnUiThread}
+                address.setText(ip);portField.setText(port.toString());findViewById<Button>(R.id.portToggle).text="Port $port · Change"
+                getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("ip",ip).putInt("port",port).putBoolean("websiteMode",false).apply()
+                (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(address.windowToken,0)
+                connectTo("http://$ip:$port")
+            }
+        }.start()
+    }
+
     private fun connectTo(origin: String) {
+        connectionGeneration++
         selectedOrigin = TrustedOrigin.normalize(origin) ?: return
         if (bridgeInstalled) WebViewCompat.removeWebMessageListener(web, "PCRAndroid")
         bridgeInstalled = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
@@ -195,6 +260,11 @@ class MainActivity : Activity() {
             try {
                 val value = JSONObject(message.data ?: "{}")
                 when (value.optString("type")) {
+                    "local-media-start" -> requestLocalMedia(value)
+                    "local-media-stop" -> if(value.optString("id")==localMediaId)stopLocalMedia()
+                    "local-media-credit" -> if(value.optString("id")==localMediaId)localMedia?.credit(value.optString("kind"))
+                    "app-settings" -> startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:$packageName")))
+                    "connect-local" -> startLocalConnection(value.optString("address"),value.optInt("port",7666),true)
                     "haptic" -> { val now=SystemClock.elapsedRealtime();if(now-lastHaptic>=35){lastHaptic=now;web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)} }
                     "volume-keys" -> { volumeControlEnabled=value.optBoolean("enabled",false) }
                     "air-mouse" -> { if(value.optBoolean("enabled",false))startAirMouse()else stopAirMouse() }
@@ -264,6 +334,7 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 501) requestProjection()
+        if(requestCode==506){val value=pendingLocalMedia;pendingLocalMedia=null;if(value!=null&&isAllowed(web.url?:"")){if(localMediaPermissions(value).all{checkSelfPermission(it)==PackageManager.PERMISSION_GRANTED})beginLocalMedia(value)else mediaEvent(JSONObject().put("kind","error").put("id",value.optString("id")).put("message","Camera or microphone permission was declined. Open Android app permissions to allow access."))}}
         if(requestCode==503){val request=microphoneRequest;microphoneRequest=null;if(request!=null){val required=mediaPermissions(request);if(required!=null&&required.all{checkSelfPermission(it)==PackageManager.PERMISSION_GRANTED}&&isAllowed(web.url?:""))request.grant(request.resources) else request.deny()}}
     }
     @Deprecated("MediaProjection consent result")
@@ -331,6 +402,8 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        connectionGeneration++
+        stopLocalMedia()
         hideFullscreen()
         stopAirMouse();volumeControlEnabled=false
         microphoneRequest?.deny();microphoneRequest=null;filesResult?.onReceiveValue(null);filesResult=null
@@ -347,6 +420,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        stopLocalMedia()
         stopAirMouse()
         if(isAllowed(web.url?:""))web.evaluateJavascript("window.PCRCamera?.stop()",null)
         // Only the in-app thumbnail pauses. The foreground service owns both
@@ -355,6 +429,21 @@ class MainActivity : Activity() {
         super.onStop()
     }
 
+    private fun mediaEvent(value:JSONObject){runOnUiThread{if(!isFinishing&&!isDestroyed&&isAllowed(web.url?:""))web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:native-media',{detail:$value}))",null)}}
+    private fun localMediaPermissions(value:JSONObject)=listOfNotNull(if(value.optBoolean("video"))Manifest.permission.CAMERA else null,if(value.optBoolean("audio"))Manifest.permission.RECORD_AUDIO else null)
+    private fun requestLocalMedia(value:JSONObject){
+        if(!isAllowed(web.url?:"")||value.optString("id").length !in 1..80)return
+        stopLocalMedia();localMediaId=value.optString("id");val required=localMediaPermissions(value);if(required.isEmpty())return
+        val missing=required.filter{checkSelfPermission(it)!=PackageManager.PERMISSION_GRANTED}
+        if(missing.isEmpty())beginLocalMedia(value)else{pendingLocalMedia=value;requestPermissions(missing.toTypedArray(),506)}
+    }
+    @Suppress("DEPRECATION")
+    private fun beginLocalMedia(value:JSONObject){
+        val id=value.optString("id");localMediaId=id
+        val degrees=when(windowManager.defaultDisplay.rotation){android.view.Surface.ROTATION_90->90;android.view.Surface.ROTATION_180->180;android.view.Surface.ROTATION_270->270;else->0}
+        localMedia=LocalMediaCapture{event->mediaEvent(event.put("id",id))}.also{it.start(value.optBoolean("video"),value.optBoolean("audio"),value.optBoolean("front"),degrees)}
+    }
+    private fun stopLocalMedia(){pendingLocalMedia=null;localMedia?.close();localMedia=null;localMediaId=""}
     private fun showControlRequest() {
         val id=ScreenShareService.pendingControl()?:return
         if(!hasWindowFocus() || isFinishing || controlDialog?.isShowing==true)return
