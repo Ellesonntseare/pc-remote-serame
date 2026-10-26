@@ -83,6 +83,7 @@ class MainActivity : Activity() {
         connectScreen = findViewById(R.id.connectScreen)
         web = findViewById(R.id.web)
         error = findViewById(R.id.error)
+        findViewById<TextView>(R.id.appVersion).text="PC Remote "+packageManager.getPackageInfo(packageName,0).versionName.orEmpty()
         address = findViewById(R.id.ipAddress)
         portField = findViewById(R.id.port)
         // An IP is text, not a decimal number. Numeric decimal key listeners
