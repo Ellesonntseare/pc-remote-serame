@@ -40,6 +40,9 @@
 <link rel="stylesheet" href="/webrtc-video.css">
 <link rel="stylesheet" href="/guest-screen.css">
 <script src="/file-transfers.js" defer></script>
+<script src="/file-manager.js" defer></script>
+<script src="/native-transfers.js" defer></script>
+<link rel="stylesheet" href="/file-manager.css">
 <script src="/image-tools.js" defer></script>
 <link rel="stylesheet" href="/file-transfers.css">
 <link rel="stylesheet" href="/desktop-controls.css">
@@ -51,6 +54,8 @@
 <script src="/media-recording.js" defer></script>
 <script src="/workspace-ui.js" defer></script>
 <script src="/workspace-settings.js" defer></script>
+<script src="/appearance.js" defer></script>
+<script src="/remote-video.js" defer></script>
 <script src="/device-links.js" defer></script>
 <script src="/device-input.js" defer></script>
 <script src="/typing-controls.js" defer></script>
@@ -59,6 +64,7 @@
 <script src="/google-signin.js" defer></script>
 <script src="/local-connection.js" defer></script>
 <script src="/page-navigation.js" defer></script>
+<script src="/accessibility.js" defer></script>
 <title>PC Remote</title>
 <style>
 html.appBooting .app{visibility:hidden}html.appBooting #pairGate{visibility:hidden}#appBoot{position:fixed;inset:0;z-index:5;display:grid;place-content:center;gap:16px;background:#101820;color:#9db6c4;text-align:center;font:13px system-ui}#appBoot span{width:28px;height:28px;margin:auto;border:2px solid #8bbaa52a;border-top-color:#8ddcc6;border-radius:50%;animation:bootSpin .8s linear infinite}@keyframes bootSpin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){#appBoot span{animation:none}}
@@ -384,7 +390,7 @@ async function rsRun(){
   screenRenderer.reset(ab);
   try{
     const autoWidth=rs.qi===4&&window.matchMedia('(any-pointer: coarse)').matches?Math.max(1280,Math.min(1920,Math.round(innerWidth*Math.min(devicePixelRatio||1,2)))):null;
-    const r=await fetch('/api/screen?p='+QN[rs.qi]+'&regions=1'+(autoWidth?'&maxWidth='+autoWidth:''),{headers:{'X-PCR':'1'},signal:ab.signal});
+    const r=await fetch('/api/screen?p='+QN[rs.qi]+'&regions=1'+(window.PCRRemoteVideo?.active?'&controlOnly=1':'')+(autoWidth?'&maxWidth='+autoWidth:''),{headers:{'X-PCR':'1'},signal:ab.signal});
     if(rs.ab!==ab||!rs.on){await r.body?.cancel();return;}
     if(!r.ok){const d=await r.json().catch(()=>({}));msg(d.error||'Screen unavailable');$('rsst').textContent=d.error||'Screen unavailable';rsPauseLive('Screen unavailable. Reopen the screen, select a PC field, then tap New field.');return rsClose();}
     const rd=r.body.getReader(),packets=new window.PCRPacketReader();let frameId=null;

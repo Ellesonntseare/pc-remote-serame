@@ -1,0 +1,51 @@
+name: Build Windows host installer
+on:
+  push:
+    branches: [main]
+    paths: ['HostTray/**', 'installer/**', '.github/workflows/windows-installer.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish tray and desktop agent
+        shell: pwsh
+        run: |
+          dotnet publish HostTray/HostTray.csproj -c Release -r win-x64 --self-contained true -o dist/host-package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish RemoteAgent/RemoteAgent.csproj -c Release -r win-x64 --self-contained true -o dist/host-package/host/RemoteAgent/bin
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Bundle host and Node runtime
+        shell: pwsh
+        run: |
+          npm ci --omit=dev --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $bundle = Join-Path $PWD 'dist/host-package/host'
+          Get-ChildItem -File -Path '*.js','*.html','package.json','package-lock.json','config.example.json','LICENSE*','README.md' -ErrorAction SilentlyContinue | Copy-Item -Destination $bundle
+          Copy-Item -LiteralPath public -Destination $bundle -Recurse
+          Copy-Item -LiteralPath node_modules -Destination $bundle -Recurse
+          New-Item -ItemType Directory -Path "$bundle/runtime" -Force | Out-Null
+          Copy-Item -LiteralPath (Get-Command node).Source -Destination "$bundle/runtime/node.exe"
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe"
+          if (!(Test-Path -LiteralPath $compiler)) { choco install innosetup --yes --no-progress; $compiler = "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" }
+          & $compiler installer/PCRemote.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-FileHash dist/PC-Remote-Host-Setup-1.9.exe -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PC-Remote-Windows-Host-1.9
+          path: dist/PC-Remote-Host-Setup-1.9.exe
+          if-no-files-found: error

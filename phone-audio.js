@@ -1,6 +1,6 @@
 'use strict';
 const {WebSocketServer,WebSocket}=require('ws');
-function validPhoneFormat(value){return !!value&&value.type==='format'&&value.encoding==='s16le'&&['microphone','playback'].includes(value.source)&&Number.isInteger(value.sampleRate)&&value.sampleRate>=8000&&value.sampleRate<=48000&&[1,2].includes(value.channels);}
+function validPhoneFormat(value){return !!value&&value.type==='format'&&['s16le','opus'].includes(value.encoding)&&(value.encoding!=='opus'||value.sampleRate===48000)&&['microphone','playback'].includes(value.source)&&Number.isInteger(value.sampleRate)&&value.sampleRate>=8000&&value.sampleRate<=48000&&[1,2].includes(value.channels);}
 function createPhoneAudio({auth,sessions,sessionExpiry,openOutput}){
   const wss=new WebSocketServer({noServer:true,maxPayload:65536,perMessageDeflate:false});let active=null;
   function upgrade(req,socket,head,token){
@@ -18,13 +18,13 @@ function createPhoneAudio({auth,sessions,sessionExpiry,openOutput}){
       ws.on('message',(data,binary)=>{
         if(closed)return;if(auth(req)!==token||sessions.get(token)?.role!=='owner'){fail('PC audio access ended.');return;}
         const now=Date.now();if(now-rateAt>1000){rateAt=now;bytes=0;messages=0;}if(++messages>140){fail('Audio arrived too quickly. Reconnect the stream.');return;}
-        if(binary){if(!format||!ready||data.length<1||data.length%(format.channels*2)!==0){fail('Invalid audio samples.');return;}bytes+=data.length;if(bytes>format.sampleRate*format.channels*4){fail('Audio data exceeded the stream limit.');return;}try{entry.output.sendPcm(data);}catch{fail('The PC output disconnected.');}return;}
+        if(binary){if(!format||!ready||data.length<1||(format.encoding==='opus'?data.length>4096:data.length%(format.channels*2)!==0)){fail('Invalid audio samples.');return;}bytes+=data.length;if(bytes>format.sampleRate*format.channels*4){fail('Audio data exceeded the stream limit.');return;}try{if(format.encoding==='opus')entry.output.sendOpus(data);else entry.output.sendPcm(data);}catch{fail('The PC output disconnected.');}return;}
         let value;try{value=JSON.parse(data.toString());}catch{fail('Invalid audio message.');return;}
         if(value?.type==='stop'){stop();ws.close(1000,'Audio stopped');return;}
         if(value?.type==='volume'&&Number.isFinite(value.value)&&value.value>=0&&value.value<=1){entry.output?.setVolume(value.value);return;}
         if(format||!validPhoneFormat(value)){fail('Unsupported phone audio format.');return;}
         format=value;clearTimeout(handshake);
-        try{entry.output=openOutput({sampleRate:value.sampleRate,channels:value.channels,volume:.6,onReady:()=>{if(!closed){ready=true;send({type:'started',source:value.source});}},onError:()=>fail('PC speakers or headphones could not start. Check the Windows output device.'),onClose:()=>{if(!closed)fail('PC audio output stopped.');}});}catch{fail('PC audio output is unavailable. Restart the updated Windows host.');}
+        try{entry.output=openOutput({sampleRate:value.sampleRate,channels:value.channels,encoding:value.encoding,volume:.6,onReady:()=>{if(!closed){ready=true;send({type:'started',source:value.source,encoding:value.encoding});}},onError:()=>fail('PC speakers or headphones could not start. Check the Windows output device.'),onClose:()=>{if(!closed)fail('PC audio output stopped.');}});}catch{fail('PC audio output is unavailable. Restart the updated Windows host.');}
       });
     });
   }

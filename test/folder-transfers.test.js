@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),http=require('node:http');
 const {createFileTransfers,relativePath,crc32}=require('../file-transfers');
-function request(port,route,{method='GET',body,raw=false}={}){const bytes=body===undefined?null:Buffer.from(raw?body:JSON.stringify(body));return new Promise((resolve,reject)=>{const req=http.request({host:'127.0.0.1',port,path:route,method,headers:{'X-PCR':'1',...bytes&&{'Content-Length':bytes.length}}},res=>{const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('end',()=>{const data=Buffer.concat(chunks);let json;try{json=JSON.parse(data);}catch{}resolve({status:res.statusCode,headers:res.headers,data,json});});});req.on('error',reject);req.end(bytes);});}
+function request(port,route,{method='GET',body,raw=false,headers={}}={}){const bytes=body===undefined?null:Buffer.from(raw?body:JSON.stringify(body));return new Promise((resolve,reject)=>{const req=http.request({host:'127.0.0.1',port,path:route,method,headers:{'X-PCR':'1',...headers,...bytes&&{'Content-Length':bytes.length}}},res=>{const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('end',()=>{const data=Buffer.concat(chunks);let json;try{json=JSON.parse(data);}catch{}resolve({status:res.statusCode,headers:res.headers,data,json});});});req.on('error',reject);req.end(bytes);});}
 async function fixture(t){const root=await fs.mkdtemp(path.join(__dirname,'.transfer-check-')),directory=path.join(root,'files');let transfers,server,port;
   async function start(){transfers=createFileTransfers({directory,maxBytes:8*1024*1024});server=http.createServer(async(req,res)=>{const respond=(response,status,body)=>{response.writeHead(status,{'Content-Type':'application/json'});response.end(JSON.stringify(body));};await transfers.handle(req,res,{pathname:new URL(req.url,'http://localhost').pathname,token:'owner',accountContext:'account',readJson:async request=>{let text='';for await(const chunk of request)text+=chunk;return JSON.parse(text);},respond});});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));port=server.address().port;}
   async function stop(){await transfers.close();await new Promise(resolve=>server.close(resolve));}await start();t.after(async()=>{await stop();assert.equal(path.dirname(root),__dirname);assert.ok(path.basename(root).startsWith('.transfer-check-'));await fs.rm(root,{recursive:true,force:true});});
@@ -25,4 +25,21 @@ test('folder upload and downloads never follow a directory junction outside the 
   try{await fs.symlink(outside,path.join(f.directory,'Linked'),process.platform==='win32'?'junction':'dir');}catch(error){if(['EPERM','EACCES'].includes(error.code)){t.skip('Directory link permission is unavailable');return;}throw error;}
   for(const route of ['/api/files/download?name=Linked/private.txt','/api/files/folder?name=Linked'])assert.equal((await f.request(route)).status,400);
   const result=await f.request('/api/files/uploads',{method:'POST',body:{name:'new.txt',relativePath:'Linked/new.txt',size:0}});assert.equal(result.status,400);assert.deepEqual(await fs.readdir(outside),['private.txt']);assert.deepEqual((await f.request('/api/files')).json.files,[]);
+});
+
+test('file manager browses immediate children, creates empty folders and rejects paths outside the transfer root',async t=>{
+ const f=await fixture(t);await upload(f,'Photos/Trip/a.txt','hello');
+ assert.equal((await f.request('/api/files/mkdir',{method:'POST',body:{path:'Photos/Empty'}})).status,200);
+ const top=await f.request('/api/files/browse');assert.deepEqual(top.json.entries.map(e=>[e.label,e.directory]),[['Photos',true]]);
+ const photos=await f.request('/api/files/browse?path=Photos');assert.deepEqual(photos.json.entries.map(e=>e.label),['Empty','Trip']);
+ const nested=await f.request('/api/files/browse?path=Photos%2FTrip');assert.equal(nested.json.entries[0].name,'Photos/Trip/a.txt');
+ for(const name of ['../outside','Photos/../../outside','C:/outside','Photos/.private','Photos/CON'])assert.equal((await f.request('/api/files/mkdir',{method:'POST',body:{path:name}})).status,400);
+ assert.equal((await f.request('/api/files/browse?path=..')).status,400);
+ assert.equal((await f.request('/api/files/browse?path=Photos%2FTrip%2Fa.txt')).status,400);
+});
+test('download resumes exact bytes only while its ETag still matches',async t=>{
+ const f=await fixture(t);await upload(f,'sample.txt','abcdefgh');
+ const original=await f.request('/api/files/download?name=sample.txt');const etag=original.headers.etag;assert.ok(etag);
+ const resumed=await f.request('/api/files/download?name=sample.txt',{headers:{Range:'bytes=3-','If-Range':etag}});assert.equal(resumed.status,206);assert.equal(resumed.data.toString(),'defgh');
+ const changed=await f.request('/api/files/download?name=sample.txt',{headers:{Range:'bytes=3-','If-Range':'"old-file"'}});assert.equal(changed.status,200);assert.equal(changed.data.toString(),'abcdefgh');
 });

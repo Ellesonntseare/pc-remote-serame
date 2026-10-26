@@ -217,5 +217,6 @@
     for(const page of stack.slice().reverse())closePage(page.node);
     saved.clear();
   });
-  window.PCRPages={back,get current(){reconcile();return stack.at(-1)?.node.id||'home';}};
+  function home(){changing=true;try{for(let i=0;i<30&&stack.length;i++)closePage(stack.at(-1).node);}finally{changing=false;render();syncHistory();}}
+  window.PCRPages={back,home,get current(){reconcile();return stack.at(-1)?.node.id||'home';}};
 })();

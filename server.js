@@ -56,6 +56,8 @@ const PWA_ASSETS = new Map([
   ['/remote-cursor.js', ['remote-cursor.js', 'text/javascript; charset=utf-8']],
   ['/file-transfers.js', ['file-transfers.js', 'text/javascript; charset=utf-8']],
   ['/file-transfers.css', ['file-transfers.css', 'text/css; charset=utf-8']],
+  ...['file-manager','native-transfers','appearance','remote-video','accessibility'].map(name=>['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']]),
+  ['/file-manager.css',['file-manager.css','text/css; charset=utf-8']],
   ['/brand.svg', ['brand.svg', 'image/svg+xml']],
   ['/app-refinements.css', ['app-refinements.css', 'text/css; charset=utf-8']],
   ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','guest-screen.js','workspace-ui.js','page-navigation.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
@@ -225,7 +227,7 @@ function createApp(options={}) {
   function viewerMetadata(viewer){return videoPacket(1,{...JSON.parse(agentMeta.subarray(5).toString('utf8')),streamId:viewer.streamId});}
   function requestVideoFrame(){
     if(!captureDemand||captureRequested||!agent?.stdin.writable)return;
-    if(!Array.from(viewers).some(v=>v.res.writable&&!v.busy&&v.inFlight.size<2))return;
+    if(!Array.from(viewers).some(v=>!v.controlOnly&&v.res.writable&&!v.busy&&v.inFlight.size<2))return;
     if(regionMode&&!refreshPending&&Array.from(viewers).some(v=>v.regions&&v.regionBase!==regionBase&&v.res.writable&&!v.busy&&v.inFlight.size<2)){
       refreshPending=true;agent.stdin.write('refresh\n');
     }
@@ -238,7 +240,7 @@ function createApp(options={}) {
       for(const v of viewers)v.regionBase=null;
       if(agent?.stdin.writable)agent.stdin.write('regions '+(regionMode?1:0)+'\n');
     }
-    const next=viewers.size>0&&Array.from(viewers).every(v=>v.feedbackSocket?.readyState===WebSocket.OPEN);
+    const next=viewers.size>0&&Array.from(viewers).every(v=>v.controlOnly||v.feedbackSocket?.readyState===WebSocket.OPEN);
     if(next!==captureDemand){captureDemand=next;captureRequested=false;if(agent?.stdin.writable)agent.stdin.write('flow '+(next?1:0)+'\n');}
     applySmartQuality();requestVideoFrame();
   }
@@ -346,7 +348,7 @@ function createApp(options={}) {
           if(keyframe){regionBase=frameBase;refreshPending=false;}
         }
         const id=++videoSequence,marker=videoPacket(3,{id});
-        for(const v of viewers)if(v.res.writable&&!v.busy){
+        for(const v of viewers)if(!v.controlOnly&&v.res.writable&&!v.busy){
           if(v.feedbackSocket&&v.inFlight.size>=2)continue;
           if(pkt[0]===5){
             if(!v.regions||(!keyframe&&v.regionBase!==frameBase))continue;
@@ -485,6 +487,7 @@ function createApp(options={}) {
         const token=auth(req),paired=!!token&&sessions.get(token).role!=='account';
         return respond(res,200,{ok:true,paired,requirePin,requirePassword,guestEnabled:requirePassword,...(paired?{name:sessions.get(token).role==='guest'?'Shared PC':hostname,...accessInfo(token),screen:enabled&&process.platform==='win32'&&permits(token,'screen')}:token?accessInfo(token):{})});
       }
+      if(req.method==='GET'&&pathname==='/api/app-version')return respond(res,200,{version:'1.9.0'});
       if(pathname.startsWith('/api/auth/google/')){
         const url=new URL(req.url,'http://localhost'),action=pathname.slice('/api/auth/google/'.length),oauthCookie='pc_remote_google';
         const redirect=(location,headers={})=>{res.writeHead(303,{'Location':location,'Cache-Control':'no-store','Referrer-Policy':'no-referrer',...headers});res.end();};
@@ -667,7 +670,7 @@ function createApp(options={}) {
         execFile('explorer.exe',[fileTransfers.root],{windowsHide:false},()=>{});return respond(res,200,{ok:true});
       }
       if(pathname==='/api/files'||pathname.startsWith('/api/files/')){
-        const permission=pathname.startsWith('/api/files/uploads')?'upload':'download';
+        const permission=pathname.startsWith('/api/files/uploads')||pathname==='/api/files/mkdir'?'upload':'download';
         if(!permits(token,permission))return respond(res,403,{error:(permission==='upload'?'Sending files':'PC file access')+' was not approved.'});
       }
       if(await fileTransfers.handle(req,res,{pathname,token,chunkBytes:viaTunnel?1024*1024:options.localChunkBytes||8*1024*1024,accountContext:sessions.get(token)?.role==='guest'?undefined:accountContext,readJson:jsonBody,respond:(response,status,data,headers)=>respond(response,status,sessions.get(token)?.role==='guest'&&data.folder?{...data,folder:'Shared transfer folder'}:data,headers)}))return;
@@ -691,7 +694,7 @@ function createApp(options={}) {
         res.writeHead(200,{'Content-Type':'application/octet-stream','Cache-Control':'no-store, no-transform','X-Accel-Buffering':'no','X-Content-Type-Options':'nosniff'});
         res.socket.setNoDelay(true);
         const regions=new URL(req.url,'http://localhost').searchParams.get('regions')==='1';
-        const v={res,token,regions,maxWidth,regionBase:null,busy:false,streamId:crypto.randomBytes(12).toString('hex'),feedbackSocket:null,inFlight:new Map(),deliveryMs:0};viewers.add(v);res.on('drain',()=>{v.busy=false;requestVideoFrame();});
+        const v={res,token,regions,controlOnly:query.get('controlOnly')==='1',maxWidth,regionBase:null,busy:false,streamId:crypto.randomBytes(12).toString('hex'),feedbackSocket:null,inFlight:new Map(),deliveryMs:0};viewers.add(v);res.on('drain',()=>{v.busy=false;requestVideoFrame();});
         if(regions&&regionMode&&agent?.stdin.writable&&!refreshPending){refreshPending=true;agent.stdin.write('refresh\n');}
         updateVideoDemand();if(agentMeta)res.write(viewerMetadata(v));
         // An already-open stream must not outlive the pairing session.

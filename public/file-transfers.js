@@ -16,7 +16,7 @@
   const notifyRow=document.createElement('label');notifyRow.className='filesNotify';notifyRow.innerHTML='<input type="checkbox" id="filesNotify"><span>Notify me when a transfer finishes</span>';el('filesPane').append(notifyRow);
   const batchList=document.createElement('ol');batchList.id='filesBatchList';batchList.className='filesBatchList';batchList.hidden=true;el('filesProgress').before(batchList);
   const filePaths=new WeakMap();let folders=[];
-  function selectedPath(file,fallback){return fallback||filePaths.get(file)||file.webkitRelativePath||file.name;}
+  function selectedPath(file,fallback){const name=filePaths.get(file)||file.webkitRelativePath||file.name;return fallback||(window.PCRFileManager?.destination?window.PCRFileManager.destination+'/'+name:name);}
   const notificationKey='pcr_transfer_notifications';try{el('filesNotify').checked=localStorage.getItem(notificationKey)==='true'&&globalThis.Notification?.permission==='granted';}catch{}
   el('filesNotify').addEventListener('change',async()=>{
     const input=el('filesNotify');if(input.checked){

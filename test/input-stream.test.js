@@ -170,3 +170,9 @@ test('30-day remembered sessions keep screen and input open without timer overfl
   await pause(60);assert.equal(ws.readyState,WebSocket.OPEN);f.emitRegion(1,true);await until(()=>f.packets().some(p=>p.type===5));
   ws.send(JSON.stringify({id:'remembered',cmds:['click l']}));await until(()=>ws.messages.length===1);assert.equal(ws.messages[0].status,200);
 });
+
+test('video control channel retains input metadata and releases capture demand without forwarding JPEGs',async t=>{
+ const f=await fixture();t.after(()=>f.close());const control=await f.openScreen('/api/screen?regions=1&controlOnly=1');assert.equal(control.metadata.w,1920);
+ await pause(30);assert.ok(f.written.includes('flow 1'));f.emitFrame();await pause(30);assert.equal(f.packets(control).filter(p=>p.type===0||p.type===5).length,0);
+ const {ws}=await f.connect();await pause(20);ws.send(JSON.stringify({type:'bind',streamId:f.streamId}));await pause(20);
+});

@@ -70,14 +70,15 @@ class LocalMediaCapture(private val emit:(JSONObject)->Unit) {
                     val rate=16000;val minimum=AudioRecord.getMinBufferSize(rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT)
                     if(minimum<=0)throw IllegalStateException("Microphone capture is unavailable.")
                     val input=AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION,rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,maxOf(minimum*2,6400));recorder=input
+                    if(!active||version!=generation){input.release();if(recorder===input)recorder=null;return@post}
                     if(input.state!=AudioRecord.STATE_INITIALIZED)throw IllegalStateException("The microphone is unavailable or in use.")
                     input.startRecording()
                     audioThread=Thread{
                         val samples=ShortArray(1600)
-                        while(active&&version==generation){
+                        try{while(active&&version==generation){
                             val count=runCatching{input.read(samples,0,samples.size)}.getOrDefault(-1);if(count<=0)break
                             if(audioCredit){audioCredit=false;val data=ByteBuffer.allocate(count*2).order(ByteOrder.LITTLE_ENDIAN);for(index in 0 until count)data.putShort(samples[index]);emit(message("audio").put("data",Base64.encodeToString(data.array(),Base64.NO_WRAP)).put("rate",rate))}
-                        }
+                        }}finally{runCatching{input.stop()};runCatching{input.release()};if(recorder===input)recorder=null}
                     }.apply{name="PCRemoteMicrophone";start()}
                 }
                 if(active&&version==generation)emit(message("started"))

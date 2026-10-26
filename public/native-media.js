@@ -1,9 +1,16 @@
 (function(){
-  'use strict';let active=null;
+  'use strict';let active=null,generation=0;
   const send=value=>window.PCRAndroid?.postMessage(JSON.stringify(value));
   function available(){return !!window.PCRNativeCapabilities?.localMedia&&!!window.PCRAndroid?.postMessage;}
-  function getUserMedia(options){
-    if(navigator.mediaDevices?.getUserMedia)return navigator.mediaDevices.getUserMedia(options);
+  async function getUserMedia(options){
+    active?.stop();const version=++generation;
+    if(navigator.mediaDevices?.getUserMedia){
+      try{
+        const stream=await navigator.mediaDevices.getUserMedia(options);
+        if(version!==generation){for(const track of stream.getTracks())track.stop();throw Error('Phone capture was stopped.');}
+        const stop=()=>{for(const track of stream.getTracks())track.stop();if(active?.stop===stop)active=null;};active={stop};for(const track of stream.getTracks())track.addEventListener('ended',stop,{once:true});return stream;
+      }catch(error){if(version!==generation||!available()||!['NotReadableError','AbortError'].includes(error.name))throw error;}
+    }
     if(!available())return Promise.reject(Error('Camera and microphone need HTTPS in a browser. Use the updated Android app for local HTTP capture.'));
     active?.stop();const id=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),stream=new MediaStream(),canvas=document.createElement('canvas');canvas.width=640;canvas.height=480;let context=null,destination=null,nextAudio=0,closed=false,settled=false,timeout;
     if(options.video!==false){const picture=canvas.captureStream(12);for(const track of picture.getTracks())stream.addTrack(track);}
@@ -27,5 +34,6 @@
       send({type:'local-media-start',id,video:options.video!==false,audio:options.audio!==false,front:options.video?.facingMode?.ideal==='user'});
     });
   }
-  window.PCRMedia={available,getUserMedia,stop:()=>active?.stop()};window.addEventListener('pagehide',()=>active?.stop());
+  function stop(){generation++;active?.stop();}
+  window.PCRMedia={available,getUserMedia,stop};window.addEventListener('pagehide',stop);
 })();

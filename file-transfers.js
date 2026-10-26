@@ -133,6 +133,27 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
       const url=new URL(req.url,'http://localhost');
       if(req.method!=='GET'&&req.method!=='HEAD'&&req.headers['x-pcr']!=='1')throw problem(403,'Request header missing');
       await ensure();
+      if(req.method==='GET'&&pathname==='/api/files/browse'){
+        const folder=url.searchParams.get('path')||'';if(folder)relativePath(folder);
+        const directory=folder?await safeTarget(folder):root,stat=await fsp.lstat(directory);
+        if(!stat.isDirectory()||stat.isSymbolicLink())throw problem(400,'Choose a real folder.');
+        const entries=[];
+        for(const entry of await fsp.readdir(directory,{withFileTypes:true})){
+          if(entry.name.startsWith('.')||entry.isSymbolicLink())continue;
+          try{filename(entry.name);}catch{continue;}
+          const name=folder?folder+'/'+entry.name:entry.name,item=await fsp.lstat(target(name));
+          if(item.isSymbolicLink()||!item.isFile()&&!item.isDirectory())continue;
+          entries.push({name,label:entry.name,directory:item.isDirectory(),size:item.size,modified:item.mtimeMs,preview:item.isFile()?previewInfo(name):null});
+          if(entries.length>=2000)break;
+        }
+        entries.sort((a,b)=>Number(b.directory)-Number(a.directory)||a.label.localeCompare(b.label));
+        respond(res,200,{ok:true,path:folder,entries,truncated:entries.length>=2000});return true;
+      }
+      if(req.method==='POST'&&pathname==='/api/files/mkdir'){
+        const body=await readJson(req,4096),name=relativePath(body.path),directory=await safeTarget(name,true);
+        try{await fsp.mkdir(directory);}catch(e){if(e.code!=='EEXIST')throw e;const stat=await fsp.lstat(directory);if(!stat.isDirectory()||stat.isSymbolicLink())throw problem(409,'A file already uses that name.');}
+        respond(res,200,{ok:true,path:name});return true;
+      }
       if(req.method==='GET'&&pathname==='/api/files'){
         const {files:list,truncated}=await listFiles(),groups=new Map();
         for(const file of list){const name=file.name.split('/')[0];if(!file.name.includes('/'))continue;const folder=groups.get(name)||{name,size:0,count:0};folder.size+=file.size;folder.count++;groups.set(name,folder);}
@@ -144,7 +165,8 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
         if(!stat.isFile()||stat.isSymbolicLink())throw problem(404,'File not found');
         if(pathname.endsWith('/preview')&&!preview)throw problem(415,'This file type is available as a download.');
         const headers={'Content-Type':preview?preview.mime:'application/octet-stream','Content-Disposition':(preview?'inline':'attachment')+'; filename="download"; filename*=UTF-8\'\''+encodeURIComponent(name.split('/').at(-1)),'Cache-Control':'no-store, no-transform','X-Content-Type-Options':'nosniff','Accept-Ranges':'bytes','Content-Security-Policy':"default-src 'none'; sandbox; frame-ancestors 'self'",'X-Frame-Options':'SAMEORIGIN','Referrer-Policy':'no-referrer'};
-        let range;try{range=byteRange(req.headers.range,stat.size);}catch(e){res.setHeader('Content-Range','bytes */'+stat.size);throw e;}
+        headers.ETag='"'+digest(name+':'+stat.size+':'+stat.mtimeMs+':'+stat.ctimeMs)+'"';
+        let range;try{range=byteRange(req.headers['if-range']&&req.headers['if-range']!==headers.ETag?null:req.headers.range,stat.size);}catch(e){res.setHeader('Content-Range','bytes */'+stat.size);throw e;}
         headers['Content-Length']=range?range.end-range.start+1:stat.size;if(range)headers['Content-Range']='bytes '+range.start+'-'+range.end+'/'+stat.size;
         res.writeHead(range?206:200,headers);
         if(req.method==='HEAD'||stat.size===0)res.end();else await pipeline(fs.createReadStream(file,range||{}),res);return true;

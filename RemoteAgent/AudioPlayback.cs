@@ -24,6 +24,10 @@ internal static class AudioPlayback
             using var metadata=JsonDocument.Parse(line.ToArray());var config=metadata.RootElement;
             int rate=config.GetProperty("sampleRate").GetInt32(),channels=config.GetProperty("channels").GetInt32();
             if(rate<8000||rate>48000||channels<1||channels>2)throw new InvalidDataException();
+            bool opus=config.TryGetProperty("encoding",out var encoding)&&encoding.GetString()=="opus";
+            if(opus&&rate!=48000)throw new InvalidDataException();
+            using var decoder=opus?Concentus.OpusCodecFactory.CreateDecoder(rate,channels):null;
+            var decoded=new short[5760*channels];
             float volume=config.TryGetProperty("volume",out var initial)?initial.GetSingle():.6f;
             if(!float.IsFinite(volume)||volume<0||volume>1)throw new InvalidDataException();
             var format=new WaveFormat(rate,16,channels);
@@ -39,7 +43,12 @@ internal static class AudioPlayback
                 var bytes=new byte[length];if(length>0&&!ReadPacket(input,bytes))throw new EndOfStreamException();
                 if(header[0]==2&&length==0)break;
                 if(header[0]==1){using var value=JsonDocument.Parse(bytes);float selected=value.RootElement.GetProperty("volume").GetSingle();if(!float.IsFinite(selected)||selected<0||selected>1)throw new InvalidDataException();output.Volume=selected;continue;}
-                if(header[0]!=0||length<1||length%format.BlockAlign!=0)throw new InvalidDataException();
+                if(opus){
+                    if(header[0]!=3||length<1||length>4096)throw new InvalidDataException();
+                    int samples=decoder!.Decode(bytes.AsSpan(),decoded.AsSpan(),5760);
+                    if(samples<1||samples>5760)throw new InvalidDataException();
+                    bytes=new byte[samples*channels*2];Buffer.BlockCopy(decoded,0,bytes,0,bytes.Length);length=bytes.Length;
+                }else if(header[0]!=0||length<1||length%format.BlockAlign!=0)throw new InvalidDataException();
                 // Keep the newest sound after a scheduling pause instead of
                 // playing a growing backlog of old microphone/music samples.
                 if(queue.BufferedBytes>format.AverageBytesPerSecond*.16)queue.ClearBuffer();

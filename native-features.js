@@ -80,7 +80,8 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     }catch(error){queueMicrotask(()=>fail(error));}
     return session;
   }
-  function openAudioOutput({sampleRate,channels,volume=.6,onReady=()=>{},onError=()=>{},onClose=()=>{}}={}){
+  function openAudioOutput({sampleRate,channels,encoding='s16le',volume=.6,onReady=()=>{},onError=()=>{},onClose=()=>{}}={}){
+    if(!['s16le','opus'].includes(encoding)||encoding==='opus'&&sampleRate!==48000)throw Error('Invalid phone audio encoding.');
     if(!Number.isInteger(sampleRate)||sampleRate<8000||sampleRate>48000||![1,2].includes(channels)||!Number.isFinite(volume)||volume<0||volume>1)throw Error('Invalid phone audio format.');
     const child=helper('--audio-playback');let stopped=false,ended=false,ready=false,output='';const capacity=Math.max(16384,Math.ceil(sampleRate*channels*2*.2));let killTimer;
     const timer=setTimeout(()=>fail(Error('The PC output did not start.')),8000);timer.unref?.();
@@ -88,11 +89,11 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     function finish(){if(ended)return;ended=true;clearTimeout(timer);clearTimeout(killTimer);audioSessions.delete(session);onClose();}
     function stop(){if(stopped)return;stopped=true;clearTimeout(timer);try{child.stdin.end(packet(2));}catch{}killTimer=setTimeout(()=>{try{child.kill();}catch{}finish();},750);killTimer.unref?.();}
     function fail(error){if(stopped)return;onError(error);stop();}
-    const session={stop,sendPcm(bytes){if(stopped||!ready||!child.stdin.writable)return false;if(!Buffer.isBuffer(bytes)||bytes.length>65536||bytes.length%(channels*2)!==0)throw Error('Invalid PCM block');if(child.stdin.writableLength>capacity)return false;return child.stdin.write(packet(0,bytes));},setVolume(value){if(!stopped&&Number.isFinite(value)&&value>=0&&value<=1&&child.stdin.writableLength<=capacity)child.stdin.write(packet(1,Buffer.from(JSON.stringify({volume:value}))));}};audioSessions.add(session);
+    const session={stop,sendPcm(bytes){if(stopped||!ready||!child.stdin.writable)return false;if(!Buffer.isBuffer(bytes)||bytes.length>65536||bytes.length%(channels*2)!==0)throw Error('Invalid PCM block');if(child.stdin.writableLength>capacity)return false;return child.stdin.write(packet(0,bytes));},sendOpus(bytes){if(stopped||!ready||!child.stdin.writable)return false;if(!Buffer.isBuffer(bytes)||bytes.length<1||bytes.length>4096)throw Error('Invalid Opus packet');if(child.stdin.writableLength>capacity)return false;return child.stdin.write(packet(3,bytes));},setVolume(value){if(!stopped&&Number.isFinite(value)&&value>=0&&value<=1&&child.stdin.writableLength<=capacity)child.stdin.write(packet(1,Buffer.from(JSON.stringify({volume:value}))));}};audioSessions.add(session);
     child.stdin.on('error',()=>fail(Error('PC audio output disconnected.')));child.stderr.resume();child.stdout.setEncoding('utf8');
     child.stdout.on('data',text=>{if(stopped)return;output+=text;if(output.length>8192){fail(Error('Invalid PC audio output response.'));return;}let newline;while((newline=output.indexOf('\n'))>=0){const line=output.slice(0,newline);output=output.slice(newline+1);try{const value=JSON.parse(line);if(value.type==='started'&&!ready){ready=true;clearTimeout(timer);onReady();}else if(value.type==='error')fail(Error('PC audio output is unavailable.'));else throw Error('Unexpected output message');}catch{fail(Error('PC audio output is unavailable.'));}}});
     child.on('error',()=>fail(Error('The Windows output helper could not start.')));child.on('close',()=>{if(!stopped)fail(Error('The Windows output helper stopped.'));finish();});
-    child.stdin.write(JSON.stringify({sampleRate,channels,volume})+'\n');return session;
+    child.stdin.write(JSON.stringify({sampleRate,channels,volume,...encoding==='opus'&&{encoding}})+'\n');return session;
   }
   function close(){closed=true;appTokens.clear();for(const session of audioSessions)session.stop();}
   async function sendMedia(action){
