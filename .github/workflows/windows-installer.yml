@@ -2,7 +2,7 @@ name: Build Windows host installer
 on:
   push:
     branches: [main]
-    paths: ['HostTray/**', 'installer/**', '.github/workflows/windows-installer.yml']
+    paths: ['HostTray/**', 'installer/**', 'RemoteAgent/**', 'public/**', '*.js', 'index.html', 'package*.json', '.github/workflows/windows-installer.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -36,6 +36,13 @@ jobs:
           Copy-Item -LiteralPath node_modules -Destination $bundle -Recurse
           New-Item -ItemType Directory -Path "$bundle/runtime" -Force | Out-Null
           Copy-Item -LiteralPath (Get-Command node).Source -Destination "$bundle/runtime/node.exe"
+      - name: Verify bundled runtime, dependencies and served UI
+        shell: pwsh
+        run: |
+          & ./dist/host-package/host/runtime/node.exe installer/verify-bundle.cjs ./dist/host-package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./dist/host-package/host/RemoteAgent/bin/RemoteAgent.exe --capture-probe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build installer
         shell: pwsh
         run: |
@@ -48,4 +55,9 @@ jobs:
         with:
           name: PC-Remote-Windows-Host-1.9
           path: dist/PC-Remote-Host-Setup-1.9.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PC-Remote-Windows-Host-Package-1.9
+          path: dist/host-package/
           if-no-files-found: error

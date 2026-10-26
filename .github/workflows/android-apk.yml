@@ -10,6 +10,8 @@ on:
       - 'gradle.properties'
       - '.github/workflows/android-apk.yml'
       - 'server.js'
+      - 'public/**'
+      - 'index.html'
       - 'test/**'
   workflow_dispatch:
 
