@@ -47,6 +47,7 @@
 <link rel="stylesheet" href="/file-transfers.css">
 <link rel="stylesheet" href="/desktop-controls.css">
 <script src="/desktop-controls.js" defer></script>
+<script src="/hold-repeat.js" defer></script>
 <script src="/camera-sharing.js" defer></script>
 <script src="/native-media.js" defer></script>
 <script src="/phone-audio.js" defer></script>
@@ -59,6 +60,7 @@
 <script src="/device-links.js" defer></script>
 <script src="/device-input.js" defer></script>
 <script src="/typing-controls.js" defer></script>
+<script src="/privacy-mode.js" defer></script>
 <script src="/home-panels.js" defer></script>
 <script src="/mission-control.js" defer></script>
 <script src="/google-signin.js" defer></script>
@@ -284,7 +286,7 @@ function closeM(){$('modal').classList.remove('on')}setInterval(poll,5000);docum
 // ---- Remote screen: trackpad / touch control. One finger = move, tap = click, hold = drag,
 // two fingers = scroll, two-finger tap = right click.
 const ls=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch{}};
-const rs={on:0,ab:null,m:null,mode:ls('pcr_mode')||'pad',qi:['0','1','2','3','4'].includes(ls('pcr_q'))?Number(ls('pcr_q')):4,pend:null,dec:0};let qq=[],qb=0,g=null;
+const rs={on:0,ab:null,m:null,mode:'touch',qi:['0','1','2','3','4'].includes(ls('pcr_q'))?Number(ls('pcr_q')):4,pend:null,dec:0};let qq=[],qb=0,g=null;
 const QN=['low','med','high','hd','auto'],QL=['Low','Med','High','HD','Auto'],KEYS=[['Esc','key 27'],['Tab','key 9'],['Win','key 91'],['Alt+Tab','combo 18,9'],['←','key 37'],['↑','key 38'],['↓','key 40'],['→','key 39'],['Enter','key 13'],['⌫','key 8'],['Del','key 46'],['Home','key 36'],['End','key 35'],['PgUp','key 33'],['PgDn','key 34'],['Ctrl+C','combo 17,67'],['Ctrl+V','combo 17,86'],['Ctrl+A','combo 17,65'],['Ctrl+Z','combo 17,90'],['Win+D','combo 91,68'],['Task Mgr','combo 17,16,27'],['F5','key 116']];
 const DEFAULT_SHORTCUTS=['key 27','combo 18,9','key 13','key 8','combo 17,67','combo 17,86','combo 91,68','key 116'];
 const validShortcuts=()=>KEYS.map(k=>k[1]);
@@ -297,7 +299,7 @@ let keyHeight=['44','56'].includes(ls('pcr_keyheight'))?ls('pcr_keyheight'):'44'
 function rsRenderShortcuts(){
   const tray=$('rsk');tray.replaceChildren();
   for(const command of shortcuts){const item=KEYS.find(k=>k[1]===command);if(!item)continue;
-    const button=document.createElement('button');button.type='button';button.textContent=item[0];button.title=item[0];button.addEventListener('click',()=>qc(command));tray.append(button);
+    const button=document.createElement('button');button.type='button';button.textContent=item[0];button.title=item[0];button.dataset.remoteCommand=command;button.addEventListener('click',()=>qc(command));tray.append(button);
   }
   tray.classList.toggle('hide',!showKeys);
   $('keyToggle').textContent=showKeys?'Hide keys':'Show keys';
@@ -412,29 +414,29 @@ async function rsRun(){
 }
 function rsOpen(){rs.on=1;rs.m=null;$('rs').classList.remove('hide');document.body.style.overflow='hidden';$('rsq').textContent=QL[rs.qi];$('rsq').dataset.quality=QN[rs.qi];rsModeUI();$('rsst').textContent='Connecting…';rsRun()}
 function rsClose(){window.PCRHoldControl?.release();window.PCRInputTransport?.stop();if(pointerFrame)cancelAnimationFrame(pointerFrame);pointerFrame=0;rs.on=0;rs.m=null;window.PCRScreenTools?.closed();window.PCRPrecisionLens?.closed();if(rs.ab)rs.ab.abort();if(live.sent||$('typeText').value||typeBusy)rsPauseLive('Screen closed. Select the PC field again, then tap New field.');rsPrefsClose();rsTypeClose();$('rs').classList.add('hide');document.body.style.overflow='';qq=[]}
-function rsModeUI(){const button=$('rsm'),current=rs.mode==='pad'?'Trackpad':'Touch',next=rs.mode==='pad'?'Touch':'Trackpad';button.textContent=current;button.title='Switch to '+next;button.setAttribute('aria-label',current+' mode. Switch to '+next);button.setAttribute('aria-pressed','true');}
-function rsMode(mode){rs.mode=mode==='pad'||mode==='touch'?mode:(rs.mode==='pad'?'touch':'pad');ls('pcr_mode',rs.mode);rsModeUI()}
+function rsModeUI(){const button=$('rsm');button.textContent='Touch screen';button.style.display='none';button.setAttribute('aria-label','Direct touch screen. Use the separate trackpad for pointer movement.');}
+function rsMode(){rs.mode='touch';rsModeUI()}
 function rsQ(){if(typeBusy){msg('Wait for typing to finish before changing quality.');return;}rs.qi=(rs.qi+1)%QN.length;ls('pcr_q',rs.qi);$('rsq').textContent=QL[rs.qi];$('rsq').dataset.quality=QN[rs.qi];rsPauseLive('Quality changed. Select the PC field again, then tap New field.');rsRun()}
 document.addEventListener('visibilitychange',()=>{if(!rs.on)return;if(document.hidden){window.PCRInputTransport?.stop();rs.m=null;window.PCRScreenTools?.disconnected('Screen paused');window.PCRPrecisionLens?.disconnected();rsPauseLive('Screen paused. Select the PC field again, then tap New field.');rs.ab?.abort();}else rsRun()});
 function box(){if(window.PCRScreenTools)return window.PCRScreenTools.imageBox();const c=$('rsc'),e=c.getBoundingClientRect(),a=c.width/c.height||1;let w=e.width,h=e.height,x=e.left,y=e.top;if(w/h>a){const nw=h*a;x+=(w-nw)/2;w=nw}else{const nh=w/a;y+=(h-nh)/2;h=nh}return{x,y,w,h}}
-function pos(t){const b=box(),m=rs.m;if(!m)return;const f=(v,o,s,M)=>Math.round(Math.min(Math.max((v-o)/s,0),1)*(M-1));qc('abs '+f(t.clientX,b.x,b.w,m.w)+' '+f(t.clientY,b.y,b.h,m.h))}
+function pos(t){const b=box(),m=rs.m;if(!m||!b||b.w<=0||b.h<=0)return false;const f=(v,o,s,M)=>Math.round(Math.min(Math.max((v-o)/s,0),1)*(M-1));qc('abs '+f(t.clientX,b.x,b.w,m.w)+' '+f(t.clientY,b.y,b.h,m.h));return true;}
 const V=$('rsv');
 const rsTouches=event=>window.PCRHoldControl?.touches(event)||Array.from(event.touches||[]);
 V.addEventListener('touchstart',e=>{e.preventDefault();if(!rsCanPoint())return;const t=rsTouches(e);if(t.length>=2){if(g){clearTimeout(g.lp);if(g.dr)qc('up l')}g={n:2,y:(t[0].clientY+t[1].clientY)/2,t:Date.now(),mv:0,ac:0};return}
-g={n:1,x:t[0].clientX,y:t[0].clientY,lx:t[0].clientX,ly:t[0].clientY,t:Date.now(),mv:0,dr:0,rx:0,ry:0};if(rs.mode==='touch')pos(t[0]);
-g.lp=setTimeout(()=>{if(g&&g.n===1&&!g.mv){navigator.vibrate&&navigator.vibrate(15);if(rs.mode==='pad'){g.dr=1;qc('down l')}else{g.rc=1;qc('click r')}}},450)},{passive:false});
+const bounds=box();if(!rs.m||!bounds||!t[0]||t[0].clientX<bounds.x||t[0].clientX>bounds.x+bounds.w||t[0].clientY<bounds.y||t[0].clientY>bounds.y+bounds.h){g=null;return;}g={n:1,x:t[0].clientX,y:t[0].clientY,lx:t[0].clientX,ly:t[0].clientY,t:Date.now(),mv:0,dr:0,rx:0,ry:0};
+g.lp=setTimeout(()=>{if(g&&g.n===1&&!g.mv){navigator.vibrate&&navigator.vibrate(15);g.rc=1;pos({clientX:g.x,clientY:g.y});qc('click r')}},450)},{passive:false});
 V.addEventListener('touchmove',e=>{e.preventDefault();if(!g)return;const t=rsTouches(e);
 if(g.n===2){if(t.length<2)return;const y=(t[0].clientY+t[1].clientY)/2;g.ac+=(y-g.y)*4;g.y=y;if(Math.abs(g.ac)>=1){g.mv=1;const d=Math.trunc(g.ac);g.ac-=d;qc('wheel '+d)}return}
-const p=t[0];if(!g.mv&&Math.hypot(p.clientX-g.x,p.clientY-g.y)>8){g.mv=1;clearTimeout(g.lp);if(rs.mode==='touch'&&!g.rc){g.dr=1;qc('down l')}}
+const p=t[0];if(!g.mv&&Math.hypot(p.clientX-g.x,p.clientY-g.y)>8){g.mv=1;clearTimeout(g.lp);if(!g.rc){pos({clientX:g.x,clientY:g.y});g.dr=1;qc('down l')}}
 if(!g.mv)return;const dx=p.clientX-g.lx,dy=p.clientY-g.ly;g.lx=p.clientX;g.ly=p.clientY;
 if(rs.mode==='touch'){pos(p);return}
 const b=box(),m=rs.m;if(!m)return;const k=m.w/b.w*(1+Math.min(Math.hypot(dx,dy),30)/30)*sens;const movement=window.PCRPrecisionLens?.scaleMovement(dx*k,dy*k)||{dx:dx*k,dy:dy*k};g.rx+=movement.dx;g.ry+=movement.dy;const ix=Math.trunc(g.rx),iy=Math.trunc(g.ry);g.rx-=ix;g.ry-=iy;if(ix||iy)qc('mv '+ix+' '+iy)},{passive:false});
-V.addEventListener('touchend',e=>{e.preventDefault();if(!g||rsTouches(e).length)return;clearTimeout(g.lp);const tap=!g.mv&&Date.now()-g.t<300;if(g.n===2){if(tap)qc('click r')}else if(g.dr)qc('up l');else if(tap)qc('click l');g=null},{passive:false});
+V.addEventListener('touchend',e=>{e.preventDefault();if(!g||rsTouches(e).length)return;clearTimeout(g.lp);const ended=g,tap=!g.mv&&!g.rc&&Date.now()-g.t<450;g=null;if(ended.n===2){if(tap)qc('click r')}else if(ended.dr)qc('up l');else if(tap){if(window.PCRTypingControls?.tap)void window.PCRTypingControls.tap({x:ended.x,y:ended.y});else{pos({clientX:ended.x,clientY:ended.y});qc('click l');}}},{passive:false});
 V.addEventListener('touchcancel',()=>{if(g){clearTimeout(g.lp);if(g.dr)qc('up l')}g=null});
 let mouseDrag=false;
 V.addEventListener('pointerdown',e=>{
   if(e.pointerType!=='mouse'||!rsCanPoint())return;
-  e.preventDefault();V.setPointerCapture(e.pointerId);$('rsc').focus({preventScroll:true});pos(e);
+  e.preventDefault();if(!pos(e))return;V.setPointerCapture(e.pointerId);$('rsc').focus({preventScroll:true});
   qc(e.button===2?'down r':'down l');mouseDrag=true;
 });
 V.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&rs.m&&!typeBusy&&!rsTypingDirty())pos(e);});
@@ -467,7 +469,7 @@ function encodeInputCommand(verb,value){
   let binary='';for(let i=0;i<bytes.length;i+=4096)binary+=String.fromCharCode(...bytes.subarray(i,i+4096));
   return verb+' '+btoa(binary);
 }
-function rsTypeStatus(text,state='success'){const e=$('typeStatus');e.textContent=text;e.dataset.state=state;}
+function rsTypeStatus(text,state='success'){const e=$('typeStatus');e.textContent=text;e.dataset.state=state;window.PCRTypingControls?.updateState();}
 function rsUpdateTypingUI(){
   $('typingMode').textContent=liveTyping?'Live typing: on':'Live typing: off';
   $('typingMode').setAttribute('aria-pressed',String(liveTyping));
@@ -519,7 +521,7 @@ async function typingRequest(commands){
   try{
     const transport=typeof window==='undefined'?null:window.PCRInputTransport;
     const d=transport?await transport.sendInput(commands,{wait:true,signal:abort.signal}):await api('/api/input',{method:'POST',body:JSON.stringify({cmds:commands,wait:true}),signal:abort.signal});
-    if(!d.ok||d.status!==200||d.delivered!==true)throw Error(d.error||'PC did not confirm the input');
+    if(!d.ok||d.status!==200||d.delivered!==true)throw Error(d.error||'PC did not confirm the input');return d;
   }finally{clearTimeout(timeout);}
 }
 async function rsDrainLive(){
@@ -576,11 +578,11 @@ function encodeTextCommands(value){
   return chunks.map(chunk=>'text '+btoa(String.fromCharCode(...new TextEncoder().encode(chunk))));
 }
 let typeBusy=false;
-async function submitTyping(commands){
+async function submitTyping(commands,returnResult=false){
   if(typeBusy||qb||qq.length||!rs.on||!rs.m)return false;
   typeBusy=true;const generation=live.generation;
   rsTypeStatus('Sending…','pending');
-  try{await typingRequest(commands);if(generation!==live.generation)return false;rsTypeStatus('Input sent to Windows. Check the selected PC field.');return true;}
+  try{const result=await typingRequest(commands);if(generation!==live.generation)return false;rsTypeStatus('Input sent to Windows. Check the selected PC field.');return returnResult?result:true;}
   catch(e){rsPauseLive('Input may have been delivered. Check the PC before retrying. '+(e.message||'Connection lost'));return false;}
   finally{typeBusy=false;flush();rsScheduleLive();}
 }
@@ -636,10 +638,9 @@ async function rsTypeKey(key){
   return submitTyping(['key '+key]);
 }
 rsUpdateTypingUI();
-// Leaving the typing panel for any remote control is an explicit dismissal.
-// Keep this separate from viewport resizing, which also happens as an IME opens.
+// Common typing keys preserve the IME; switching to another feature dismisses it.
 document.addEventListener('pointerdown',event=>{
-  if(typingPanelOpen&&!$('typePanel').contains(event.target)&&!$('rsKeyboard').contains(event.target))rsTypeClose();
+  if(typingPanelOpen&&!$('typePanel').contains(event.target)&&!$('rsKeyboard').contains(event.target)&&!event.target.closest('[data-remote-key]'))rsTypeClose();
 },true);
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&typingPanelOpen){event.preventDefault();event.stopImmediatePropagation();rsTypeClose();}

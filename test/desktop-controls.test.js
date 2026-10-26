@@ -4,7 +4,7 @@ const source=fs.readFileSync(path.join(__dirname,'../public/desktop-controls.js'
 const dockSource=source.slice(source.indexOf('// A separate relative touch surface'),source.indexOf('// Optional input clutch'));
 
 function fixture(t){
-  const dom=new JSDOM('<div id="rs"><div class="screenTools"></div><div id="rsv"></div><div id="rsk" class="rskeys hide"></div><div class="rsbot"><button id="rsKeyboard">Keyboard</button><button id="keyToggle">Show keys</button></div></div>',{runScripts:'outside-only',pretendToBeVisual:true});
+  const dom=new JSDOM('<div id="rs"><div class="screenTools"><button id="rsFullscreen">Fullscreen</button></div><div id="rsv"></div><div id="rsk" class="rskeys hide"></div><div class="rsbot"><button id="rsKeyboard">Keyboard</button><button id="keyToggle">Show keys</button><button data-files-button>Files</button></div></div>',{runScripts:'outside-only',pretendToBeVisual:true});
   t.after(()=>dom.window.close());const window=dom.window,commands=[],keys=[];
   window.rs={on:1,m:{w:1920,h:1080}};window.sens=1;window.rsCanPoint=()=>!window.PCRHoldControl||window.PCRHoldControl.can('pc');window.qc=command=>commands.push(command);window.rsTypeKey=key=>keys.push(key);window.PCRTouchGestures=gestures;
   window.eval(dockSource);window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
@@ -17,8 +17,9 @@ function fixture(t){
 test('the dedicated scroll rail and common keyboard controls are visible outside the options menu',t=>{
   const f=fixture(t),doc=f.window.document,dock=doc.getElementById('remoteSwipeDock'),options=doc.getElementById('remoteOptions');
   assert.match(f.rail.getAttribute('aria-label'),/one finger/);assert.equal(f.rail.tabIndex,0);assert.ok(f.rail.querySelector('.remoteScrollTrack .remoteScrollThumb'));
-  for(const id of ['rsKeyboard','keyToggle','rsk']){assert.equal(dock.contains(doc.getElementById(id)),true);assert.equal(options.contains(doc.getElementById(id)),false);}
-  assert.equal(doc.querySelector('.dockQuickKeys').children.length,4);doc.querySelectorAll('.dockDirectKey').forEach(button=>button.click());assert.deepEqual(f.keys,[13,8]);
+  for(const selector of ['#rsKeyboard','[data-files-button]','#rsFullscreen']){assert.equal(dock.contains(doc.querySelector(selector)),true);assert.equal(options.contains(doc.querySelector(selector)),false);}
+  for(const id of ['keyToggle','rsk'])assert.ok(options.contains(doc.getElementById(id)));
+  assert.equal(doc.querySelector('.dockQuickKeys').children.length,5);doc.querySelectorAll('.dockDirectKey').forEach(button=>button.click());assert.deepEqual(f.keys,[13,8]);
   f.window.PCRCanAccess=()=>false;f.window.dispatchEvent(new f.window.Event('pcr:auth'));assert.equal(doc.getElementById('rsKeyboard').dataset.pcrDenied,'true');
   f.window.PCRCanAccess=()=>true;f.window.dispatchEvent(new f.window.Event('pcr:auth'));assert.equal(doc.getElementById('rsKeyboard').dataset.pcrDenied,'false','relocated controls update their permission gates after sign-in');
 });
@@ -29,6 +30,8 @@ test('one-finger rail swipes scroll without clicks, filter jitter and stop on ca
   f.pointer(f.rail,'pointercancel',1);assert.equal(f.rail.classList.contains('active'),false);f.pointer(f.rail,'pointermove',1,60,100);assert.equal(f.commands.length,2);
   f.pointer(f.rail,'pointerdown',2);f.pointer(f.rail,'pointerup',2);assert.equal(f.commands.some(command=>command.startsWith('click')),false);
 });
+
+test('holding a rail arrow scrolls repeatedly and releasing stops it without an extra step',async t=>{const f=fixture(t);f.rail.getBoundingClientRect=()=>({top:0,height:100});f.pointer(f.rail,'pointerdown',1,60,10);await new Promise(r=>setTimeout(r,740));assert.ok(f.commands.length>=2);assert.ok(f.commands.every(command=>command==='wheel 120'));f.pointer(f.rail,'pointerup',1,60,10);const count=f.commands.length;await new Promise(r=>setTimeout(r,180));assert.equal(f.commands.length,count);});
 
 test('scroll rail supports normalized wheels and keyboard steps',t=>{
   const f=fixture(t);f.rail.dispatchEvent(new f.window.WheelEvent('wheel',{deltaY:2,deltaMode:1,cancelable:true}));assert.equal(f.commands.at(-1),'wheel -32');

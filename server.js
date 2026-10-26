@@ -11,6 +11,7 @@ const ScreenPacketReader = require('./public/screen-packets');
 const {createFileTransfers}=require('./file-transfers');
 const nativeClipboard=require('./native-clipboard');
 const {createNativeFeatures}=require('./native-features');
+const {createDisplayPrivacy}=require('./display-privacy');
 const {createDeviceLinks}=require('./device-links');
 const {createAssetCache}=require('./asset-cache');
 const {createAssetBundles}=require('./asset-bundles');
@@ -52,6 +53,8 @@ const PWA_ASSETS = new Map([
   ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
   ...['workspace-settings','device-links','device-input','typing-controls','home-panels'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/screen-packets.js', ['screen-packets.js', 'text/javascript; charset=utf-8']],
+  ['/hold-repeat.js', ['hold-repeat.js', 'text/javascript; charset=utf-8']],
+  ['/privacy-mode.js', ['privacy-mode.js', 'text/javascript; charset=utf-8']],
   ['/screen-renderer.js', ['screen-renderer.js', 'text/javascript; charset=utf-8']],
   ['/remote-cursor.js', ['remote-cursor.js', 'text/javascript; charset=utf-8']],
   ['/file-transfers.js', ['file-transfers.js', 'text/javascript; charset=utf-8']],
@@ -125,7 +128,7 @@ async function jsonBody(req, max=4096) {
 function validInput(c) {
   if(typeof c !== 'string' || c.length > 90000) return false;
   const [verb, ...rest] = c.split(' '), v=rest.join(' ');
-  if (['mv','abs'].includes(verb)) return /^-?\d{1,6} -?\d{1,6}$/.test(v);
+  if (['mv','abs','focus'].includes(verb)) return /^-?\d{1,6} -?\d{1,6}$/.test(v);
   if (verb === 'wheel' || verb === 'hwheel') return /^-?\d{1,5}$/.test(v);
   if (['click','down','up'].includes(verb)) return /^[lrm]$/.test(v);
   if (verb === 'dbl') return v === '';
@@ -178,6 +181,7 @@ function createApp(options={}) {
   const hostnames = new Set(['localhost','127.0.0.1',os.hostname().toLowerCase(),...interfaces]);
   const sessions = new Map(), strikes = new Map(), activity=[];
   const nativeFeatures=options.nativeFeatures||createNativeFeatures({root:ROOT});
+  const displayPrivacy=options.displayPrivacy||createDisplayPrivacy({root:ROOT});
   const audioSockets=new Set();
   const accountContext=requirePassword?crypto.createHash('sha256').update('pc-remote-owner-v1\0'+options.password).digest('hex'):undefined;
   const pairingContext=accountContext||crypto.createHash('sha256').update('pc-remote-pin-v1\0'+pin).digest('hex');
@@ -330,7 +334,7 @@ function createApp(options={}) {
             const waiter=pendingInput.get(ack.id);
             if(waiter){
               pendingInput.delete(ack.id);clearTimeout(waiter.timer);
-              ack.ok===true?waiter.resolve():waiter.reject(new Error(ack.error||'Desktop input rejected'));
+              ack.ok===true?waiter.resolve(ack):waiter.reject(new Error(ack.error||'Desktop input rejected'));
             }
           } catch(e){console.error('Invalid desktop input acknowledgement:',e.message);}
           return;
@@ -400,7 +404,7 @@ function createApp(options={}) {
     if(!agent.stdin.writable)return result(503,{error:'Desktop agent disconnected'});
     if(agent.stdin.writableLength>262144||pendingInput.size>512)return result(429,{error:'PC input queue is busy'});
     if(b.wait===true){
-      if(b.cmds.length<1||b.cmds.length>25||!b.cmds.every(c=>/^(text|paste|edit|key|combo) /.test(c)))
+      if(b.cmds.length<1||b.cmds.length>25||!b.cmds.every(c=>/^(text|paste|edit|key|combo|abs|click|focus) /.test(c)))
         return result(400,{error:'Invalid typing request'});
       const tagged=[],ids=[];
       const completion=b.cmds.map(c=>new Promise((resolve,reject)=>{
@@ -410,8 +414,8 @@ function createApp(options={}) {
       }));
       try{
         agent.stdin.write(tagged.join('\n')+'\n');
-        await Promise.all(completion);
-        return result(200,{ok:true,delivered:true});
+        const replies=await Promise.all(completion),focus=replies.find(reply=>Object.hasOwn(reply,'editable'));
+        return result(200,{ok:true,delivered:true,...focus&&{editable:typeof focus.editable==='boolean'?focus.editable:null}});
       }catch(e){return result(503,{error:e.message});}
       finally{
         for(const id of ids){const pending=pendingInput.get(id);if(pending){clearTimeout(pending.timer);pendingInput.delete(id);}}
@@ -632,6 +636,18 @@ function createApp(options={}) {
         if(!requiresHeader(req)||!permits(token,'screen'))return respond(res,403,{error:'Screen viewing was not approved.'});
         return respond(res,200,{ok:true,iceServers:rtcServers,audioAllowed:permits(token,'audio')});
       }
+      if(pathname==='/api/privacy'&&(req.method==='GET'||req.method==='POST')){
+        if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Privacy mode is available to the PC owner only.'});
+        if(req.method==='GET')return respond(res,200,displayPrivacy.status(token));
+        try{
+          const body=await jsonBody(req,1024);
+          if(body.action==='stop'){displayPrivacy.stop();record(ip,'Privacy mode off');return respond(res,200,displayPrivacy.status(token));}
+          if(body.action==='heartbeat'){displayPrivacy.heartbeat(token);return respond(res,200,displayPrivacy.status(token));}
+          if(body.action!=='start')return respond(res,400,{error:'Invalid privacy action.'});
+          if(!Array.from(viewers).some(viewer=>viewer.token===token))return respond(res,409,{error:'Open the remote screen before enabling Privacy mode.'});
+          const result=await displayPrivacy.start(token);record(ip,'Privacy mode on');return respond(res,200,result);
+        }catch(error){return respond(res,503,{error:error.message});}
+      }
       if(req.method==='GET'&&pathname==='/api/camera/config'){
         if(!requiresHeader(req)||sessions.get(token)?.role==='guest')return respond(res,403,{error:'Sign in as the owner on both devices to share a camera.'});
         return respond(res,200,{ok:true,iceServers:rtcServers,audioAllowed:true});
@@ -681,7 +697,7 @@ function createApp(options={}) {
       if(req.method==='POST'&&pathname==='/api/unpair'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
         sessions.delete(token);saveSessions();await fileTransfers.revoke(token);deviceLinks.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);cameraRevoke(token);collaboration.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
-        record(ip,'Phone unpaired');return respond(res,200,{ok:true},{'Set-Cookie':`${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`});
+        displayPrivacy.revoke(token);record(ip,'Phone unpaired');return respond(res,200,{ok:true},{'Set-Cookie':`${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`});
       }
       if(req.method==='GET'&&pathname==='/api/screen'){
         if(!permits(token,'screen'))return respond(res,403,{error:'Screen viewing was not approved.'});
@@ -833,7 +849,7 @@ function createApp(options={}) {
       });
     });
   });
-  function stop(){endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();cameraRevoke();collaboration.revoke();}
+  function stop(){displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();cameraRevoke();collaboration.revoke();}
   server.on('close',()=>{google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   return {server,pin,port,addresses:interfaces,stop};
 }

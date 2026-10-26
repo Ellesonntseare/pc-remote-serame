@@ -7,3 +7,24 @@
 @media(max-width:650px){.workspaceSettingsCard{padding:16px}.settingsTileBoard{grid-template-columns:1fr}.workspaceSettingsSectionHead{gap:10px}.workspaceSettingsSectionHead h3{font-size:16px}.workspaceSettingsSectionHead p{font-size:11px}.workspaceSettings .settingsQuietButton{padding:8px 9px;font-size:10px}.settingsTileActions{grid-template-columns:repeat(3,36px)}.workspaceSettings .settingsTileActions button{width:36px;min-height:42px}.settingsTileCard{gap:8px;padding:9px 8px}.workspaceSettingsButton{margin-left:6px;flex-basis:36px;min-width:36px;min-height:38px;padding:8px}.controlWorkspace .topbar{gap:5px}.controlWorkspace #unpairBtn{margin-left:5px;padding:7px;font-size:10px}.controlWorkspace .topbar .connection{padding:7px;font-size:10px}}
 @media(max-width:360px){.workspaceSettings .settingsTileActions{grid-template-columns:repeat(3,31px)}.workspaceSettings .settingsTileActions button{width:31px}.settingsTileIcon{width:23px;flex-basis:23px}.settingsTileCopy small{font-size:9px}.workspaceSettings .settingsTileGrip{flex-basis:20px;min-width:20px}.workspaceSplitPresets{gap:5px}.workspaceSplitPresets button{font-size:10px}.controlWorkspace .topbar .connection{font-size:0;gap:0;padding:8px}.workspaceSettingsButton{margin-left:3px}}
 @media(prefers-reduced-motion:reduce){.settingsTileCard,.remoteSplitHandle>span{transition:none}}
+.settingsSectionNav{position:sticky;top:-1px;z-index:4;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:0 0 28px;padding:8px 0;background:#03111df5;border-bottom:1px solid #234156}
+.settingsSectionNav button{min-width:0;min-height:44px;padding:9px 3px;border:1px solid #214660;border-radius:9px;background:#0a2436;color:#b9deed;font:600 12px system-ui}
+.settingsSectionNav button:hover,.settingsSectionNav button:focus-visible{border-color:#20c5dd;color:#6be9eb}
+#workspaceSettings .settingsGroup{background:none;border:0;padding:0;margin:0 0 38px;scroll-margin-top:80px}
+.settingsGroup>h3{font:600 20px/1.3 system-ui;color:#e7f5ff;letter-spacing:-.4px;margin:0 0 14px}
+.settingsGroup>h3:focus{outline:none}.settingsGroupContent{display:grid;gap:12px;min-width:0}
+#workspaceSettings .settingsGroupContent>.workspaceSettingsCard{margin:0;background:#081d2b;border-color:#24445c;min-width:0}
+.settingsGroup .workspaceSettingsCard h3,.settingsGroup .workspaceSettingsCard h4{font:600 15px/1.4 system-ui;margin:0 0 10px}
+#workspaceSettings #workspaceControlPreferences{width:100%;max-width:none;max-height:none;padding:20px;overflow:visible;box-shadow:none;box-sizing:border-box}
+#workspaceControlPreferences>label{display:block;font-size:12px;color:#b9d7e3;margin:14px 0 8px}
+#workspaceControlPreferences input[type=range]{width:100%;accent-color:#10d8cc}
+#workspaceControlPreferences select{width:100%;padding:10px;color:#e1f0ff;background:#102d40;border:1px solid #34586f;border-radius:8px}
+#workspaceControlPreferences .controlGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
+#workspaceControlPreferences .controlGrid label{display:grid;gap:8px;font-size:12px}
+#workspaceControlPreferences .controlActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+#workspaceSettings .settingsEndpoint{margin:0;color:#83b1c9;font:11px/1.5 system-ui;overflow-wrap:anywhere}
+#workspaceSettings .localConnectionCard{margin:0;padding:20px;max-width:none;min-width:0;background:#081d2b;border-color:#24445c;border-radius:17px}
+#workspaceSettings .localConnectionSymbol{display:none}#workspaceSettings .localConnectionCard h3{font:600 15px system-ui;letter-spacing:0;margin:0 0 9px}
+#workspaceSettings .localConnectionCard>p{font-size:12px;margin-bottom:16px}
+.settingsPrivacyNote{color:#95b8c8;font:12px/1.7 system-ui;margin:0 2px}
+@media(max-width:480px){.settingsSectionNav button{font-size:11px}#workspaceSettings #workspaceControlPreferences,#workspaceSettings .localConnectionCard{padding:16px}.settingsGroup{scroll-margin-top:76px}.settingsGroup>h3{font-size:18px}}

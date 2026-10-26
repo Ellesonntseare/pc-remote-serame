@@ -1,3 +1,18 @@
+# Latest update — 27 October 2026
+
+- [x] Home: primary Remote Screen, Files and Audio actions; PC wallpaper/hotspots removed; remaining tiles open directly and fill each row.
+- [x] Remote: Keyboard, Enter, Backspace, Files and Fullscreen in one stable row; advanced actions collected on one compact tools page.
+- [x] Direct touch: screen taps target the displayed PC position, including phones with the old saved Trackpad setting.
+- [x] Tap to type: Windows reports whether the tapped control is editable; recognised fields open the phone editor automatically. Keyboard remains a direct fallback for unsupported application fields/browser keyboard restrictions.
+- [x] Typing feedback: active, paused and waiting states; uncertain drafts require deliberate sending after switching fields.
+- [x] Hold to repeat: Backspace, navigation keys, volume, zoom, and scroll-rail arrows. Release, cancellation, page changes and app backgrounding stop repetition.
+- [x] Settings: Connection, Controls, Appearance and Privacy on one page, sharing the actual controls rather than duplicate copies.
+- [x] Privacy mode: physical Windows desktop covers excluded from capture, owner-only activation and a capture/input check before reporting success. Restore with Privacy off or Ctrl + Alt + Shift + P on the PC. Disconnect lease, sign-out and host shutdown restore displays. Windows security screens are outside the software cover.
+- [x] Validation: 269 Node tests; Windows native build; real Chromium tap/hold flow with a simulated desktop agent; five responsive layouts (320–1280 px); real Windows privacy-cover/capture/pass-through/restore probe.
+- [ ] Verify tap-to-type and the native phone keyboard on the user's physical Android phone; no phone is attached to this workspace.
+
+---
+
 # Current implementation progress
 
 - [x] Phone keyboard dismissal and draft preservation

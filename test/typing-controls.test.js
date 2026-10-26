@@ -5,7 +5,7 @@ function fixture(t){
   const dom=new JSDOM('<div id="rs"><button id="rsKeyboard">Keyboard</button><section id="typePanel" class="hide"><div class="typeTop"></div><textarea id="typeText" readonly></textarea><p id="typeStatus"></p></section><div id="rsv"><canvas id="rsc"></canvas></div></div>',{runScripts:'outside-only',pretendToBeVisual:true});t.after(()=>dom.window.close());
   const window=dom.window,doc=window.document,input=doc.getElementById('typeText'),panel=doc.getElementById('typePanel'),requests=[],scheduled=[],messages=[];let focused=0,allowed=true;
   window.rs={on:1,m:{w:1920,h:1080}};window.live={paused:false,sent:'',generation:0,keys:[]};window.liveTyping=true;window.typeBusy=false;window.qb=0;window.qq=[];window.composing=false;
-  window.PCRCanAccess=()=>allowed;window.PCRDeviceInput={focusKeyboard:()=>focused++};window.PCRScreenTools={imageBox:()=>({x:10,y:20,w:200,h:100})};window.msg=message=>messages.push(message);
+  window.rsTypingDirty=()=>false;window.PCRCanAccess=()=>allowed;window.PCRDeviceInput={focusKeyboard:()=>focused++};window.PCRScreenTools={imageBox:()=>({x:10,y:20,w:200,h:100})};window.msg=message=>messages.push(message);
   window.rsTypeStatus=(message,state)=>{doc.getElementById('typeStatus').textContent=message;doc.getElementById('typeStatus').dataset.state=state||'success';};window.rsScheduleLive=()=>{if(!window.live.paused&&window.liveTyping)scheduled.push(input.value);};
   window.rsPauseLive=message=>{window.live.paused=true;window.live.generation++;window.rsTypeStatus(message,'error');};window.rsResetTypingContext=()=>{window.live.paused=false;window.live.sent='';window.live.generation++;input.value='';};
   window.submitTyping=commands=>{window.typeBusy=true;return new Promise(resolve=>requests.push({commands:Array.from(commands),resolve:ok=>{window.typeBusy=false;resolve(ok);}}));};
@@ -50,4 +50,21 @@ test('lost acknowledgments and changed screen metadata keep drafts paused',async
 test('cancel preserves an acknowledged field context and denied guests cannot open input',t=>{
   const f=fixture(t);f.window.live.sent='Already delivered';f.input.value='Already delivered';f.window.rsKb();f.choose();assert.equal(f.input.value,'');f.choose();assert.equal(f.input.value,'Already delivered');assert.equal(f.window.live.paused,false);
   f.window.rsTypeClose();f.deny();f.window.rsKb();assert.equal(f.input.readOnly,true);assert.equal(f.panel.classList.contains('hide'),true);assert.equal(f.window.PCRTypingControls.choose(),false);assert.equal(f.requests.length,0);
+});
+
+test('a direct screen tap opens the keyboard only after Windows confirms an editable field',async t=>{
+  const f=fixture(t),tap=f.window.PCRTypingControls.tap({x:100,y:75});
+  assert.deepEqual(f.requests[0].commands,['abs 864 593','click l','focus 864 593']);
+  assert.equal(f.input.readOnly,true,'ordinary screen buttons must not summon the keyboard while checking focus');
+  f.requests[0].resolve({editable:true});await tap;
+  assert.equal(f.doc.activeElement,f.input);assert.equal(f.input.readOnly,false);
+  assert.equal(f.doc.getElementById('remoteTypingFeedback').dataset.state,'active');
+  f.window.rsTypeClose();const button=f.window.PCRTypingControls.tap({x:100,y:75});f.requests[1].resolve({editable:false});await button;assert.equal(f.input.readOnly,true);
+});
+
+test('automatic field focus keeps uncertain drafts local and ignores stale screen replies',async t=>{
+  const f=fixture(t);f.input.value='Keep my draft';f.window.live.paused=true;
+  const tap=f.window.PCRTypingControls.tap({x:100,y:75});f.requests[0].resolve({editable:true});await tap;
+  assert.equal(f.input.value,'Keep my draft');assert.equal(f.window.live.paused,true);assert.equal(f.doc.getElementById('typingResumeDraft').hidden,false);assert.deepEqual(f.scheduled,[]);
+  f.window.rsTypeClose();const stale=f.window.PCRTypingControls.tap({x:100,y:75});f.window.rs.m={w:1920,h:1080};f.requests[1].resolve({editable:true});await stale;assert.equal(f.input.readOnly,true);
 });

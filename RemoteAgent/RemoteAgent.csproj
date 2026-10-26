@@ -3,12 +3,14 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>RemoteAgent</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <Using Include="System.IO" />
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
     <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />

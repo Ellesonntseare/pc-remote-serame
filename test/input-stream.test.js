@@ -17,6 +17,25 @@ function request(port,path,method='GET',body,headers={}){
   });
 }
 function packet(type,value){const p=Buffer.from(JSON.stringify(value)),header=Buffer.alloc(5);header[0]=type;header.writeUInt32BE(p.length,1);return Buffer.concat([header,p]);}
+
+test('acknowledged screen taps return Windows field detection through HTTP and the input stream',async t=>{
+  const f=await fixture();t.after(()=>f.close());await f.openScreen();
+  const body={cmds:['abs 100 200','click l','focus 100 200'],wait:true};
+  const httpResult=await request(f.port,'/api/input','POST',body,{Cookie:f.cookie});assert.equal(httpResult.status,200);assert.equal(httpResult.body.delivered,true);assert.equal(httpResult.body.editable,true);
+  const {ws}=await f.connect();ws.send(JSON.stringify({id:22,...body}));await until(()=>ws.messages.some(message=>message.id===22));assert.equal(ws.messages.find(message=>message.id===22).editable,true);
+  const invalid=await request(f.port,'/api/input','POST',{cmds:['focus 1 2\nkey 13'],wait:true},{Cookie:f.cookie});assert.equal(invalid.status,400);
+});
+
+test('privacy requires owner authentication, a request header and an open remote screen, then stops on sign-out',async t=>{
+  let active=false,revoked=0,closed=0;const privacy={status:()=>({ok:true,available:true,active,owned:active}),start:async()=>{active=true;return privacy.status();},heartbeat:()=>true,stop:()=>{active=false;},revoke:()=>{active=false;revoked++;},close:()=>{active=false;closed++;}};
+  const f=await fixture({displayPrivacy:privacy});t.after(()=>f.close());
+  assert.equal((await request(f.port,'/api/privacy')).status,401);
+  assert.equal((await request(f.port,'/api/privacy','GET',undefined,{Cookie:f.cookie,'X-PCR':'0'})).status,403);
+  assert.equal((await request(f.port,'/api/privacy','POST',{action:'start'},{Cookie:f.cookie})).status,409);
+  await f.openScreen();assert.equal((await request(f.port,'/api/privacy','POST',{action:'start'},{Cookie:f.cookie})).body.active,true);
+  assert.equal((await request(f.port,'/api/privacy','POST',{action:'unexpected'},{Cookie:f.cookie})).status,400);
+  await request(f.port,'/api/unpair','POST',{}, {Cookie:f.cookie});assert.equal(active,false);assert.equal(revoked,1);f.app.stop();assert.ok(closed>0);
+});
 async function fixture(options={}){
   const written=[],clients=new Set(),timers=new Set(),screens=[];let screen,activeAgent;
   const app=createApp({port:0,disableActions:true,...options,agentFactory:()=>{
@@ -26,7 +45,7 @@ async function fixture(options={}){
       while((newline=buffer.indexOf('\n'))>=0){
         const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);const ack=/^ack ([a-f0-9]{16}) (.+)$/.exec(line),command=ack?ack[2]:line;written.push(command);
         if(ack){
-          const timer=setTimeout(()=>{timers.delete(timer);if(!closed)agent.stdout.write(packet(2,{id:ack[1],ok:!command.endsWith(Buffer.from('REJECT').toString('base64')),error:'Desktop rejected typing'}));},120);timers.add(timer);
+          const timer=setTimeout(()=>{timers.delete(timer);if(!closed)agent.stdout.write(packet(2,{id:ack[1],ok:!command.endsWith(Buffer.from('REJECT').toString('base64')),error:'Desktop rejected typing',...command.startsWith('focus ')?{editable:true}:{}}));},120);timers.add(timer);
         }
       }
       done();

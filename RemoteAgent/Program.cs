@@ -26,6 +26,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Length==1&&args[0]=="--privacy-display"){PrivacyDisplay.Run();return;}
         if(args.Length==1&&args[0]=="--open-link")
         {
             try
@@ -255,8 +256,17 @@ internal static class Program
                     if (fields.Length != 3) continue;
                     try
                     {
-                        Execute(fields[2]);
-                        Send(output, 2, JsonSerializer.SerializeToUtf8Bytes(new { id = fields[1], ok = true }));
+                        if (fields[2].StartsWith("focus ", StringComparison.Ordinal))
+                        {
+                            var point = fields[2].Split(' ');
+                            bool? editable = point.Length == 3 ? FieldFocus.EditableAt(Number(point[1]) + primary.Left, Number(point[2]) + primary.Top) : null;
+                            Send(output, 2, JsonSerializer.SerializeToUtf8Bytes(new { id = fields[1], ok = true, editable }));
+                        }
+                        else
+                        {
+                            Execute(fields[2]);
+                            Send(output, 2, JsonSerializer.SerializeToUtf8Bytes(new { id = fields[1], ok = true }));
+                        }
                     }
                     catch (Exception ex)
                     {

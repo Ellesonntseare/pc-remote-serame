@@ -75,15 +75,36 @@
     board.addEventListener('drop', event => { if (!nativeDrag) return; event.preventDefault(); const id = nativeDrag; nativeDrag = null; board.classList.remove('settingsDragging'); commitOrder(id); });
     board.addEventListener('dragend', () => { board.classList.remove('settingsDragging'); if (nativeDrag) { nativeDrag = null; renderTiles(); } });
     dialog.querySelector('#homeLayoutReset').addEventListener('click', () => { const saved = workspace.reset(); renderTiles(); say('Default order and all available controls restored.', saved); });
-    function open() { if (window.PCRAuth && !window.PCRAuth.signedIn) return; accountSection.querySelector('[data-current-account]').textContent=window.PCRAuth?.account?.email||'Connected with your PC password';if (!dialog.open) dialog.showModal(); renderTiles(); }
+    function open(section) { if (window.PCRAuth && !window.PCRAuth.signedIn) return; accountSection.querySelector('[data-current-account]').textContent=window.PCRAuth?.account?.email||'Connected with your PC password';if (!dialog.open) dialog.showModal(); renderTiles();refreshControls();if(typeof section==='string')requestAnimationFrame(()=>jump(section)); }
     function close() { if (dialog.open) dialog.close(); }
     launcher.addEventListener('click', open); dialog.querySelector('[data-close]').addEventListener('click', close);
     dialog.addEventListener('close', () => { if (dragFrame) cancelAnimationFrame(dragFrame); dragFrame = 0; drag = null; dragPoint = null; nativeDrag = null; board.classList.remove('settingsDragging'); });
     window.addEventListener('pcr:home-availability', () => { if (dialog.open && !drag && !nativeDrag) renderTiles(); });
     window.addEventListener('pcr:auth', event => { if (!event.detail?.signedIn) close(); });
-    dialog.querySelector('#workspaceRemotePreferences').addEventListener('click', () => window.rsPrefsOpen?.());
-    window.PCRWorkspaceSettings = {open, close};
+    function refreshControls(){document.getElementById('sensitivity').value=sens;document.getElementById('sensValue').textContent=sens.toFixed(1)+'×';document.getElementById('keyColumns').value=cols;document.getElementById('keySize').value=keyHeight;rsRenderEditor();}
+    function jump(section){const target=dialog.querySelector('[data-settings-section="'+section+'"]');if(!target)return;target.scrollIntoView?.({block:'start',behavior:'instant'});target.querySelector('h3')?.focus({preventScroll:true});}
+    function organize(){
+      if(dialog.dataset.organized==='true')return;dialog.dataset.organized='true';
+      const intro=dialog.querySelector('.workspaceSettingsIntro');intro.textContent='Your connection, controls and personal preferences. Saved on this device.';
+      const nav=document.createElement('nav');nav.className='settingsSectionNav';nav.setAttribute('aria-label','Settings sections');intro.after(nav);
+      const groups={};for(const [id,label]of [['connection','Connection'],['controls','Controls'],['appearance','Appearance'],['privacy','Privacy']]){const section=document.createElement('section');section.className='settingsGroup';section.dataset.settingsSection=id;section.innerHTML='<h3 tabindex="-1" id="settings-'+id+'">'+label+'</h3><div class="settingsGroupContent"></div>';section.setAttribute('aria-labelledby','settings-'+id);dialog.append(section);groups[id]=section.querySelector('div');const link=document.createElement('button');link.type='button';link.textContent=label;link.onclick=()=>jump(id);nav.append(link);}
+      const connection=document.querySelector('#localConnectionPage .localConnectionCard');if(connection)groups.connection.append(connection);
+      const endpoint=document.createElement('p');endpoint.className='settingsEndpoint';endpoint.textContent='Current host · '+location.origin;groups.connection.prepend(endpoint);
+      const split=dialog.querySelector('#workspaceSplitSettings');split.querySelector('#workspaceRemotePreferences').remove();groups.controls.append(split);
+      const sheet=document.querySelector('#rsSettings .controlSheet');if(sheet){sheet.id='workspaceControlPreferences';sheet.classList.add('workspaceSettingsCard');sheet.querySelector('.controlHead')?.remove();const heading=document.createElement('h4');heading.textContent='Pointer & keyboard';sheet.prepend(heading);groups.controls.append(sheet);}
+      groups.controls.append(dialog.querySelector('#workspaceSettingsPreferences'));
+      const appearance=dialog.querySelector('.appearanceSettings');if(appearance){appearance.querySelector('h3').textContent='Visual effects';groups.appearance.append(appearance);}
+      groups.appearance.append(dialog.querySelector('#homeLayoutTitle').closest('section'));groups.privacy.append(accountSection);
+      const privacy=document.createElement('p');privacy.className='settingsPrivacyNote';privacy.textContent='Camera, microphone and screen sharing start when you choose them. Review and stop each source in its sharing page.';groups.privacy.append(privacy);
+      // All launchers now reach this same page; remote customization no longer
+      // opens a second settings dialog or maintains another copy of sliders.
+      window.rsPrefsOpen=()=>open('controls');window.rsPrefsClose=()=>{document.getElementById('rsSettings').classList.add('hide');if(dialog.open)close();};
+    }
+    window.PCRWorkspaceSettings = {open, close,get ready(){return dialog.dataset.organized==='true';}};
     installSplit(dialog);
+    // Run after every feature's mount callback, including when this module was
+    // itself mounted during DOMContentLoaded (embedded/older browser engines).
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(organize,0),{once:true});else setTimeout(organize,0);
   }
 
   function installSplit(dialog) {
@@ -104,7 +125,6 @@
       group.addEventListener('click', event => { const name = event.target.closest('[data-split-preset]')?.dataset.splitPreset, preset = presets[name]; if (!preset) return; preference.portrait = preset[0]; preference.landscape = preset[1]; persist(); syncControls(); schedule(); }); parent.append(group); groups.push(group);
     }
     controls(dialog.querySelector('.workspaceSplitControls'), 'homeSplit');
-    const controlSheet = document.querySelector('#rsSettings .controlSheet'); if (controlSheet) { const section = document.createElement('section'); section.className = 'remoteSplitPreferences'; section.innerHTML = '<h3>Screen &amp; trackpad space</h3><p>Drag the divider on the remote screen, or choose a size here.</p>'; controls(section, 'remoteSplit'); controlSheet.querySelector('.controlHead')?.after(section); }
     function visible() { return !document.hidden && !screen.classList.contains('hide'); }
     function watchingResize(on) { if (on === watching) return; watching = on; resize?.disconnect(); if (on) for (const node of [screen, dock.querySelector('.dockQuickKeys'), document.getElementById('rsk')]) if (node) resize?.observe(node); }
     const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;

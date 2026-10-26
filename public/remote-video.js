@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
   if(!window.PCRVideo||!window.rsOpen)return;
-  const toolbar=document.getElementById('screenTools');if(!toolbar)return;
+  const toolbar=document.querySelector('.remoteAdvancedView')||document.getElementById('screenTools');if(!toolbar)return;
   const label=document.createElement('label');label.className='remoteEngine';label.innerHTML='<span>Screen engine</span><select aria-label="Screen engine"><option value="auto">Auto</option><option value="video">Video</option><option value="compatibility">Compatibility</option></select>';toolbar.append(label);const choice=label.querySelector('select');try{const saved=localStorage.getItem('pcr_engine');if(['auto','video','compatibility'].includes(saved))choice.value=saved;}catch{}
   const publish=document.createElement('button');publish.type='button';publish.textContent='Share primary screen';publish.title='On the PC: select its primary monitor to enable fast remote video';toolbar.append(publish);
   const detail=document.createElement('span');detail.className='remoteEngineStatus';detail.setAttribute('role','status');toolbar.append(detail);
