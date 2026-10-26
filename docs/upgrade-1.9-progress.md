@@ -18,7 +18,7 @@ Requested: Android background uploads/downloads with notification Pause/Resume/C
 - Both .NET projects compile without warnings/errors.
 - 22 targeted Node checks pass: new folder browsing/traversal, mkdir, ETag resumption, Opus protocol, and control-only screen stream.
 - Initial full suite: 233/249. A legacy desktop layout moved the new search field; fixed by separating selectors. Follow-up UI suite 15/16; remaining failure was a native transfer sign-out message on an old app stub, fixed by capability gating. Rerun required.
-- Nothing in 1.9 has been committed/pushed/released yet. Keep `start-at-login.bat` untouched and uncommitted.
+- Development checkpoint 2518961 is pushed. Final corrections and release verification are in progress. No 1.9 release is published yet. Keep `start-at-login.bat` untouched and uncommitted.
 
 ## Website incident
 
@@ -31,3 +31,12 @@ On 26 October user reported Cloudflare 1033. Local and public /api/ping subseque
 3. Test real browser WebRTC remote video/fallback and Opus encode/decode/Windows playback. Do not claim physical-phone tests without an attached device.
 4. Build/smoke-test Windows installer; preserve current private config.
 5. Run full checks, inspect diff/security, update docs, commit/push; build signed personal APK 1.9 (versionCode 10); upload personal APK and installer after checks; deploy tested host.
+
+## Additional verified corrections
+
+- WebView audio permission defect identified: MODIFY_AUDIO_SETTINGS is now declared and verified by Android CI. HTTPS native microphone fallback and permission-denial tests pass. Native capture switching waits for release.
+- Both first-checkpoint APK and Windows installer builds succeeded. A Windows UI mock lacked a MediaStreamTrack event method; compatibility guard fixed it. Opus test encoder API argument corrected.
+- Integrated real-browser flow passes: H264, metadata-only native stream with no duplicate JPEG capture, PC input, fallback, folder destinations, native share/picker/queue actions, direct keyboard, Lightweight appearance. Encoder implementation was not reported.
+- Real Windows Opus output passed mono and stereo with volume held at zero.
+- User requested Air Mouse removal and reported a blue drag rectangle; Air Mouse removed from JS/Kotlin and priority mouse-up recovery added, with regression tests.
+- Files layout further simplified: no duplicate direction menu, automatic destination selection, compact phone rows, header connection shortcut, bounded progressive rendering.

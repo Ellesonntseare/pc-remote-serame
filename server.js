@@ -56,7 +56,7 @@ const PWA_ASSETS = new Map([
   ['/remote-cursor.js', ['remote-cursor.js', 'text/javascript; charset=utf-8']],
   ['/file-transfers.js', ['file-transfers.js', 'text/javascript; charset=utf-8']],
   ['/file-transfers.css', ['file-transfers.css', 'text/css; charset=utf-8']],
-  ...['file-manager','native-transfers','appearance','remote-video','accessibility'].map(name=>['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']]),
+  ...['file-manager','native-transfers','appearance','remote-video','accessibility','pointer-safety'].map(name=>['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']]),
   ['/file-manager.css',['file-manager.css','text/css; charset=utf-8']],
   ['/brand.svg', ['brand.svg', 'image/svg+xml']],
   ['/app-refinements.css', ['app-refinements.css', 'text/css; charset=utf-8']],

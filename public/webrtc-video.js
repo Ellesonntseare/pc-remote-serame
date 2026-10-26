@@ -21,6 +21,7 @@
         this.timer=setInterval(()=>{void this.readStats(epoch);},1500);
       }catch(error){if(epoch===this.epoch){this.stop();this.onStatus(error.message||'Could not start video.');}}
     }
+    setQuality(preset){const profile=({low:[750000,15],med:[2000000,20],high:[4000000,30],hd:[6000000,30],auto:[4000000,30]})[preset]||[4000000,30];this.send({type:'quality',bitrate:profile[0],fps:profile[1]});}
     send(value){if(this.socket?.readyState===1&&this.socket.bufferedAmount<262144)this.socket.send(JSON.stringify(value));}
     peer(id,epoch,audioAllowed=this.audioAllowed){
       if(this.peers.has(id))return this.peers.get(id);const pc=new this.Peer(this.config),entry={pc,id,queue:Promise.resolve(),ice:[]};this.peers.set(id,entry);
@@ -30,7 +31,7 @@
       const codecs=preferH264(this.capabilities()?.codecs||[]);if(codecs.length&&transceiver?.setCodecPreferences)try{transceiver.setCodecPreferences(codecs);}catch{}
       pc.onicecandidate=event=>{if(epoch===this.epoch)this.send({type:'candidate',id:this.publish?id:undefined,candidate:event.candidate?.toJSON?.()??event.candidate??null});};
       pc.ontrack=event=>{if(epoch===this.epoch&&!this.publish&&event.streams?.[0]){const stream=event.streams[0];if(!this.audioAllowed)for(const audio of stream.getAudioTracks?.()||[])audio.enabled=false;this.onStream(stream,{publish:false,audioAllowed:this.audioAllowed});this.onStatus('Watching your PC live');}};
-      pc.onconnectionstatechange=()=>{if(epoch!==this.epoch)return;if(pc.connectionState==='connected')this.onStatus(this.publish?'PC video connected.':'Live video');else if(pc.connectionState==='failed'){if(!this.publish)this.stop();else{pc.close();this.peers.delete(id);}this.onStatus('Video could not connect. Use Remote screen; connections across different networks may need a relay.');}};
+      pc.onconnectionstatechange=()=>{if(epoch!==this.epoch)return;if(pc.connectionState==='connected')this.onStatus(this.publish?'PC video connected.':'Live video');else if(pc.connectionState==='disconnected')this.onStatus('Video connection interrupted.');else if(pc.connectionState==='failed'){if(!this.publish)this.stop();else{pc.close();this.peers.delete(id);}this.onStatus('Video could not connect. Use Remote screen; connections across different networks may need a relay.');}};
       return entry;
     }
     async receive(value,epoch){
@@ -39,6 +40,7 @@
       if(!this.publish&&value.type==='source-ready')this.onAudio({allowed:this.audioAllowed,available:value.hasAudio===true,publish:false});
       if(!this.publish&&(value.type==='source-ready'||value.type==='ready'&&value.available)){this.send({type:'watch'});return;}
       if(value.type==='source-stopped'){for(const p of this.peers.values())p.pc.close();this.peers.clear();this.onStream(null);this.onStatus('The PC stopped video sharing. Waiting for it to restart.');return;}
+      if(value.type==='quality'&&this.publish){const entry=this.peers.get(value.id);if(entry){entry.quality={bitrate:value.bitrate,fps:value.fps};entry.queue=entry.queue.then(async()=>{const sender=entry.pc.getSenders().find(s=>s.track?.kind==='video');if(!sender)return;const parameters=sender.getParameters();for(const encoding of parameters.encodings||[]){encoding.maxBitrate=value.bitrate;encoding.maxFramerate=value.fps;}try{await sender.setParameters(parameters);}catch{}});await entry.queue;}return;}
       if(value.type==='leave'&&this.publish){const p=this.peers.get(value.id);p?.pc.close();this.peers.delete(value.id);return;}
       if(value.type==='join'&&this.publish){const entry=this.peer(value.id,epoch,value.audioAllowed===true);entry.queue=entry.queue.then(async()=>{const offer=await entry.pc.createOffer();if(epoch!==this.epoch)return;await entry.pc.setLocalDescription(offer);if(epoch!==this.epoch)return;this.send({type:'description',id:value.id,description:entry.pc.localDescription});});await entry.queue;return;}
       if(!['description','candidate'].includes(value.type))return;const id=this.publish?value.id:'source',entry=this.peer(id,epoch);
@@ -48,7 +50,7 @@
         await entry.pc.setRemoteDescription(value.description);if(epoch!==this.epoch)return;for(const candidate of entry.ice.splice(0))await entry.pc.addIceCandidate(candidate);
         if(!this.publish){const answer=await entry.pc.createAnswer();if(epoch!==this.epoch)return;await entry.pc.setLocalDescription(answer);if(epoch!==this.epoch)return;this.send({type:'description',description:entry.pc.localDescription});}
         else{
-          const sender=entry.pc.getSenders().find(s=>s.track?.kind==='video');if(sender){const parameters=sender.getParameters();if(parameters.encodings?.length){for(const encoding of parameters.encodings){encoding.maxBitrate=4000000;encoding.maxFramerate=30;}try{await sender.setParameters(parameters);}catch{}}}
+          const sender=entry.pc.getSenders().find(s=>s.track?.kind==='video');if(sender){const parameters=sender.getParameters();if(parameters.encodings?.length){for(const encoding of parameters.encodings){encoding.maxBitrate=entry.quality?.bitrate||4000000;encoding.maxFramerate=entry.quality?.fps||30;}try{await sender.setParameters(parameters);}catch{}}}
         }
       });await entry.queue;
     }

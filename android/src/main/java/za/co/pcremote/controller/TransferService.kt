@@ -32,7 +32,10 @@ class TransferService : Service() {
             }}
             return JSONObject().put("origin",origin).put("tasks",rows)
         }
-        fun stopOrigin(context: Context, origin: String) { live?.cancelOrigin(origin) }
+        fun stopOrigin(context: Context, origin: String) {
+            val running=live;if(running!=null){running.cancelOrigin(origin);return}
+            runCatching{val file=File(context.filesDir,"transfer-queue.json");val old=JSONArray(file.readText());val retained=JSONArray();for(i in 0 until old.length()){val row=old.getJSONObject(i);if(row.optString("origin")!=origin)retained.put(row)else File(context.filesDir,"transfer-"+row.optString("id")+".part").delete()};val atomic=android.util.AtomicFile(file);val out=atomic.startWrite();try{out.write(retained.toString().toByteArray());atomic.finishWrite(out)}catch(e:Exception){atomic.failWrite(out)}}
+        }
     }
     private val tasks=mutableListOf<JSONObject>()
     private val cookies=mutableMapOf<String,String>()
@@ -179,7 +182,7 @@ class TransferService : Service() {
             Thread.sleep(200)
         }
     }
-    private fun cancelOrigin(origin:String) {synchronized(lock){tasks.filter{it.optString("origin")==origin&&it.optString("state") !in listOf("complete","cancelled")}.forEach{it.put("state","cancelled");cleanup(it)};cookies.remove(origin);activeCall?.cancel();persist();publish()}}
+    private fun cancelOrigin(origin:String) {synchronized(lock){tasks.filter{it.optString("origin")==origin}.forEach{it.put("state","cancelled");cleanup(it)};tasks.removeAll{it.optString("origin")==origin};cookies.remove(origin);activeCall?.cancel();persist();publish()}}
     private fun notification(row:JSONObject?,bytes:Long=row?.optLong("received")?:0):Notification {
         val open=PendingIntent.getActivity(this,109,Intent(this,MainActivity::class.java).putExtra("openFiles",true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val state=row?.optString("state").orEmpty();val size=row?.optLong("size",-1)?:-1

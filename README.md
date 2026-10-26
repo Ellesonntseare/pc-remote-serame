@@ -1,5 +1,7 @@
 # PC Remote — Serame's personal remote app
 
+Version 1.9 adds background Android transfers, Share → PC Remote, a folder-based file manager, integrated remote video with fallback, efficient audio, the WebView microphone permission fix, a personal Windows installer, Lightweight appearance and simpler navigation. Air Mouse is removed. See [version 1.9](docs/version-1.9.md) for use and validation limits.
+
 Version 1.8 adds [phone-to-PC audio streaming](docs/phone-audio.md), with microphone/phone playback selection and direct Windows speaker output. The Cloudflare launcher reuses a healthy running host. Version 1.7 introduced faster local connections/transfers, Google registration/login, and native local camera/microphone capture. See [Google setup](GOOGLE-SIGN-IN.md), [version 1.7 checks](docs/version-1.7.md), [the feature guide](docs/mission-control.md), and [reference artwork notes](docs/design-artwork.md).
 
 ## Start the updated app

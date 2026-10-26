@@ -35,10 +35,6 @@ import android.widget.Toast
 import android.view.KeyEvent
 import android.view.HapticFeedbackConstants
 import android.view.inputmethod.InputMethodManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.os.SystemClock
 import android.webkit.URLUtil
 import java.net.HttpURLConnection
@@ -64,8 +60,6 @@ class MainActivity : Activity() {
     private var filesResult: ValueCallback<Array<Uri>>? = null
     private var volumeControlEnabled = false
     private var lastHaptic = 0L
-    private var lastMotion = 0L
-    private var gyroListener: SensorEventListener? = null
     private var downloadRequest: Pair<String, String>? = null
     private var screenshotBytes: ByteArray? = null
     private var fullscreenView: View? = null
@@ -144,7 +138,7 @@ class MainActivity : Activity() {
         // Keep file:// and cross-origin file access disabled.
         settings.allowContentAccess = true
         settings.javaScriptCanOpenWindowsAutomatically = false
-        settings.mediaPlaybackRequiresUserGesture = true
+        settings.mediaPlaybackRequiresUserGesture = false
         settings.setSupportMultipleWindows(false)
         settings.allowFileAccessFromFileURLs = false
         settings.allowUniversalAccessFromFileURLs = false
@@ -197,7 +191,7 @@ class MainActivity : Activity() {
                 return !isAllowed(request.url.toString())
             }
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                volumeControlEnabled=false;stopAirMouse()
+                volumeControlEnabled=false;
                 microphoneRequest?.deny();microphoneRequest=null;filesResult?.onReceiveValue(null);filesResult=null
                 stopLocalMedia();pendingPhoneAudio=null;PhoneAudioService.stop();pendingProjection = false; ScreenShareService.stopSharing(); shareReply = null
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
@@ -289,7 +283,6 @@ class MainActivity : Activity() {
                     "connect-local" -> startLocalConnection(value.optString("address"),value.optInt("port",7666),true)
                     "haptic" -> { val now=SystemClock.elapsedRealtime();if(now-lastHaptic>=35){lastHaptic=now;web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)} }
                     "volume-keys" -> { volumeControlEnabled=value.optBoolean("enabled",false) }
-                    "air-mouse" -> { if(value.optBoolean("enabled",false))startAirMouse()else stopAirMouse() }
                     "keyboard" -> { web.requestFocus();(getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(web,InputMethodManager.SHOW_IMPLICIT) }
                     "save-image" -> {
                         val encoded=value.optString("data")
@@ -405,7 +398,7 @@ class MainActivity : Activity() {
 
     private fun showConnect(message: String) {
         hideFullscreen()
-        volumeControlEnabled=false;stopAirMouse()
+        volumeControlEnabled=false;
         pendingProjection = false; ScreenShareService.stopSharing()
         web.stopLoading()
         web.loadUrl("about:blank")
@@ -433,7 +426,7 @@ class MainActivity : Activity() {
         TransferService.events=null
         stopLocalMedia()
         hideFullscreen()
-        stopAirMouse();volumeControlEnabled=false
+        volumeControlEnabled=false
         microphoneRequest?.deny();microphoneRequest=null;filesResult?.onReceiveValue(null);filesResult=null
         controlDialog?.dismiss();controlDialog=null
         pendingProjection = false; ScreenShareService.stopSharing(); ScreenShareService.events = null; shareReply = null
@@ -449,7 +442,7 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         stopLocalMedia()
-        stopAirMouse()
+
         if(isAllowed(web.url?:""))web.evaluateJavascript("window.PCRCamera?.stop()",null)
         // Only the in-app thumbnail pauses. The foreground service owns both
         // capture and the network connection while the user opens other apps.
@@ -548,9 +541,7 @@ class MainActivity : Activity() {
         if(volumeControlEnabled&&keyCode in listOf(KeyEvent.KEYCODE_VOLUME_UP,KeyEvent.KEYCODE_VOLUME_DOWN))return true
         return super.onKeyUp(keyCode,event)
     }
-    private fun stopAirMouse(){
-        gyroListener?.let{(getSystemService(SENSOR_SERVICE) as SensorManager).unregisterListener(it)};gyroListener=null;lastMotion=0
-    }
+
     private fun mediaPermissions(request:PermissionRequest):List<String>?{
         if(!isAllowed(request.origin.toString())||request.resources.isEmpty())return null
         val permissions=mutableListOf<String>()
@@ -567,16 +558,5 @@ class MainActivity : Activity() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         if(selectedOrigin!=null)web.visibility=View.VISIBLE
     }
-    private fun startAirMouse(){
-        stopAirMouse();val manager=getSystemService(SENSOR_SERVICE) as SensorManager;val sensor=manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
-        if(sensor==null){web.evaluateJavascript("window.PCRDeviceInput?.motionUnavailable()",null);return}
-        gyroListener=object:SensorEventListener{
-            override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int){}
-            override fun onSensorChanged(event:SensorEvent){
-                val now=SystemClock.elapsedRealtime();if(lastMotion==0L){lastMotion=now;return};val delta=now-lastMotion;if(delta<24)return;lastMotion=now
-                val scale=delta.coerceAtMost(80)/1000.0*650;val dx=(-event.values[1]*scale).coerceIn(-100.0,100.0);val dy=(-event.values[0]*scale).coerceIn(-100.0,100.0)
-                web.evaluateJavascript("window.PCRDeviceInput?.motion($dx,$dy)",null)
-            }
-        };manager.registerListener(gyroListener,sensor,SensorManager.SENSOR_DELAY_GAME)
-    }
+
 }

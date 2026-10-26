@@ -8,7 +8,7 @@
       try{
         const stream=await navigator.mediaDevices.getUserMedia(options);
         if(version!==generation){for(const track of stream.getTracks())track.stop();throw Error('Phone capture was stopped.');}
-        const stop=()=>{for(const track of stream.getTracks())track.stop();if(active?.stop===stop)active=null;};active={stop};for(const track of stream.getTracks())track.addEventListener('ended',stop,{once:true});return stream;
+        const stop=()=>{for(const track of stream.getTracks())track.stop();if(active?.stop===stop)active=null;};active={stop};for(const track of stream.getTracks())track.addEventListener?.('ended',stop,{once:true});return stream;
       }catch(error){if(version!==generation||!available()||!['NotReadableError','AbortError'].includes(error.name))throw error;}
     }
     if(!available())return Promise.reject(Error('Camera and microphone need HTTPS in a browser. Use the updated Android app for local HTTP capture.'));
