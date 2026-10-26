@@ -310,7 +310,7 @@ function createApp(options={}) {
     if(fs.existsSync(exe)) {bin=exe;args=[String(fps),String(quality),String(scale)];}
     else {bin='dotnet';args=[dll,String(fps),String(quality),String(scale)];}
     if(preset==='auto'&&maxWidth)args.push(String(maxWidth));
-    const p=options.agentFactory ? options.agentFactory(preset) : spawn(bin,args,{cwd:ROOT,windowsHide:false,stdio:['pipe','pipe','pipe']});
+    const p=options.agentFactory ? options.agentFactory(preset) : spawn(bin,args,{cwd:ROOT,windowsHide:true,stdio:['pipe','pipe','pipe']});
     agent=p;agentPreset=preset;agentBuffer=new ScreenPacketReader(MAX_PACKET);agentReady=false;
     p.stdin.on('error',()=>{});
     p.stderr.on('data',d=>console.error('[Desktop agent]',String(d).trim()));
