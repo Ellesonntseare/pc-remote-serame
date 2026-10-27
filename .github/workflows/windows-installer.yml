@@ -56,8 +56,13 @@ jobs:
           name: PC-Remote-Windows-Host-1.9
           path: dist/PC-Remote-Host-Setup-1.9.exe
           if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-artifact@v4
+        # The installer already contains this bundle. Keep the larger unpacked
+        # copy only for manually requested debugging builds.
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: PC-Remote-Windows-Host-Package-1.9
           path: dist/host-package/
           if-no-files-found: error
+          retention-days: 1

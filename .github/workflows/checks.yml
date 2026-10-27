@@ -7,6 +7,25 @@ on:
 permissions:
   contents: read
 jobs:
+  portable:
+    name: Portable host checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run portable host checks
+        shell: bash
+        run: |
+          portable=()
+          for file in test/*.test.js; do
+            if [[ "$file" != "test/interface.test.js" ]]; then portable+=("$file"); fi
+          done
+          node --require ./test/use-sandbox-home.cjs --test "${portable[@]}"
   windows:
     runs-on: windows-latest
     timeout-minutes: 15

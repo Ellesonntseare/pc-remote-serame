@@ -23,7 +23,7 @@
     function open(){if(window.PCRAuth?.signedIn&&card.closest('#workspaceSettings'))window.PCRWorkspaceSettings.open('connection');else{if(!dialog.contains(card))dialog.append(card);if(!dialog.open)dialog.showModal();}fill(saved||parseAddress(location.hostname,location.port||7666));setStatus('');void loadAddresses();requestAnimationFrame(()=>input.focus({preventScroll:true}));}
     function connect(){
       if(busy)return;const target=parseAddress(input.value,port.value);if(!target){setStatus('Enter a private PC IP such as 192.168.8.100. A full local URL or IP:port also works.',true);input.focus();return;}
-      if(activeUpload()){setStatus('Pause or finish the current transfer before switching connections.',true);return;}
+      if(activeUpload()){setStatus('Finish or cancel the current transfer batch before switching connections.',true);return;}
       fill(target);saved=target;try{localStorage.setItem(storage,JSON.stringify({ip:target.ip,port:target.port}));}catch{}
       if(target.url===location.origin+'/'){dialog.close();window.msg?.('You are already using this local connection.');return;}
       if(window.PCRAndroid?.postMessage){

@@ -1,3 +1,18 @@
+# Transfer convenience and build storage — 27 October 2026
+
+- [x] Browser Pause keeps every remaining file in the batch. Resume batch continues without selecting the files again; Cancel preserves completed files.
+- [x] Each batch keeps its original PC destination when another folder is browsed. Switching feature pages continues the transfer; closing/reloading the browser warns while its file selections are still needed, where the browser supports that warning.
+- [x] Files shortcuts on Home, the remote controls and navigation show the remaining count and current-file progress, including the Android queue. Paused transfers use an amber indicator and a single Resume batch action.
+- [x] Sign-out clears paused selections and progress indicators. Active or paused browser batches prevent connection switching until completed or cancelled.
+- [x] Validation: 281 automated tests passed; final targeted checks passed; a real Chromium transfer resumed three files (14,680,086 bytes), verified their contents and original destination, and cleared the indicator on completion. Five browser layouts (320–1280 px) retain accessible remote controls without horizontal overflow.
+- [x] Updated host deployed. Local and public HTTPS health checks and the served client bundle include the new transfer flow.
+- [x] Deleted the 21 specifically approved older Actions artifacts (865.3 MiB), retaining the latest three artifacts and all published APK/installer release assets.
+- [x] Automatic Windows builds retain the installer for seven days; the duplicate unpacked bundle is limited to manual debugging builds with one-day retention. Android artifacts retain for fourteen days. Web-only changes run host checks without rebuilding the unchanged Android wrapper; portable checks run in the main checks workflow.
+- [ ] GitHub artifact uploads are still awaiting its storage-quota refresh after cleanup; build compilation succeeded before the quota rejection. Published personal release downloads remain available.
+- [ ] Physical Android testing remains necessary; no phone is attached to this workspace.
+
+---
+
 # All-area refinement pass — 27 October 2026
 
 - [x] Remote taps use the pointer channel immediately; superseded field checks cannot open the keyboard or block another tap. Windows focus queries run outside the input loop.

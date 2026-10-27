@@ -55,6 +55,7 @@ const PWA_ASSETS = new Map([
   ['/screen-packets.js', ['screen-packets.js', 'text/javascript; charset=utf-8']],
   ['/hold-repeat.js', ['hold-repeat.js', 'text/javascript; charset=utf-8']],
   ['/privacy-mode.js', ['privacy-mode.js', 'text/javascript; charset=utf-8']],
+  ['/transfer-badges.js', ['transfer-badges.js', 'text/javascript; charset=utf-8']],
   ['/screen-renderer.js', ['screen-renderer.js', 'text/javascript; charset=utf-8']],
   ['/remote-cursor.js', ['remote-cursor.js', 'text/javascript; charset=utf-8']],
   ['/file-transfers.js', ['file-transfers.js', 'text/javascript; charset=utf-8']],

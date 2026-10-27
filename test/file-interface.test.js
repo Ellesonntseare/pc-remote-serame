@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),{JSDOM,CookieJar}=require('jsdom'),{createApp}=require('../server');
 const pause=()=>new Promise(resolve=>setTimeout(resolve,20));
-async function until(check){for(let n=0;n<300;n++){if(await check())return;await pause();}assert.fail('File interface did not finish the expected action');}
+async function until(check,detail,timeout=6000){const deadline=Date.now()+timeout;while(Date.now()<deadline){if(await check())return;await pause();}assert.fail('File interface did not finish the expected action'+(detail?': '+detail():''));}
 async function fixture(t){
   const root=await fs.mkdtemp(path.join(__dirname,'.transfer-check-'));let clipboard='From the PC',requested=0;const notifications=[],opened=[];
   const app=createApp({transferDirectory:root,disableAgent:true,disableActions:true,clipboardProvider:{get:async()=>clipboard,set:async value=>{clipboard=value;}},nativeFeatures:{openLink:async url=>opened.push(url),close(){}}});await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
@@ -45,4 +45,28 @@ test('link UI sends to the device inbox and opens the PC browser only after choo
   const f=await fixture(t);f.w.eval(await fs.readFile(path.join(__dirname,'../public/device-links.js'),'utf8'));await until(()=>f.d.getElementById('deviceLinks'));f.d.getElementById('textTab').click();
   const panel=f.d.getElementById('deviceLinks'),input=f.d.getElementById('deviceLinkUrl');input.value='example.com/from-phone';panel.querySelector('[data-link-send]').click();await until(()=>panel.querySelector('.deviceLinkRow'));assert.deepEqual(f.opened,[],'sharing a link never launches a browser');
   assert.match(panel.querySelector('.deviceLinkRow').textContent,/example.com/);panel.querySelector('.deviceLinkForm').dispatchEvent(new f.w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>f.opened.length===1);assert.deepEqual(f.opened,['https://example.com/from-phone']);
+});
+
+function holdChunk(f,number=1){const Real=f.w.XMLHttpRequest;let started=0,held=null;f.w.XMLHttpRequest=class extends Real{send(body){if(++started===number){this.holding=true;this.abortCount=0;held=this;return;}super.send(body);}abort(){if(this.holding){this.holding=false;this.abortCount++;this.onabort?.();}else super.abort();}};return()=>held;}
+
+test('browser batches survive page changes and resume every remaining file into the original destination',async t=>{
+  const f=await fixture(t),held=holdChunk(f),summaries=[];f.w.PCRFileManager={destination:'Original'};f.w.addEventListener('pcr:transfer-summary',event=>summaries.push(event.detail));f.w.eval(await fs.readFile(path.join(__dirname,'../public/transfer-badges.js'),'utf8'));
+  f.choose(['one','two','three'].map((name,index)=>new f.w.File([name],name+'.txt',{lastModified:index+1})));await until(()=>held());
+  f.d.getElementById('filesClose').click();assert.equal(held().abortCount,0,'changing feature pages must not stop uploads');assert.equal(f.d.querySelector('[data-files-button] .transferBadge').textContent,'3');
+  f.d.querySelector('.filesHome').click();f.d.getElementById('filesPause').click();await until(()=>f.d.getElementById('filesPause').textContent==='Resume batch');assert.equal(summaries.at(-1).remaining,3);assert.equal(summaries.at(-1).paused,true);
+  const leave=new f.w.Event('beforeunload',{cancelable:true});f.w.dispatchEvent(leave);assert.equal(leave.defaultPrevented,true,'closing the tab warns while File objects are still needed');
+  f.w.PCRFileManager.destination='Another folder';f.d.getElementById('filesPause').click();await until(()=>f.d.getElementById('filesStatus').textContent==='3 files sent to your PC.',()=>JSON.stringify({status:f.d.getElementById('filesStatus').textContent,summary:summaries.at(-1),pause:f.d.getElementById('filesPause').textContent}),30000);
+  for(const name of ['one','two','three'])assert.equal(await fs.readFile(path.join(f.root,'Original',name+'.txt'),'utf8'),name);
+  await assert.rejects(fs.stat(path.join(f.root,'Another folder')),error=>error.code==='ENOENT');assert.equal(summaries.at(-1).remaining,0);assert.equal(f.d.querySelector('[data-files-button] .transferBadge').hidden,true);
+  const finished=new f.w.Event('beforeunload',{cancelable:true});f.w.dispatchEvent(finished);assert.equal(finished.defaultPrevented,false);
+});
+
+test('cancelling a paused batch keeps completed files and discards only the unfinished upload',async t=>{
+  const f=await fixture(t),held=holdChunk(f,2);f.choose(['sent','unfinished','queued'].map((name,index)=>new f.w.File([name],name+'.txt',{lastModified:index+1})));await until(()=>held());f.d.getElementById('filesPause').click();await until(()=>f.d.getElementById('filesPause').textContent==='Resume batch');assert.match(f.d.getElementById('filesProgressName').textContent,/2 files paused/);
+  f.d.getElementById('filesCancel').click();await until(()=>f.d.getElementById('filesPending').children.length===0);assert.equal(f.d.getElementById('filesProgress').hidden,true);assert.equal(await fs.readFile(path.join(f.root,'sent.txt'),'utf8'),'sent');
+  for(const name of ['unfinished','queued'])await assert.rejects(fs.stat(path.join(f.root,name+'.txt')),error=>error.code==='ENOENT');
+});
+
+test('signing out clears paused batches before another account can reuse the file selection',async t=>{
+  const f=await fixture(t),held=holdChunk(f);f.choose([new f.w.File(['private'],'private.txt'),new f.w.File(['queued'],'queued.txt')]);await until(()=>held());f.d.getElementById('filesPause').click();await until(()=>f.d.getElementById('filesPause').textContent==='Resume batch');f.w.PCRAuth={signedIn:false};f.w.dispatchEvent(new f.w.Event('pcr:auth'));assert.equal(f.d.getElementById('filesProgress').hidden,true);assert.equal(f.d.getElementById('filesPending').children.length,0);const leave=new f.w.Event('beforeunload',{cancelable:true});f.w.dispatchEvent(leave);assert.equal(leave.defaultPrevented,false);
 });
