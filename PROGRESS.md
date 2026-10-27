@@ -1,3 +1,14 @@
+# Personal app 2.1.1 reliability update — 27 October 2026
+
+- [x] Preserve the original upload snapshot in sync checkpoints so edits made while sending remain pending. Recheck phone files before replacing them with downloads.
+- [x] Recover interrupted upload tickets without replacing them on network/busy errors; release obsolete partials before creating another upload. Refresh the PC listing after recovery can finish an upload.
+- [x] Coalesce rapid PC changes with a trailing sync request. Sign-out and page exit cancel pending timers; returning from the background resumes pending work.
+- [x] Synchronize Android folder-provider observer bookkeeping across background workers and UI callbacks.
+- [ ] Complete browser/host and Android regression checks, then publish the signed 2.1.1 APK and matching Windows installer.
+- [ ] Physical Android provider and background scheduling checks still need a connected phone.
+
+---
+
 # Personal app 2.1 — 27 October 2026
 
 - [x] Local PC discovery in Android and Connection settings; discovery advertises IPv4 addresses matching the host listener. A live DNS-SD probe resolved the actual PC address.
