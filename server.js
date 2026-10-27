@@ -199,8 +199,9 @@ function createApp(options={}) {
   const googleAccounts=createGoogleAccounts({file:options.accountFile||(options.sessionFile?path.join(path.dirname(options.sessionFile),'.google-accounts.json'):undefined)});
   const deviceLinks=createDeviceLinks({openLink:url=>nativeFeatures.openLink(url),readClipboard:()=>options.clipboardProvider?options.clipboardProvider.get():nativeClipboard(ROOT,'get')});
   const smart=createSmartQuality();
+  const hostIdentity=os.hostname()+'|'+os.homedir();
   const fileTransfers=createFileTransfers({directory:options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers'),maxBytes:options.maxFileBytes,watch:options.discovery===true,locations:pcLocations(options.fileLocations),locationsProvider:options.fileLocationsProvider});
-  const syncHub=createSyncHub({file:options.syncFile,stageFiles:fileTransfers.stageFromPC,getFileRevision:()=>fileTransfers.revision,clipboard:options.clipboardProvider||{get:()=>nativeClipboard(ROOT,'get'),set:text=>nativeClipboard(ROOT,'set',text)}});
+  const syncHub=createSyncHub({identity:hostIdentity,file:options.syncFile,stageFiles:fileTransfers.stageFromPC,getFileRevision:()=>fileTransfers.revision,clipboard:options.clipboardProvider||{get:()=>nativeClipboard(ROOT,'get'),set:text=>nativeClipboard(ROOT,'set',text)}});
   const networkDevices=createNetworkDevices({enabled:options.discovery===true&&allowLan});
   const sessionKey=token=>crypto.createHash('sha256').update(token).digest('hex');
   if(options.sessionFile)try{
@@ -912,7 +913,7 @@ function createApp(options={}) {
   });
   function stop(){stopping=true;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();}
   server.on('close',()=>{sessionAdmin.close();google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();nativeVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
-  if(options.discovery===true)require('./local-discovery').advertise(server,{name:hostname,identity:ROOT,enabled:allowLan});
+  if(options.discovery===true)require('./local-discovery').advertise(server,{name:hostname,identity:hostIdentity,enabled:allowLan});
   server.once('close',()=>{networkDevices.close();void syncHub.close();});
   return {server,pin,port,addresses:interfaces,stop};
 }

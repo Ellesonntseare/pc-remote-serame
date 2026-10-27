@@ -13,6 +13,7 @@
       page.querySelector('[data-close]').addEventListener('click',()=>page.close());page.addEventListener('close',()=>{power.setAttribute('aria-expanded','false');window.closeM?.();});page.addEventListener('click',event=>{if(event.target.closest('[data-q]'))queueMicrotask(()=>confirmation?.querySelector('.confirm button')?.focus());});
       window.addEventListener('pcr:auth',()=>{if(!window.PCRCanAccess?.('power'))page.close();});
     }
+    window.addEventListener('pcr:settings-sync',event=>{if(event.detail?.key!=='pcr_home_panels_v1')return;try{const values=JSON.parse(event.detail.value);if(!values||typeof values!=='object'||Array.isArray(values))return;saved=values;for(const item of panels)item.panel.open=values[item.panel.dataset.homePanel]===true;}catch{}});
     const storageKey='pcr_home_panels_v1';let saved={};try{const value=JSON.parse(localStorage.getItem(storageKey)||'{}');if(value&&typeof value==='object'&&!Array.isArray(value))saved=value;}catch{}
     const group=document.createElement('section');group.id='homePanels';group.className='homePanels';group.setAttribute('aria-label','More PC controls');const panels=[];
     const icons={media:'<path d="m8 5 11 7-11 7Z"/>',status:'<path d="M3 13h4l3-8 4 14 3-8h4"/>',history:'<path d="M4 5v5h5M4.5 10a8 8 0 1 1 0 5M12 7v5l3 2"/>'};

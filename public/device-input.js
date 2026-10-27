@@ -62,5 +62,6 @@
     auth();
   }
   window.PCRDeviceInput={haptic,focusKeyboard,volume,screenshot};
+  window.addEventListener('pcr:settings-sync',()=>{vibration=read('pcr_haptics',true);volumeKeys=read('pcr_volume_keys',false);syncVolume();});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();

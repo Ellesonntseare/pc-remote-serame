@@ -1,0 +1,35 @@
+# Personal 2.1: connected devices
+
+Your Windows PC remains the host. Install the personal Android 2.1 APK for discovery, clipboard integration, widgets and background folder sync. The website provides the shared file workspace and settings/link delivery too.
+
+## Start using it
+
+1. On Android, choose **Find my PC nearby** on the connection screen, or in Settings → Connection. Choose the discovered PC; the saved IP field remains available. Discovery uses DNS-SD on the local network and does not require Internet access.
+2. Sign in and open Settings → Connection → **Connected devices**. App layout, appearance and supported control preferences sync between paired owner devices. Clipboard text moves between Windows and the foreground Android app; browsers use their available clipboard permissions or the explicit Send clipboard action.
+3. In Files → PC, choose Transfers, Desktop, Documents, Downloads or a folder added on the Windows host. The current location is also the upload destination. Select checkboxes to rename or move items; sorting, favourites and subfolder search stay in the same workspace.
+4. Open Files → Phone → **Synced folders**. Choose a phone folder and the PC destination once. Select both-way sync or phone-to-PC backup. Sync now, Pause, Resume and Disconnect folder are beside each folder pair. The same controls are accessible from Connection settings.
+5. Add the PC Remote widget from these controls or Android's widget picker. Long-press the app icon for Screen, Files, Keyboard and Audio shortcuts.
+
+Folder sync copies additions and changes; it does not mirror deletions. Conflicting changes keep a separate conflict copy. Hidden/internal files and paths unsupported by Windows are excluded. Android requires granting access to each chosen phone folder; another device cannot grant that permission remotely. App-private storage and Android system settings are outside folder sync.
+
+PC file changes and supported Android provider notifications trigger checks while the app is in use. WorkManager also checks in the background at intervals of at least fifteen minutes; Android's battery/network policies can delay work. An open remembered host session is required, and signing out cancels that origin's jobs until signing in again. Paused uploads retain their committed chunk offset; folder downloads complete one file at a time. Previously replaced phone files are retained under `.pcr-previous-…` names; PC versions are retained privately in `.pcr-versions` inside Transfers.
+
+## Windows sending and network folders
+
+The Windows installer adds **Send to → PC Remote** in Explorer. The tray menu also opens a Send to my phone window that accepts dropped files, links and text. Choose a receiving device or all your devices. Deliveries remain queued while the receiving app is disconnected. Open Files or Connected devices to collect them.
+
+The tray's **PC folders and network shares** control adds locations without relocating their contents. Windows must already be able to open a network share; its normal Windows credentials and availability apply. Removing a location from PC Remote keeps its files.
+
+Nearby network discovery combines advertised PC Remote, SMB, web, printer and media services with Windows' recently seen network neighbours. A discovered device does not automatically expose all its data. Devices without PC Remote participate through supported services, such as a Windows-accessible shared folder. Browser access can provide app functionality without installing the APK, subject to browser capabilities. Network isolation and sleeping devices can limit discovery.
+
+## Phone as a Windows microphone
+
+Install [VB-CABLE from its publisher](https://vb-audio.com/Cable/) on the PC once and follow its installation/restart instructions. The driver is not redistributed or installed automatically by PC Remote.
+
+In Audio, select the phone microphone and choose **Windows microphone · CABLE Output** as the PC destination. In Zoom, Discord or your recording app, choose **CABLE Output** as the microphone. The app detects the driver before enabling this destination. Speakers/headphones remain a separate choice. Android 2.1 is required for this routing from the APK; microphone permission is requested when used.
+
+## Video and validation
+
+The host probes Intel Quick Sync, NVIDIA NVENC and AMD AMF before selecting hardware H.264. Failed hardware falls back to software encoding. The phone/browser needs secure WebCodecs support for direct H.264 viewing; the compatibility stream remains available, including plain HTTP connections that cannot expose WebCodecs.
+
+Real Windows/Chromium testing decoded Intel Quick Sync frames and exercised Remote Screen and Watch PC. Browser testing verified settings synchronisation between two sessions, file selection/scroll restoration, rename/move and responsive layouts. Android build verification is automated; physical-device document-provider behaviour, microphone routing, background scheduling and LAN multicast discovery still require device testing.

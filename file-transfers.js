@@ -28,6 +28,7 @@ function byteRange(header,size){
 }
 function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],watch=false,locationsProvider}={}){
   const root=path.resolve(directory),uploads=new Map();let diskReady;
+  let mutation=Promise.resolve();function commit(change){const next=mutation.then(change);mutation=next.catch(()=>{});return next;}
   let revision=Date.now();const watched=new Map();
   function watchFolder(directory){if(!watch||watched.has(directory)||!fs.existsSync(directory))return;try{const watcher=fs.watch(directory,{recursive:true,persistent:false},(event,name)=>{if(name&&String(name).split(/[\\/]/).some(part=>part.startsWith('.')))return;revision=Date.now();});watcher.on('error',()=>{watcher.close();watched.delete(directory);});watched.set(directory,watcher);}catch{}}
   const roots=new Map();for(const item of locations){if(!item||!/^@[a-z][a-z0-9-]{0,40}$/.test(item.id)||typeof item.directory!=='string'||!path.isAbsolute(item.directory))continue;roots.set(item.id,{id:item.id,label:String(item.label||item.id.slice(1)).slice(0,80),directory:path.resolve(item.directory)});}
@@ -79,7 +80,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
     const name=u.relativePath||u.name,out=await safeTarget(name,true);let before=null;try{before=await fsp.lstat(out);}catch(error){if(error.code!=='ENOENT')throw error;}
     if(before?.isSymbolicLink()||before&&!before.isFile()||u.syncETag==='new'&&before||u.syncETag!=='new'&&(!before||fileETag(name,before)!==u.syncETag))throw problem(409,'This file changed on another device. Keep both copies and sync again.');
     const temp=path.join(path.dirname(out),'.pcr-sync-'+u.id+'.tmp');await fsp.copyFile(u.temp,temp);try{
-      if(before){const versions=path.join(root,'.pcr-versions');await fsp.mkdir(versions,{recursive:true});const check=await fsp.lstat(versions);if(!check.isDirectory()||check.isSymbolicLink())throw problem(400,'Sync history is unavailable.');await fsp.copyFile(out,path.join(versions,u.id),fs.constants.COPYFILE_EXCL).catch(error=>{if(error.code!=='EEXIST')throw error;});const latest=await fsp.lstat(out);if(fileETag(name,latest)!==u.syncETag)throw problem(409,'The PC file changed during sync. Keep both copies.');}
+      if(before){const versions=path.join(root,'.pcr-versions');await fsp.mkdir(versions,{recursive:true});const check=await fsp.lstat(versions);if(!check.isDirectory()||check.isSymbolicLink())throw problem(400,'Sync history is unavailable.');const backup=path.join(versions,u.id),partial=backup+'.tmp';let existing=false;try{const stat=await fsp.lstat(backup);existing=stat.isFile()&&!stat.isSymbolicLink()&&stat.size===before.size;}catch(error){if(error.code!=='ENOENT')throw error;}if(!existing){await fsp.unlink(partial).catch(()=>{});try{await fsp.copyFile(out,partial,fs.constants.COPYFILE_EXCL);if((await fsp.stat(partial)).size!==before.size)throw problem(409,'The PC file changed while preserving its previous version.');await fsp.rename(partial,backup);}finally{await fsp.unlink(partial).catch(()=>{});}}const latest=await fsp.lstat(out);if(fileETag(name,latest)!==u.syncETag)throw problem(409,'The PC file changed during sync. Keep both copies.');}
       else{try{await fsp.lstat(out);throw problem(409,'Another device created this file. Keep both copies.');}catch(error){if(error.code!=='ENOENT')throw error;}}
       // A sibling temporary file allows atomic replacement on the target volume.
       if(before)await fsp.rename(temp,out);else{await fsp.copyFile(temp,out,fs.constants.COPYFILE_EXCL);await fsp.unlink(temp);}
@@ -88,7 +89,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
   }
   async function finish(u){
     if(u.complete)return u.file;
-    if(u.syncETag)return finishSync(u);
+    if(u.syncETag)return commit(()=>finishSync(u));
     async function complete(name){u.complete=true;u.file={name,size:u.size,modified:Date.now()};try{await persist(u);}catch(e){u.complete=false;throw e;}await fsp.unlink(u.temp).catch(e=>{if(e.code!=='ENOENT')throw e;});return u.file;}
     // A stop between publishing the link and saving completion must not produce a duplicate.
     if(u.publishName){try{const [source,stored]=await Promise.all([fsp.stat(u.temp),safeTarget(u.publishName).then(file=>fsp.lstat(file))]);if(stored.isFile()&&!stored.isSymbolicLink()&&source.ino!==0&&source.ino===stored.ino&&source.dev===stored.dev)return await complete(u.publishName);}catch(e){if(e.code!=='ENOENT')throw e;}}
@@ -228,7 +229,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
         const syncETag=body.replaceETag;if(syncETag!==undefined&&(!allowLocations||typeof syncETag!=='string'||!/^new$|^\"[a-f0-9]{64}\"$/.test(syncETag)))throw problem(400,'Refresh the sync folder before replacing a file.');
         const u={id,token,...syncETag&&{syncETag},account:typeof accountContext==='string'&&accountContext?digest(accountContext):null,secretHash:digest(secret),temp,name,relativePath:destination,size,received:0,busy:false,until:Date.now()+RETENTION_MS};
         try{await persist(u);}catch(e){await removeDisk(u).catch(()=>{});throw e;}uploads.set(id,u);
-        const file=size===0?await finish(u):undefined;
+        let file;try{if(size===0)file=await finish(u);}catch(error){await discard(u);throw error;}
         respond(res,200,{ok:true,id,resumeSecret:secret,received:0,chunkBytes:chunkLimit,complete:size===0,expires:u.until,...file&&{file}});return true;
       }
       const match=/^\/api\/files\/uploads\/([a-f0-9]{32})(\/resume)?$/.exec(pathname);
@@ -263,7 +264,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
             const fh=await fsp.open(u.temp,'r+');try{await fh.sync();}finally{await fh.close();}
             u.received+=bytes;u.until=Date.now()+RETENTION_MS;
             try{await persist(u);}catch(e){u.received=offset;throw e;}
-            const complete=u.received===u.size,file=complete?await finish(u):undefined;
+            const complete=u.received===u.size;let file;try{if(complete)file=await finish(u);}catch(error){if(u.syncETag&&error.status===409){u.request=null;await discard(u);}throw error;}
             respond(res,200,{ok:true,received:u.received,complete,...file&&{file}});
           }finally{u.busy=false;u.request=null;if(u.cancelled)await removeDisk(u).catch(()=>{});else if(!u.complete)await fsp.truncate(u.temp,u.received).catch(()=>{});}
           return true;

@@ -36,7 +36,7 @@ class NearbyComputers(context:Context,private val event:(JSONObject)->Unit) {
         if(resolving||queue.isEmpty()||serial!=generation)return
         resolving=true
         nsd.resolveService(queue.removeFirst(),object:NsdManager.ResolveListener{
-            override fun onResolveFailed(info:NsdServiceInfo,code:Int){handler.post{if(serial==generation){resolving=false;resolve(serial)}}}
+            override fun onResolveFailed(info:NsdServiceInfo,code:Int){handler.post{if(serial==generation){resolving=false;if(code==NsdManager.FAILURE_ALREADY_ACTIVE){queue.addFirst(info);handler.postDelayed({resolve(serial)},300)}else resolve(serial)}}}
             override fun onServiceResolved(info:NsdServiceInfo){handler.post{
                 if(serial!=generation)return@post
                 resolving=false

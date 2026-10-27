@@ -4,8 +4,8 @@ using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
 
-// Explicit phone audio input only. Bounded PCM goes to the default Windows
-// speakers/headphones and is never saved to disk or installed as a virtual mic.
+// Bounded phone audio goes to speakers or an explicitly selected, installed
+// VB-CABLE input. The companion CABLE Output is a Windows recording device.
 internal static class AudioPlayback
 {
     static MMDevice? VirtualInput(MMDeviceEnumerator devices)=>devices.EnumerateAudioEndPoints(DataFlow.Render,DeviceState.Active).FirstOrDefault(device=>device.FriendlyName.Contains("CABLE Input",StringComparison.OrdinalIgnoreCase));
