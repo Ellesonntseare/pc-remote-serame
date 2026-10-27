@@ -32,6 +32,7 @@ local.properties
 HostTray/bin/
 HostTray/obj/
 dist/
+/PC-Remote-Host-Setup-*.exe
 test/AudioCodecChecks/bin/
 test/AudioCodecChecks/obj/
 .github/workflows/talentlms-cloud-login.yml

@@ -9,7 +9,10 @@
 - [x] The configured verified Google owner is the main administrator. The private owner password was updated as requested, old default password access is disabled, and guest access retains approval. Password sessions bind to the current credential context so removed credentials do not survive in remembered sessions. Private passwords and history are excluded from the repository and installers.
 - [x] 287 automated tests passed. Live Chromium decoded Windows video, played/paused/resumed Watch PC, opened direct Remote Screen video and verified administrator revocation stops access during streaming. Four new responsive UI checks and native audio/download bridge interactions passed; earlier five-width remote-key checks also passed.
 - [x] Updated host and Windows helper deployed; local and public HTTPS clients verified. The removed passwords were rejected and the configured password/administrator session controls were verified; the verification session was signed out.
-- [ ] Build and publish the personal Android 2.0 APK and Windows 2.0 installer after GitHub checks. Direct draft-release uploads avoid the delayed Actions artifact quota.
+- [x] Personal Android 2.0 APK and Windows 2.0 installer published in [the personal 2.0 preview release](https://github.com/Ellesonntseare/pc-remote-serame/releases/tag/v2.0.0-preview), with verified checksums and the existing Android signing certificate. Windows and portable Linux checks passed. Direct release uploads avoided the delayed Actions artifact quota.
+- [x] Buffered the deliberately stale guest-poll test response and allowed its full UI extension action to settle on slower Windows runners; all 287 checks passed in Windows CI with the original state assertions retained.
+- [x] Cloudflared service restarted with Windows administrator approval after it was found stopped. Its startup remains Automatic and the public website responds successfully. The correct service/executable spelling is cloudflared.
+- [x] The verified APK is also available in the PC transfer folder for phone download. Local APK and installer copies are saved in the project folder and excluded from Git.
 - [ ] Physical Android microphone, document-provider Open / Share and device-specific video decoder testing remain necessary; no phone is attached.
 
 ---
