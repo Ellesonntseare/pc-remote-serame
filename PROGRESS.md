@@ -1,3 +1,19 @@
+# Personal app 2.1 — 27 October 2026
+
+- [x] Local PC discovery in Android and Connection settings; discovery advertises IPv4 addresses matching the host listener. A live DNS-SD probe resolved the actual PC address.
+- [x] Hardware H.264 selection, real encoder probes and software fallback. Real Chromium decoded Intel Quick Sync desktop frames and exercised Remote Screen and Watch PC.
+- [x] Files workspace: Desktop/Documents/Downloads and host-selected local/network folders, favourites, remembered destination, selection, rename/move, sorting and recursive search. Browser checks verified folder/selection/scroll continuity and file operations at four sizes.
+- [x] Application-specific shortcuts, Android widget/launcher shortcuts, improved typing positioning and preserved remote view.
+- [x] Shared-device hub for supported app settings, foreground Android clipboard and targeted file/link/text delivery. Unchanged polls omit bulk payloads; collected deliveries release inbox capacity.
+- [x] Incremental Android folder pairs with two-way/backup modes, conflict copies, resumable uploads, provider change notifications and WorkManager background checks. Devices without the app participate through services they expose, including Windows-accessible shared folders.
+- [x] Windows Send To shortcut installed for the running personal host; tray sending window and local/network folder controls built and deployed.
+- [x] Optional Windows virtual microphone route added. This PC currently has no VB-CABLE device; install that driver once and select CABLE Output in the Windows application to activate it.
+- [x] 299 automated tests passed in Windows CI; portable checks, native compilation, Android signing/version checks and the Windows installer/runtime checks passed. Real browser checks covered settings sync across two sessions, file changes, page continuity and five remote-control layouts.
+- [x] Personal 2.1 APK and Windows installer published in [the 2.1 preview release](https://github.com/Ellesonntseare/pc-remote-serame/releases/tag/v2.1.0-preview), with checksums. Functional source is on main at 4aea539. The running host and Windows helper were updated; local and public health checks passed. The verified APK is also in PC Transfers.
+- [ ] Physical Android document-provider, background scheduling, microphone and LAN multicast tests remain necessary; no Android device is attached. See [shared-device setup](docs/SHARED-DEVICES.md) for supported scope and one-time folder/driver setup.
+
+---
+
 # Personal app 2.0 — 27 October 2026
 
 - [x] One shared Home / Screen / Files / Audio / Settings bar, reused across feature pages. Remote Screen retains its five essential keys. Home / Dashboard remains a direct switch.
