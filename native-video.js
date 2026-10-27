@@ -7,13 +7,15 @@ class AccessUnits{
   push(bytes){this.buffer=Buffer.concat([this.buffer,bytes]);if(this.buffer.length>8*1024*1024)throw Error('Video frame exceeded its limit');let i=this.scan;while(i+4<this.buffer.length){const n=this.buffer[i]===0&&this.buffer[i+1]===0?(this.buffer[i+2]===1?3:this.buffer[i+2]===0&&this.buffer[i+3]===1?4:0):0;if(!n){i++;continue;}const type=this.buffer[i+n]&31;if(type===9){if(this.start>=0&&i>this.start){this.emit(this.buffer.subarray(this.start,i));this.buffer=this.buffer.subarray(i);i=0;this.start=0;}else this.start=i;}i+=n+1;}this.scan=i;}
 }
 function describe(frame){let key=false,codec=null;for(let i=0;i+5<frame.length;i++){if(frame[i]||frame[i+1])continue;const n=frame[i+2]===1?3:frame[i+2]===0&&frame[i+3]===1?4:0;if(!n)continue;const type=frame[i+n]&31;if(type===5)key=true;if(type===7&&i+n+3<frame.length)codec='avc1.'+frame.subarray(i+n+1,i+n+4).toString('hex');}return {key,codec};}
-const PROFILES={low:{width:854,fps:12,bitrate:800},med:{width:1280,fps:20,bitrate:2000},high:{width:1600,fps:24,bitrate:4000},hd:{width:1920,fps:30,bitrate:6000},auto:{width:1280,fps:24,bitrate:3000}};
+const PROFILES={low:{width:854,fps:12,bitrate:800},med:{width:1280,fps:20,bitrate:2000},high:{width:1600,fps:24,bitrate:4000},hd:{width:1920,fps:30,bitrate:6000},auto:{width:1280,fps:24,bitrate:3000},smooth:{width:1280,fps:30,bitrate:3200}};
 function createNativeVideo({root,auth,sessions,sessionExpiry,enabled=true,spawnImpl=spawn,platform=process.platform,ffmpegPath,capturePath}={}){
   const {createEncoderSelector,encodingArgs,LABELS}=require('./video-encoders'),selector=createEncoderSelector({spawnImpl});
   const wss=new WebSocketServer({noServer:true,maxPayload:1024,perMessageDeflate:false}),peers=new Set();let closed=false;
-  function upgrade(req,socket,head,token,preset='auto'){
+  function upgrade(req,socket,head,token,preset='auto',windowSource=null){
     wss.handleUpgrade(req,socket,head,async ws=>{
-      if(closed||!enabled||platform!=='win32'||!PROFILES[preset]||peers.size>=2){ws.close(1013,'Native video unavailable');return;}
+      if(closed||!enabled||platform!=='win32'||!Object.hasOwn(PROFILES,preset)){ws.close(1013,'Native video unavailable');return;}
+      if(windowSource)for(const previous of [...peers])if(previous.token===token)previous.stop();
+      if(peers.size>=2){ws.close(1013,'Native video unavailable');return;}
       const peer={ws,token,children:[],stopped:false};peers.add(peer);const profile=PROFILES[preset];let generation=0,expiry=()=>{},startTimer=null,ping=null;
       function killChildren(){for(const child of peer.children.splice(0)){child.stdin?.destroy();child.stdout?.destroy();try{child.kill();}catch{}}}
       const stop=()=>{if(peer.stopped)return;peer.stopped=true;generation++;peers.delete(peer);clearTimeout(startTimer);clearInterval(ping);expiry();killChildren();if(ws.readyState===WebSocket.OPEN)ws.close(1000,'Video stopped');};
@@ -34,7 +36,7 @@ function createNativeVideo({root,auth,sessions,sessionExpiry,enabled=true,spawnI
             clearTimeout(startTimer);const envelope=Buffer.alloc(13);envelope[0]=info.key?1:0;envelope.writeDoubleBE(Math.round(sequence++*1000000/profile.fps),1);envelope.writeUInt32BE(frame.length,9);ws.send(Buffer.concat([envelope,frame]));
           });
           const capture=spawnImpl(exe,['--video-frames'],{cwd:root,windowsHide:true,stdio:['pipe','pipe','pipe']});peer.children.push(capture);
-          capture.stdin.on('error',()=>{});capture.stderr.resume();capture.on('error',()=>{if(current())fail('Windows screen capture could not start.');});capture.on('close',()=>{if(current())fail('Windows screen capture ended.');});capture.stdin.write(JSON.stringify({width:profile.width,fps:profile.fps})+'\n');
+          capture.stdin.on('error',()=>{});capture.stderr.resume();capture.on('error',()=>{if(current())fail('Windows screen capture could not start.');});capture.on('close',()=>{if(current())fail(windowSource?'Window presentation stopped. Restore or choose the window again.':'Windows screen capture ended.');});capture.stdin.write(JSON.stringify({width:profile.width,fps:profile.fps,...windowSource&&{window:windowSource}})+'\n');
           capture.stdout.on('data',bytes=>{
             if(!current())return;try{
               if(!metadata){

@@ -1,8 +1,8 @@
 'use strict';
 (()=>{
   function mount(){
-    const screen=document.getElementById('rs'),view=document.getElementById('rsv'),group=document.querySelector('.screenViewGroup');if(!screen||!view||!group)return;
-    const button=document.createElement('button');button.type='button';button.id='rsMinimise';button.textContent='Minimise';button.title='Keep the PC screen in a floating window';button.setAttribute('aria-label','Minimise to floating window');button.hidden=true;group.prepend(button);
+    const screen=document.getElementById('rs'),view=document.getElementById('rsv'),group=document.querySelector('.screenConnectionGroup')||document.querySelector('.screenViewGroup');if(!screen||!view||!group)return;
+    const button=document.createElement('button');button.type='button';button.id='rsMinimise';button.textContent='Minimise';button.title='Keep the PC screen in a floating window';button.setAttribute('aria-label','Minimise to floating window');button.hidden=true;group.append(button);
     let saved=null,timer=0,active=false;
     const available=()=>!!window.PCRNativeCapabilities?.miniWindow&&!!window.PCRAuth?.signedIn&&(!window.PCRCanAccess||window.PCRCanAccess('screen'));
     function restore(message=''){

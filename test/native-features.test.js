@@ -44,6 +44,12 @@ test('helper failures reject cleanly without shell execution',async()=>{
   const f=fixture(),promise=f.service.listApps();assert.equal(f.calls[0].options.shell,undefined);assert.equal(f.calls[0].options.windowsHide,true);
   f.calls[0].child.stdout.end('{"ok":false,"error":"Desktop locked"}');f.calls[0].child.emit('close',1);await assert.rejects(promise,/Desktop locked/);f.service.close();
 });
+
+test('presentation selections retain the exact process identity and remain usable beyond the menu expiry',async()=>{
+  const f=fixture(),pending=f.service.listApps(),app={handle:'123abc',pid:42,startTicks:'638750000000000000',title:'Slides',processName:'chrome'};
+  f.calls[0].child.stdout.end(JSON.stringify({ok:true,apps:[app]}));f.calls[0].child.emit('close',0);const id=(await pending).apps[0].id;
+  assert.throws(()=>f.service.presentationApp('123abc'),/expired/);const selected=f.service.presentationApp(id);assert.deepEqual(selected,{handle:app.handle,pid:app.pid,startTicks:app.startTicks});selected.handle='wrong';f.advance(120001);assert.equal(f.service.presentationApp(id).handle,app.handle);assert.equal(f.calls.length,1,'starting a window stream never runs an arbitrary command');f.advance(6*60*60*1000+1);assert.throws(()=>f.service.presentationApp(id),/expired/);f.service.close();
+});
 test('audio streams only after validated metadata and stops capture when the consumer stops',()=>{
   const f=fixture(),metadata=[],pcm=[],errors=[];let closed=0;
   const session=f.service.openAudio({onMetadata:value=>metadata.push(value),onPcm:value=>pcm.push(Buffer.from(value)),onError:error=>errors.push(error.message),onClose:()=>closed++});

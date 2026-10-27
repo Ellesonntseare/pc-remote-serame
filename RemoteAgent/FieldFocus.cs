@@ -19,25 +19,47 @@ internal static class FieldFocus
                 var element = AutomationElement.FocusedElement;
                 if (element == null) { result.TrySetResult(caret); return; }
                 var info = element.Current;
+                if(Environment.GetEnvironmentVariable("PCR_FOCUS_DIAGNOSTICS")=="1")Console.Error.WriteLine($"Focus: {info.ControlType.ProgrammaticName}; focused={info.HasKeyboardFocus}; bounds={info.BoundingRectangle}; point={x},{y}; caret={caret}");
                 if (!info.IsEnabled) { result.TrySetResult(false); return; }
                 var bounds = info.BoundingRectangle;
                 if (!bounds.IsEmpty) bounds.Inflate(10, 10); // Text-box borders are valid taps too.
                 if (!info.HasKeyboardFocus || !bounds.Contains(x, y))
                 { result.TrySetResult(caret); return; }
-                if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var value))
-                { result.TrySetResult(!((ValuePattern)value).Current.IsReadOnly); return; }
-                if (element.TryGetCurrentPattern(TextPattern.Pattern, out var text))
+                var focused = Editable(element);
+                if (focused == true || info.ControlType == ControlType.Edit) { result.TrySetResult(focused);return; }
+                // Chromium and embedded web views can expose the document as
+                // focused while its clicked child is the actual editor.
+                var candidate = AutomationElement.FromPoint(new System.Windows.Point(x,y));
+                for(int depth=0;candidate!=null&&depth<6;depth++)
                 {
-                    var readOnly = ((TextPattern)text).DocumentRange.GetAttributeValue(TextPattern.IsReadOnlyAttribute);
-                    if (readOnly is bool locked) { result.TrySetResult(!locked); return; }
+                    var target=candidate.Current;if(target.ProcessId!=info.ProcessId)break;
+                    if(target.BoundingRectangle.Contains(x,y))
+                    {
+                        var editable=Editable(candidate);
+                        if(editable==true||target.ControlType==ControlType.Edit){result.TrySetResult(editable);return;}
+                    }
+                    if(candidate.Equals(element))break;
+                    candidate=TreeWalker.ControlViewWalker.GetParent(candidate);
                 }
-                result.TrySetResult(info.ControlType == ControlType.Edit ? true : false);
+                result.TrySetResult(focused??false);
             }
             catch { result.TrySetResult(caret); }
             finally { Volatile.Write(ref busy, 0); }
         }) { IsBackground = true, Name = "Remote field detection" };
         worker.SetApartmentState(ApartmentState.MTA); worker.Start();
         return result.Task.Wait(350) ? result.Task.Result : caret;
+    }
+
+    private static bool? Editable(AutomationElement element)
+    {
+        if(!element.Current.IsEnabled)return false;
+        if(element.TryGetCurrentPattern(ValuePattern.Pattern,out var value))return !((ValuePattern)value).Current.IsReadOnly;
+        if(element.TryGetCurrentPattern(TextPattern.Pattern,out var text))
+        {
+            var readOnly=((TextPattern)text).DocumentRange.GetAttributeValue(TextPattern.IsReadOnlyAttribute);
+            if(readOnly is bool locked)return !locked;
+        }
+        return element.Current.ControlType==ControlType.Edit?true:null;
     }
 
     private static bool? CaretAt(int x, int y)

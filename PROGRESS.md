@@ -7,9 +7,14 @@
 - [x] A confirmed PC text-field tap starts live typing immediately, including after compose/paused mode. Previous unsent drafts stay available through an optional Insert saved draft action. Delayed Windows focus checks retry without repeating the click.
 - [x] Native keyboard opening waits for the focused WebView editor and retries once; closing typing cancels delayed opening. Windows field detection also checks the native caret when an accessibility provider is slow.
 - [x] Android Remote Screen has a Minimise button for a floating picture-in-picture view. Expanding restores the prior zoom and scroll. Android controls the floating window; expand it to type or control the PC.
+- [x] Single-window presentation: choose Chrome, PowerPoint or another app in Tools → Present, with Smooth/Balanced/Sharper presets. Windows Graphics Capture keeps the chosen window visible when covered and fits content after resizing. The real end-to-end browser stream decoded 30 fps using Intel Quick Sync; no desktop fallback occurs for a failed window selection.
+- [x] Presentation pauses other native screen streams in the same session and routine app-settings/clipboard polling. Capture/encoder stop on Pause, page exit, backgrounding and sign-out. Other Windows applications retain their normal resources/priorities.
+- [x] Responsive browser review passed at 320, 390, 844 and 1280 pixels wide; the simulated 256 × 144 floating view fit correctly and restored the full layout. A live Windows check confirmed Chrome field/button detection. Physical Android IME/PiP testing still needs the phone.
 - [x] First host/browser suite: 302 tests passed; first signed Android build and Windows installer passed. The subsequent typing/floating-window pass passed all 13 focused checks.
 - [ ] Complete final browser/host and Android regression checks, then publish the signed 2.1.1 APK and matching Windows installer.
 - [ ] Physical Android provider and background scheduling checks still need a connected phone.
+
+See [2.1.1 usage and platform requirements](docs/USING-2.1.1.md).
 
 ---
 

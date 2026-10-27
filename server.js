@@ -14,7 +14,7 @@ const {createSyncHub}=require('./sync-hub');
 const {createNetworkDevices}=require('./network-devices');
 const nativeClipboard=require('./native-clipboard');
 const {createNativeFeatures}=require('./native-features');
-const {createNativeVideo}=require('./native-video');
+const {createNativeVideo,PROFILES:NATIVE_VIDEO_PROFILES}=require('./native-video');
 const {createSessionAdmin}=require('./session-admin');
 const {createDisplayPrivacy}=require('./display-privacy');
 const {createDeviceLinks}=require('./device-links');
@@ -56,7 +56,7 @@ const PWA_ASSETS = new Map([
   ...['mission-control','camera-sharing','local-connection'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/media-recording.js',['media-recording.js','text/javascript; charset=utf-8']],
   ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
-  ...['workspace-settings','device-links','device-input','typing-controls','home-panels'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
+  ...['workspace-settings','device-links','device-input','typing-controls','home-panels','native-window','window-presentation'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/screen-packets.js', ['screen-packets.js', 'text/javascript; charset=utf-8']],
   ['/hold-repeat.js', ['hold-repeat.js', 'text/javascript; charset=utf-8']],
   ['/privacy-mode.js', ['privacy-mode.js', 'text/javascript; charset=utf-8']],
@@ -819,7 +819,9 @@ function createApp(options={}) {
     if(sessions.get(token).role==='account')return rejectUpgrade(socket,403,'Pair this PC before opening a remote session');
     if(pathname==='/api/native-video'){
       if(!enabled||!permits(token,'screen'))return rejectUpgrade(socket,403,'Screen viewing was not approved');
-      const preset=new URL(req.url,'http://localhost').searchParams.get('p')||'auto';if(!PRESETS[preset])return rejectUpgrade(socket,400,'Invalid video quality');return nativeVideo.upgrade(req,socket,head,token,preset);
+      const params=new URL(req.url,'http://localhost').searchParams,preset=params.get('p')||'auto';if(!Object.hasOwn(NATIVE_VIDEO_PROFILES,preset))return rejectUpgrade(socket,400,'Invalid video quality');
+      let windowSource=null;if(params.has('window')){if(!permits(token,'apps'))return rejectUpgrade(socket,403,'Window presentation was not approved');try{windowSource=nativeFeatures.presentationApp(params.get('window'));}catch(error){return rejectUpgrade(socket,error.status||400,'Choose the window again');}}
+      return nativeVideo.upgrade(req,socket,head,token,preset,windowSource);
     }
     if(pathname==='/api/phone-audio'){
       if(sessions.get(token)?.role!=='owner')return rejectUpgrade(socket,403,'Only the paired PC owner can stream audio to this PC');

@@ -63,6 +63,8 @@
 <script src="/typing-controls.js" defer></script>
 <script src="/native-window.js" defer></script>
 <link rel="stylesheet" href="/native-window.css">
+<script src="/window-presentation.js" defer></script>
+<link rel="stylesheet" href="/window-presentation.css">
 <script src="/privacy-mode.js" defer></script>
 <script src="/home-panels.js" defer></script>
 <script src="/mission-control.js" defer></script>
@@ -574,12 +576,13 @@ function rsKb(){
 }
 function rsToggleKeyboard(){if(typingPanelOpen)rsTypeClose();else rsKb();}
 function rsTypeClose(){
+  const wasOpen=typingPanelOpen;
   // Lock before blur: a delayed key or dialog focus restoration must never
   // summon the phone IME again after the user has dismissed this panel.
   typingPanelOpen=false;$('typeText').readOnly=true;$('typeText').inputMode='none';
   $('rsKeyboard').setAttribute('aria-expanded','false');
   $('rs').classList.remove('typing');$('typeText').blur();$('typePanel').classList.add('hide');
-  window.PCRDeviceInput?.hideKeyboard?.();
+  if(wasOpen)window.PCRDeviceInput?.hideKeyboard?.();
   // Some phone IMEs omit compositionend on blur; commit the visible snapshot
   // rather than leaving all pointer controls blocked by hidden composition.
   if(composing){composing=false;if(rs.on)rsScheduleLive();}

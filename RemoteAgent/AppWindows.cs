@@ -54,6 +54,17 @@ internal static class AppWindows
         catch (Exception ex) { Console.Write(JsonSerializer.Serialize(new { ok = false, error = ex.Message })); Environment.ExitCode = 1; }
     }
 
+    internal static IntPtr PresentationWindow(JsonElement selection)
+    {
+        string text=selection.GetProperty("handle").GetString()??"";
+        if(text.Length is <1 or >16||!ulong.TryParse(text,NumberStyles.AllowHexSpecifier,CultureInfo.InvariantCulture,out ulong raw)||raw==0)throw new ArgumentException("Invalid window selection.");
+        IntPtr window=new(unchecked((long)raw));var info=Describe(window);
+        if(info==null||info.pid!=selection.GetProperty("pid").GetInt32()||info.startTicks!=selection.GetProperty("startTicks").GetString())throw new InvalidOperationException("This window closed or changed. Choose it again.");
+        // WGC can capture a covered/background window without stealing focus.
+        if(IsIconic(window)){ShowWindowAsync(window,9);for(int i=0;i<20&&IsIconic(window);i++)Thread.Sleep(25);}
+        return window;
+    }
+
     private static WindowInfo? Describe(IntPtr window)
     {
         try

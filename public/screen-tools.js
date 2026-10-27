@@ -197,7 +197,7 @@
   toolbar.addEventListener('mousedown',event=>event.preventDefault());
   reconnectButton.addEventListener('click',reconnect);
   fullButton.addEventListener('click',()=>fullscreen().catch(()=>msg('Could not change full-screen mode.')));
-  presentButton.addEventListener('click',presentation);restoreButton.addEventListener('click',restoreControls);
+  presentButton.addEventListener('click',()=>{if(window.PCRWindowPresentation)window.PCRWindowPresentation.open();else presentation();});restoreButton.addEventListener('click',restoreControls);
   minus.addEventListener('click',()=>setZoom(zoom-.25));
   plus.addEventListener('click',()=>setZoom(zoom+.25));
   zoomButton.addEventListener('click',()=>setZoom(1));

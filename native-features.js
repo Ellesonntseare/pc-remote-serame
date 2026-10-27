@@ -58,6 +58,10 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     prune();if(typeof id!=='string'||!/^[A-Za-z0-9_-]{24}$/.test(id)||!appTokens.has(id)){const error=Error('This app selection expired. Refresh the app list.');error.status=400;throw error;}
     const {handle,pid,startTicks}=appTokens.get(id);await request('--app-focus',{handle,pid,startTicks});return {ok:true};
   }
+  function presentationApp(id){
+    prune();if(typeof id!=='string'||!/^[A-Za-z0-9_-]{24}$/.test(id)||!appTokens.has(id)){const error=Error('This window selection expired. Choose the window again.');error.status=400;throw error;}
+    const entry=appTokens.get(id);entry.until=now()+6*60*60*1000;const {handle,pid,startTicks}=entry;return {handle,pid,startTicks};
+  }
   function openAudio({onMetadata=()=>{},onPcm=()=>{},onError=()=>{},onClose=()=>{}}={}){
     let child,format=null,stopped=false,ended=false,failed=false;
     const timer=setTimeout(()=>fail(Error('PC audio did not start. Check the PC output device.')),10000);timer.unref?.();
@@ -109,6 +113,6 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
   }
   let currentAppPending=null,currentAppValue=null,currentAppAt=0;
   async function currentApp(){if(currentAppValue&&now()-currentAppAt<1500)return currentAppValue;if(currentAppPending)return currentAppPending;currentAppPending=request('--app-current').then(value=>{currentAppValue=value;currentAppAt=now();return value;}).finally(()=>currentAppPending=null);return currentAppPending;}
-  return {listApps,currentApp,focusApp,sendMedia,openLink,openAudio,openAudioOutput,audioDevices:()=>request('--audio-devices'),close};
+  return {listApps,currentApp,focusApp,presentationApp,sendMedia,openLink,openAudio,openAudioOutput,audioDevices:()=>request('--audio-devices'),close};
 }
 module.exports={createNativeFeatures,AudioPacketReader,validFormat};
