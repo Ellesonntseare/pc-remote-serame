@@ -45,7 +45,7 @@
     const existing=document.getElementById('pcAudioDialog');if(existing){const shortcut=document.createElement('button');shortcut.type='button';shortcut.className='nativePrimary';shortcut.textContent='Send audio to PC →';shortcut.onclick=()=>{existing.close();home.click();};existing.append(shortcut);}
     window.addEventListener('pcr:phone-audio',event=>{native=true;update(event.detail);});window.addEventListener('pcr:native-ready',support);
     function auth(){home.hidden=!window.PCRAuth?.signedIn||window.PCRAuth.role!=='owner';home.dataset.pcrDenied=String(home.hidden);if(home.hidden){sender.stop(true);if(native)window.PCRAndroid?.postMessage(JSON.stringify({type:'phone-audio-stop'}));clearTimeout(timer);update({state:'stopped'});dialog.close();}}window.addEventListener('pcr:auth',auth);window.addEventListener('pagehide',()=>{sender.stop(true);if(native)window.PCRAndroid?.postMessage(JSON.stringify({type:'phone-audio-stop'}));});auth();
-    window.PCRPhoneAudio.sender=sender;window.PCRPhoneAudio.open=()=>home.click();
+    window.PCRPhoneAudio.sender=sender;window.PCRPhoneAudio.open=()=>home.click();window.PCRPhoneAudio.choose=choose;window.PCRPhoneAudio.stop=stop;Object.defineProperty(window.PCRPhoneAudio,"state",{get:()=>state});
   }
   return {PhoneAudioSender,mount};
 });

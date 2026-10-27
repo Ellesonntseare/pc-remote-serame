@@ -10,9 +10,14 @@ on:
       - 'gradle.properties'
       - '.github/workflows/android-apk.yml'
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Upload the verified personal preview directly to its draft release
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -62,9 +67,20 @@ jobs:
           grep -q "android.permission.FOREGROUND_SERVICE_DATA_SYNC" apk-metadata.txt
           sha256sum android/build/outputs/apk/debug/android-debug.apk
       - name: Upload installable APK
+        if: github.event_name != 'workflow_dispatch' || !inputs.publish_release
         uses: actions/upload-artifact@v4
         with:
           name: PC-Remote-Android-APK
           path: android/build/outputs/apk/debug/android-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload personal APK to draft release
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release view v2.0.0-preview || gh release create v2.0.0-preview --draft --prerelease --target "$GITHUB_SHA" --title "PC Remote 2.0 Personal Preview" --notes "Personal preview: unified navigation and audio, direct PC video, completed-file actions and administrator device management."
+          cp android/build/outputs/apk/debug/android-debug.apk PC-Remote-Android-2.0.apk
+          gh release upload v2.0.0-preview PC-Remote-Android-2.0.apk --clobber

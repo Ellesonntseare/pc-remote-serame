@@ -1,6 +1,8 @@
 # PC Remote — Serame's personal remote app
 
-Version 1.9 adds background Android transfers, Share → PC Remote, a folder-based file manager, integrated remote video with fallback, efficient audio, the WebView microphone permission fix, a personal Windows installer, Lightweight appearance and simpler navigation. Air Mouse is removed. See [version 1.9](docs/version-1.9.md) for use and validation limits.
+Version 2.0 adds one shared navigation bar, one Audio page, direct Windows H.264 video, completed-file actions, signed-in device management and an online indicator. See [direct video](docs/native-video.md) for engine details.
+
+Version 1.9 added background Android transfers, Share → PC Remote, a folder-based file manager, integrated remote video with fallback, efficient audio, the WebView microphone permission fix, a personal Windows installer, Lightweight appearance and simpler navigation. Air Mouse is removed. See [version 1.9](docs/version-1.9.md) for use and validation limits.
 
 Version 1.8 adds [phone-to-PC audio streaming](docs/phone-audio.md), with microphone/phone playback selection and direct Windows speaker output. The Cloudflare launcher reuses a healthy running host. Version 1.7 introduced faster local connections/transfers, Google registration/login, and native local camera/microphone capture. See [Google setup](GOOGLE-SIGN-IN.md), [version 1.7 checks](docs/version-1.7.md), [the feature guide](docs/mission-control.md), and [reference artwork notes](docs/design-artwork.md).
 
@@ -11,7 +13,7 @@ Installed project: `C:\Users\elles\Downloads\pc-remote-redesigned\PC-Remote-Sera
 1. Close the previous PC Remote host window.
 2. Run **start-cloudflare.bat** for both `remote.teamtrader.co.za` and local Wi-Fi access, or **start.bat** to use your saved configuration.
 3. Wait for dependencies and the Windows desktop agent to build. Keep the host and Cloudflare connector running.
-4. Reload the site on your phone and sign in with **serame**.
+4. Reload the site on your phone and sign in with your configured Google administrator account or your private PC owner password.
 
 Node.js 20+ and the .NET 8 SDK are required. Initial setup needs internet access. Updates in the installed folder retain private configuration, remembered logins and transferred files. A source ZIP excludes those private files, dependencies and compiled output; the launcher rebuilds the required components.
 
@@ -19,7 +21,7 @@ Node.js 20+ and the .NET 8 SDK are required. Initial setup needs internet access
 
 The password eye shows or conceals the text you enter. **Remember me** remembers an owner login for 30 days using an HttpOnly cookie; it does not save the password in browser storage. Disconnect revokes that login.
 
-Guests use **guest**, then wait for an owner signed in with **serame** to approve them. Requests open the full Guest Access page, also available from **Security** on desktop. The notification bell indicates pending requests.
+Guests use **guest**, then wait for the signed-in administrator to approve them. Requests open the full Guest Access page, also available from **Security** on desktop. The notification bell indicates pending requests.
 
 **Select all** checks every permission, and shows a partial selection when some are enabled. The guest sees a **Guest account** ribbon and remaining time. Under **Guests**, the owner can extend an active session by 15, 30 or 60 minutes; a two-minute warning also offers **Extend 30 min**. Extensions update existing screen, input, audio and voice connection deadlines without reconnecting. Extend before expiry: an ended or revoked session needs a fresh approval. Remaining access is capped at eight hours, and extension never changes permissions.
 
@@ -120,13 +122,13 @@ Text transfers are explicit, support up to 250,000 UTF-16 characters, and requir
 
 ## Configuration and privacy
 
-The default owner password is built into the host, not browser JavaScript. Override it in private `config.json` if desired. The guest password only creates a request and cannot grant itself access.
+The host requires an owner password in private `config.json`; old default sign-ins are disabled. The Windows tray setup generates a random initial password. Configure Google owner emails locally to select the main administrator. The guest password only creates a request and cannot grant itself access.
 
 ```json
 {
   "tunnelHostname": "remote.teamtrader.co.za",
   "deviceName": "SERAME'S PC",
-  "password": "serame",
+  "password": "REPLACE_WITH_YOUR_PRIVATE_OWNER_PASSWORD",
   "maxFileBytes": 2147483648
 }
 ```

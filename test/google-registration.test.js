@@ -1,6 +1,16 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs/promises'),path=require('node:path'),{WebSocket}=require('ws'),{createApp}=require('../server');
 function request(port,route,{method='GET',body,headers={}}={}){return new Promise((resolve,reject)=>{const req=http.request({hostname:'127.0.0.1',port,path:route,method,headers:{'X-PCR':'1',...headers}},res=>{const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>{const text=Buffer.concat(chunks).toString();let json;try{json=JSON.parse(text);}catch{}resolve({status:res.statusCode,headers:res.headers,json});});});req.on('error',reject);req.end(body?JSON.stringify(body):undefined);});}
+
+test('only the configured Google administrator or PC password administrator can manage every device',async t=>{
+  const f=await fixture(t),owner=await f.google('owner@gmail.com'),member=await f.google('customer@gmail.com');
+  assert.equal((await f.request('/api/sessions',{headers:{Cookie:owner}})).status,200);
+  assert.equal((await f.request('/api/sessions',{headers:{Cookie:member}})).status,403);
+  const paired=await f.request('/api/pair',{method:'POST',headers:{Cookie:member},body:{password:'private-PC-password',remember:true}}),cookie=paired.headers['set-cookie'][0].split(';')[0];assert.equal(paired.status,200);
+  assert.equal((await f.request('/api/sessions',{headers:{Cookie:cookie}})).status,403,'PC pairing does not make a different Google account the main administrator');
+  assert.equal((await f.request('/api/session',{headers:{Cookie:owner}})).json.mainAdmin,true);
+  await f.restart('changed-PC-password');assert.equal((await f.request('/api/session',{headers:{Cookie:owner}})).json.mainAdmin,true,'verified administrator keeps access after PC password rotation');
+});
 async function fixture(t){const directory=await fs.mkdtemp(path.join(__dirname,'.transfer-check-')),config={origin:'https://remote.example',clientId:'test-client',clientSecret:'test-only',ownerEmails:['owner@gmail.com']};let claims,app,port,password='private-PC-password';
  async function start(){app=createApp({password,disableAgent:true,disableActions:true,tunnelHostname:'remote.example',allowLan:true,googleSignIn:config,googleDependencies:{verify:async()=>claims},sessionFile:path.join(directory,'sessions.json'),accountFile:path.join(directory,'accounts.json'),transferDirectory:path.join(directory,'files')});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));port=app.server.address().port;}
  async function stop(){app.stop();await new Promise(r=>app.server.close(r));}await start();t.after(async()=>{await stop();assert.equal(path.dirname(directory),__dirname);await fs.rm(directory,{recursive:true,force:true});});

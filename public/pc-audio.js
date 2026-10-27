@@ -51,7 +51,7 @@
       }
       this.node.connect(this.gain);clearTimeout(this.connectTimer);
     }
-    push(buffer){if(this.node?.port)this.node.port.postMessage(buffer,[buffer]);else this.queue?.push(buffer);}
+    push(buffer){const now=Date.now();if(now-(this.lastMeter||0)>200){this.lastMeter=now;const samples=new Float32Array(buffer);let energy=0,count=0;for(let i=0;i<samples.length;i+=Math.max(1,Math.floor(samples.length/256))){energy+=samples[i]*samples[i];count++;}this.onState({state:this.state,level:count?Math.min(1,Math.sqrt(energy/count)):0,muted:this.muted});}if(this.node?.port)this.node.port.postMessage(buffer,[buffer]);else this.queue?.push(buffer);}
     setVolume(value){this.volume=Math.min(1,Math.max(0,Number(value)||0));if(this.gain)this.gain.gain.value=this.muted?0:this.volume;}
     setMuted(value){this.muted=!!value;this.setVolume(this.volume);this.onState({state:this.state,muted:this.muted,volume:this.volume});}
     stop(){
@@ -72,14 +72,14 @@
     document.body.append(dialog);bar.append(button);
     const select=name=>dialog.querySelector('[data-'+name+']'),status=dialog.querySelector('.nativeAudioStatus');
     const player=new PcAudioPlayer({onState:state=>{
-      window.dispatchEvent(new CustomEvent('pcr:audio-state',{detail:{state:state.state}}));
+      window.dispatchEvent(new CustomEvent('pcr:audio-state',{detail:{state:state.state,level:state.level||0,muted:state.muted===true}}));
       if(state.message)status.textContent=state.message;const active=state.state==='connecting'||state.state==='playing';
       button.textContent=active?'Audio on':'Audio';button.setAttribute('aria-pressed',String(active));select('start').disabled=active;select('start').textContent=state.state==='error'?'Try again':'Start PC audio';select('stop').disabled=!active;select('mute').disabled=!active;select('mute').textContent=state.muted?'Unmute':'Mute';select('mute').setAttribute('aria-pressed',String(state.muted));
     }});
     button.addEventListener('click',()=>dialog.showModal());select('close').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
     home.addEventListener('click',()=>dialog.showModal());
     select('start').addEventListener('click',()=>{void player.start();});select('stop').addEventListener('click',()=>player.stop());select('mute').addEventListener('click',()=>player.setMuted(!player.muted));dialog.querySelector('input').addEventListener('input',event=>player.setVolume(event.target.value/100));
-    const screen=document.getElementById('rs');if(screen)new MutationObserver(()=>{if(screen.classList.contains('hide')){player.stop();dialog.close();}}).observe(screen,{attributes:true,attributeFilter:['class']});
+    const screen=document.getElementById('rs');if(screen)new MutationObserver(()=>{if(screen.classList.contains('hide')&&!document.getElementById('audioPage')){player.stop();dialog.close();}}).observe(screen,{attributes:true,attributeFilter:['class']});
     const gate=document.getElementById('pairGate');if(gate)new MutationObserver(()=>{if(!gate.classList.contains('hide')){player.stop();dialog.close();}}).observe(gate,{attributes:true,attributeFilter:['class']});
     document.addEventListener('visibilitychange',()=>{if(document.hidden)player.stop();});window.addEventListener('pagehide',()=>player.stop());
     globalThis.PCRAudio.player=player;

@@ -1,3 +1,19 @@
+# Personal app 2.0 — 27 October 2026
+
+- [x] One shared Home / Screen / Files / Audio / Settings bar, reused across feature pages. Remote Screen retains its five essential keys. Home / Dashboard remains a direct switch.
+- [x] One Audio page reuses the existing PC output, microphone and phone playback controls, with source switching, level indicators and mute/stop controls.
+- [x] Direct Windows capture and low-latency H.264 now serve Remote Screen and Watch PC without a PC browser publishing a screen. JPEG and browser WebRTC alternatives remain. The bundled encoder uses two CPU threads; this version does not claim hardware encoding.
+- [x] Watch PC uses the existing authenticated PC-output audio. Pause/resume, close and backgrounding stop or resume the appropriate capture resources.
+- [x] Completed browser uploads offer Show in PC folder. Android 2.0 adds Open / Share for completed downloads in its queue and notification, plus the PC folder action after uploads and Retry for interrupted tasks. Older APKs retain their existing controls.
+- [x] Administrator device management: active sessions, online count at the top, sign-in history, selected-device sign-out and all-device sign-out. Online counts use a 45-second activity window; a browser and app can represent separate sessions on one phone. Historical device activity before logging began cannot be reconstructed.
+- [x] The configured verified Google owner is the main administrator. The private owner password was updated as requested, old default password access is disabled, and guest access retains approval. Password sessions bind to the current credential context so removed credentials do not survive in remembered sessions. Private passwords and history are excluded from the repository and installers.
+- [x] 287 automated tests passed. Live Chromium decoded Windows video, played/paused/resumed Watch PC, opened direct Remote Screen video and verified administrator revocation stops access during streaming. Four new responsive UI checks and native audio/download bridge interactions passed; earlier five-width remote-key checks also passed.
+- [x] Updated host and Windows helper deployed; local and public HTTPS clients verified. The removed passwords were rejected and the configured password/administrator session controls were verified; the verification session was signed out.
+- [ ] Build and publish the personal Android 2.0 APK and Windows 2.0 installer after GitHub checks. Direct draft-release uploads avoid the delayed Actions artifact quota.
+- [ ] Physical Android microphone, document-provider Open / Share and device-specific video decoder testing remain necessary; no phone is attached.
+
+---
+
 # Transfer convenience and build storage — 27 October 2026
 
 - [x] Browser Pause keeps every remaining file in the batch. Resume batch continues without selecting the files again; Cancel preserves completed files.

@@ -25,6 +25,11 @@ test('phone file selection and text save send actual bytes through the live HTTP
 test('the primary upload target is a real tappable input instead of a hidden synthetic picker',async t=>{
   const f=await fixture(t),input=f.d.getElementById('filesInput');assert.equal(input.hidden,false);assert.ok(input.parentElement.classList.contains('filesPickerSlot'));assert.equal(input.getAttribute('aria-label'),'Choose files to send to your PC');assert.equal(input.multiple,true);assert.equal(f.d.getElementById('filesChoose').getAttribute('aria-hidden'),'true');
 });
+
+test('completed uploads expose the saved PC file action and reject destinations outside the transfer folder',async t=>{
+  const f=await fixture(t);f.choose([new f.w.File(['complete'],'finished.txt')]);await until(()=>f.d.getElementById('filesStatus').textContent==='1 file sent to your PC.');const button=f.d.querySelector('#filesBatchList .filesSmallButton');assert.equal(button.textContent,'Show in PC folder');button.click();await until(()=>f.d.getElementById('filesStatus').textContent.includes('directly on your Windows PC'));assert.equal(await fs.readFile(path.join(f.root,'finished.txt'),'utf8'),'complete');
+  const rejected=await f.w.api('/api/files/reveal',{method:'POST',body:JSON.stringify({name:'../outside.txt'})});assert.equal(rejected.status,400);
+});
 test('text moves in both directions without a filename or an open remote screen',async t=>{
   const f=await fixture(t),text='From phone\nمرحبا 👋';f.d.getElementById('filesNote').value=text;f.d.getElementById('clipboardSend').click();await until(()=>f.clipboard===text);
   f.d.getElementById('filesNote').value='';f.d.getElementById('clipboardGet').click();await until(()=>f.d.getElementById('filesNote').value===text);

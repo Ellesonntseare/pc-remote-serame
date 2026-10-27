@@ -19,6 +19,7 @@
         android:label="PC Remote"
         android:icon="@drawable/ic_remote"
         android:theme="@style/Theme.PCRemote">
+        <activity android:name=".TransferActionActivity" android:exported="false" android:excludeFromRecents="true" />
         <service android:name=".ScreenShareService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <service android:name=".PhoneAudioService" android:exported="false" android:foregroundServiceType="microphone|mediaProjection" />
         <service android:name=".TransferService" android:exported="false" android:foregroundServiceType="dataSync" />

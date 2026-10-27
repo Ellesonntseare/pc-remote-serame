@@ -198,7 +198,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("version","1.9");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version","2.0");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow PC Remote through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -273,6 +273,7 @@ class MainActivity : Activity() {
                     }
                     "transfer-shared" -> { val items=org.json.JSONArray();sharedUris.forEach{items.put(JSONObject().put("direction","upload").put("uri",it.toString()).put("destination",value.optString("destination").take(700)))};if(items.length()>0){enqueueTransfers(items);sharedUris.clear();sharedText="";transferReady()} }
                     "transfer-control" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("pause","resume","cancel"))startForegroundService(Intent(this,TransferService::class.java).setAction(TransferService.CONTROL).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("id",value.optString("id")).putExtra("command",command))}
+                    "transfer-file-action" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("open","share")&&TransferService.completedDownload(this,origin,value.optString("id"))!=null)startActivity(Intent(this,TransferActionActivity::class.java).putExtra("origin",origin).putExtra("id",value.optString("id")).putExtra("command",command))}
                     "transfer-signout" -> selectedOrigin?.let{TransferService.stopOrigin(this,it)}
                     "phone-audio-start" -> {compressedPhoneAudio=value.optBoolean("compressed",true);requestPhoneAudio(value.optString("source"),value.optDouble("volume",.6))}
                     "phone-audio-stop" -> {pendingPhoneAudio=null;PhoneAudioService.stop()}

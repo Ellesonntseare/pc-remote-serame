@@ -26,6 +26,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Length==1&&args[0]=="--video-frames"){VideoFrames.Run();return;}
         if(args.Length==1&&args[0]=="--privacy-display"){PrivacyDisplay.Run();return;}
         if(args.Length==1&&args[0]=="--open-link")
         {

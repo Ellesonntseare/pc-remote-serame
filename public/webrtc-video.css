@@ -39,3 +39,5 @@
 .rtcPlayer:fullscreen .rtcPlayerBar{flex-shrink:0;padding-bottom:max(10px,env(safe-area-inset-bottom))}
 @media(max-width:480px){.rtcPlayerBar{gap:6px;padding:10px 8px}.rtcVolume{max-width:105px;gap:0}.rtcVolume>span{display:none}#webrtcVideoDialog .rtcPlayerBar button{padding:8px 9px}#webrtcVideoDialog [data-fullscreen] span{display:none}#webrtcVideoDialog video{height:40dvh;min-height:190px}.rtcActions{display:grid;grid-template-columns:1fr 1fr}.rtcActions button{min-height:46px;font-size:11px;padding:10px 8px}.rtcHint{line-height:1.6}.rtcLiveBadge{left:10px;top:10px;font-size:8px}.rtcPlayerEmpty{padding:45px 18px}}
 @media(max-height:480px) and (orientation:landscape){#webrtcVideoDialog video{height:65dvh;min-height:140px}.rtcPlayerEmpty{padding:25px}.rtcPlayerMark{display:none}}
+
+.rtcNativeCanvas{display:block;width:100%;max-height:70dvh;object-fit:contain;background:#000}.rtcNativeCanvas[hidden]{display:none!important}

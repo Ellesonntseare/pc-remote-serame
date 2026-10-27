@@ -230,6 +230,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
   }
   async function revoke(token){await ensure();for(const u of [...uploads.values()])if(u.token===token)await discard(u).catch(()=>{});}
   async function close(){clearInterval(cleanup);for(const u of uploads.values()){u.request?.destroy();}}
-  return {handle,revoke,close,root};
+  async function resolveFile(name){await ensure();const file=await safeTarget(name),stat=await fsp.lstat(file);if(!stat.isFile()||stat.isSymbolicLink())throw problem(400,'Choose a completed file inside the transfer folder.');return file;}
+  return {handle,revoke,close,root,resolveFile};
 }
 module.exports={createFileTransfers,filename,relativePath,crc32};

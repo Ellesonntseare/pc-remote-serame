@@ -31,6 +31,7 @@
 <link rel="stylesheet" href="/guest-access.css">
 <script src="/guest-access.js" defer></script>
 <script src="/guest-screen.js" defer></script>
+<script src="/native-video.js" defer></script>
 <script src="/webrtc-video.js" defer></script>
 <script src="/session-features.js" defer></script>
 <script src="/collaboration.js" defer></script>
@@ -66,6 +67,10 @@
 <script src="/google-signin.js" defer></script>
 <script src="/local-connection.js" defer></script>
 <script src="/page-navigation.js" defer></script>
+<script src="/session-admin.js" defer></script>
+<link rel="stylesheet" href="/session-admin.css">
+<script src="/audio-hub.js" defer></script>
+<link rel="stylesheet" href="/audio-hub.css">
 <script src="/accessibility.js" defer></script>
 <script src="/transfer-badges.js" defer></script>
 <script src="/pointer-safety.js" defer></script>
@@ -246,7 +251,7 @@ function concealPassword(){$('pin').type=passwordMode?'password':'text';$('passw
 $('passwordPeek').addEventListener('click',()=>{const visible=$('pin').type==='password';$('pin').type=visible?'text':'password';$('passwordPeek').setAttribute('aria-pressed',String(visible));$('passwordPeek').setAttribute('aria-label',visible?'Hide password':'Show password');});
 function configureLogin(d){passwordMode=d.requirePassword===true;concealPassword();$('passwordPeek').hidden=!passwordMode;$('loginTitle').textContent=passwordMode?'Welcome back.':'Connect to your PC';$('loginDescription').textContent=passwordMode?'Your PC, wherever you are. Sign in to continue.':'Enter the pairing PIN shown on your PC.';$('loginLabel').textContent=passwordMode?'Password':'Pairing PIN';$('pin').name=passwordMode?'password':'pin';$('pin').autocomplete=passwordMode?'current-password':'one-time-code';$('pin').inputMode=passwordMode?'text':'numeric';$('pin').maxLength=passwordMode?256:8;$('pin').placeholder=passwordMode?'Enter your password':'8-digit PIN';$('rememberChoice').hidden=!passwordMode;$('pairSubmit').textContent=passwordMode?'Sign in ↗':'Connect';}
 function showPair(error=''){statusPollAbort?.abort();paired=false;authGeneration++;if(rs.on)rsClose();concealPassword();window.PCRAccount=null;window.PCRAuth={signedIn:false};window.dispatchEvent(new CustomEvent('pcr:auth',{detail:window.PCRAuth}));$('pairGate').classList.remove('hide');document.querySelector('.app').inert=true;document.body.style.overflow='hidden';$('pairError').textContent=error;connectionLight('Signed out');}
-function showConnected(d){paired=true;authGeneration++;$('pin').blur();window.PCRAccount=d.account||null;window.PCRAuth={signedIn:true,account:d.account||null,role:d.role||'owner',until:d.until,permissions:d.permissions||{},guestId:d.guestId||'',guestEnabled:d.guestEnabled===true};window.dispatchEvent(new CustomEvent('pcr:auth',{detail:window.PCRAuth}));const wasHidden=!$('pairGate').classList.contains('hide');$('pairGate').classList.add('hide');const app=document.querySelector('.app');app.inert=false;if(wasHidden){app.classList.remove('pageArrive');requestAnimationFrame(()=>app.classList.add('pageArrive'));}document.body.style.overflow=rs.on?'hidden':'';connectionLight('Connected');if(d.name)$('name').textContent=d.name;$('screenBtn').classList.toggle('hide',!d.screen);window.PCRGuestAccess?.applyPermissions();poll();}
+function showConnected(d){paired=true;authGeneration++;$('pin').blur();window.PCRAccount=d.account||null;window.PCRAuth={signedIn:true,mainAdmin:d.mainAdmin===true,account:d.account||null,role:d.role||'owner',until:d.until,permissions:d.permissions||{},guestId:d.guestId||'',guestEnabled:d.guestEnabled===true};window.dispatchEvent(new CustomEvent('pcr:auth',{detail:window.PCRAuth}));const wasHidden=!$('pairGate').classList.contains('hide');$('pairGate').classList.add('hide');const app=document.querySelector('.app');app.inert=false;if(wasHidden){app.classList.remove('pageArrive');requestAnimationFrame(()=>app.classList.add('pageArrive'));}document.body.style.overflow=rs.on?'hidden':'';connectionLight('Connected');if(d.name)$('name').textContent=d.name;$('screenBtn').classList.toggle('hide',!d.screen);window.PCRGuestAccess?.applyPermissions();poll();}
 async function init(){try{const d=await api('/api/ping');configureLogin(d);if(d.paired)showConnected(d);else if(d.account){showPair();window.PCRAccount=d.account;window.dispatchEvent(new CustomEvent('pcr:account',{detail:d.account}));connectionLight('Account signed in');}else if(!d.requirePin&&!d.requirePassword){const connected=await api('/api/pair',{method:'POST',body:'{}'});if(!connected.ok)throw new Error(connected.error);return init();}else showPair();}catch{showPair('PC is not reachable. Check that the Windows host is running.');}}
 $('pairForm').addEventListener('submit',async e=>{e.preventDefault();const b=$('pairSubmit');b.disabled=true;$('pairError').textContent='Connecting…';try{const body=passwordMode?{password:$('pin').value,remember:$('rememberMe').checked}:{pin:$('pin').value};const d=await api('/api/pair',{method:'POST',body:JSON.stringify(body)});if(d.pending){$('pin').value='';window.PCRGuestAccess?.wait();}else if(d.ok){$('pin').value='';init();}else $('pairError').textContent=d.error||'Sign-in failed';}catch{$('pairError').textContent='Cannot reach this PC';}finally{b.disabled=false;}});
 async function unpair(){rsClose();try{await api('/api/unpair',{method:'POST',body:'{}'});}catch{}showPair();}

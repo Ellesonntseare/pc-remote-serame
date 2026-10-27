@@ -20,6 +20,12 @@ import java.util.concurrent.TimeUnit
 /** The service, rather than the Activity/WebView, owns each transfer. No cookies are persisted. */
 class TransferService : Service() {
     companion object {
+        fun completedDownload(context:Context,origin:String,id:String):JSONObject? {
+            if(TrustedOrigin.normalize(origin)!=origin||!id.matches(Regex("[a-fA-F0-9-]{36}")))return null
+            val rows=runCatching{live?.synchronizedSnapshot()?:JSONArray(File(context.filesDir,"transfer-queue.json").readText())}.getOrDefault(JSONArray())
+            for(i in 0 until rows.length()){val row=rows.getJSONObject(i);if(row.optString("id")==id&&row.optString("origin")==origin&&row.optString("direction")=="download"&&row.optString("state")=="complete"&&Uri.parse(row.optString("uri")).scheme=="content")return row}
+            return null
+        }
         private var live: TransferService? = null
         var events: ((JSONObject) -> Unit)? = null
         const val ADD = "pcr.transfer.ADD"
@@ -28,7 +34,7 @@ class TransferService : Service() {
             val source=live?.synchronizedSnapshot() ?: runCatching { JSONArray(File(context.filesDir,"transfer-queue.json").readText()) }.getOrDefault(JSONArray())
             val rows=JSONArray()
             for(i in 0 until source.length()) { val row=source.getJSONObject(i);if(row.optString("origin")==origin) {
-                rows.put(JSONObject().put("id",row.optString("id")).put("name",row.optString("name")).put("direction",row.optString("direction")).put("state",if(live==null&&row.optString("state") in listOf("queued","running","saving"))"paused" else row.optString("state")).put("received",row.optLong("transferred",row.optLong("received"))).put("size",row.optLong("size")).put("message",row.optString("message")))
+                rows.put(JSONObject().put("id",row.optString("id")).put("name",row.optString("name")).put("direction",row.optString("direction")).put("state",if(live==null&&row.optString("state") in listOf("queued","running","saving"))"paused" else row.optString("state")).put("received",row.optLong("transferred",row.optLong("received"))).put("size",row.optLong("size")).put("message",row.optString("message")).put("pcName",row.optString("pcName")))
             }}
             return JSONObject().put("origin",origin).put("tasks",rows)
         }
@@ -136,7 +142,7 @@ class TransferService : Service() {
         }
         var offset=state.getLong("received");val chunk=state.optInt("chunkBytes",1048576).coerceIn(1,8388608)
         synchronized(lock){row.put("received",offset);persist()}
-        if(state.optBoolean("complete"))return
+        if(state.optBoolean("complete")){state.optJSONObject("file")?.optString("name")?.let{row.put("pcName",it)};return}
         contentResolver.openInputStream(uri)?.use { input ->
             var skip=offset;while(skip>0){check(row);val n=input.skip(skip);if(n>0)skip-=n else if(input.read()<0)throw IOException("The source file changed")else skip--}
             while(offset<size) {
@@ -150,6 +156,7 @@ class TransferService : Service() {
             }
         }?:throw IllegalStateException("The phone no longer has access to this file. Choose it again.")
         if(!state.optBoolean("complete"))throw IOException("The PC has not confirmed the file")
+        state.optJSONObject("file")?.optString("name")?.let{row.put("pcName",it)}
     }
     private fun validDownload(path:String)=runCatching{val u=java.net.URI(path);!u.isAbsolute&&u.rawAuthority==null&&u.path in listOf("/api/files/download","/api/files/folder")&&!path.contains('#')}.getOrDefault(false)
     private fun download(row:JSONObject) {
@@ -191,6 +198,11 @@ class TransferService : Service() {
         if(row!=null&&state !in listOf("complete","cancelled"))for(command in listOf(if(state=="paused")"resume" else "pause","cancel")) {
             val action=Intent(this,TransferService::class.java).setAction(CONTROL).putExtra("id",row.optString("id")).putExtra("command",command)
             val pending=PendingIntent.getService(this,(row.optString("id")+command).hashCode(),action,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            builder.addAction(Notification.Action.Builder(null,command.replaceFirstChar{it.uppercase()},pending).build())
+        }
+        if(row!=null&&state=="complete"&&row.optString("direction")=="download")for(command in listOf("open","share")){
+            val action=Intent(this,TransferActionActivity::class.java).putExtra("origin",row.optString("origin")).putExtra("id",row.optString("id")).putExtra("command",command)
+            val pending=PendingIntent.getActivity(this,(row.optString("id")+command).hashCode(),action,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             builder.addAction(Notification.Action.Builder(null,command.replaceFirstChar{it.uppercase()},pending).build())
         }
         return builder.build()

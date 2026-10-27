@@ -1,0 +1,20 @@
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.PCRNativeVideo=api;})(globalThis,function(){
+  'use strict';
+  class NativeVideoSession{
+    constructor({onFrame=()=>{},onState=()=>{},Decoder=globalThis.VideoDecoder,Chunk=globalThis.EncodedVideoChunk,Socket=globalThis.WebSocket,location=globalThis.location}={}){Object.assign(this,{onFrame,onState,Decoder,Chunk,Socket,location});this.epoch=0;this.active=false;}
+    start(preset='auto'){
+      this.stop(true);const epoch=++this.epoch;if(!this.Decoder||!this.Chunk||!globalThis.isSecureContext){this.onState({state:'unavailable',message:'Compatibility screen active'});return false;}
+      if(!['low','med','high','hd','auto'].includes(preset))preset='auto';this.preset=preset;this.waitingKey=true;this.lastFrame=Date.now();this.codec=null;
+      const ws=this.socket=new this.Socket((this.location.protocol==='https:'?'wss:':'ws:')+'//'+this.location.host+'/api/native-video?p='+preset);ws.binaryType='arraybuffer';this.onState({state:'connecting',message:'Starting PC video…'});
+      this.timer=setInterval(()=>{if(epoch===this.epoch&&Date.now()-this.lastFrame>10000)this.fail('PC video interrupted · compatibility screen active');},1000);
+      ws.onmessage=event=>{if(epoch!==this.epoch)return;try{if(typeof event.data==='string'){const value=JSON.parse(event.data);if(value.type==='error')throw Error(value.message);if(value.type!=='format'||!/^avc1\.[0-9a-f]{6}$/i.test(value.codec)||!Number.isInteger(value.width)||value.width<2||value.width>1920||!Number.isInteger(value.height)||value.height<2||value.height>1080)throw Error('Invalid video format');this.format=value;if(this.codec!==value.codec){this.decoder?.close();this.decoder=new this.Decoder({output:frame=>{try{if(epoch!==this.epoch)return;this.lastFrame=Date.now();if(!this.active){this.active=true;this.onState({state:'playing',message:'Direct PC video · H.264'});}this.onFrame(frame,this.format);}catch{this.fail('Video display failed · compatibility screen active');}finally{frame.close();}},error:()=>{if(epoch===this.epoch)this.fail('Video decoding failed · compatibility screen active');}});this.decoder.configure({codec:value.codec,codedWidth:value.width,codedHeight:value.height,optimizeForLatency:true,hardwareAcceleration:'no-preference'});this.codec=value.codec;this.waitingKey=true;}return;}
+          if(!(event.data instanceof ArrayBuffer)||event.data.byteLength<14||event.data.byteLength>8*1024*1024||!this.decoder)throw Error('Invalid video frame');const header=new DataView(event.data),key=header.getUint8(0)===1,length=header.getUint32(9),timestamp=header.getFloat64(1);if(length!==event.data.byteLength-13||!Number.isSafeInteger(timestamp)||timestamp<0)throw Error('Invalid video frame');
+          if(this.decoder.decodeQueueSize>3){this.waitingKey=true;return;}if(this.waitingKey&&!key)return;if(key)this.waitingKey=false;this.decoder.decode(new this.Chunk({type:key?'key':'delta',timestamp,data:new Uint8Array(event.data,13)}));
+        }catch(error){this.fail(error.message||'PC video unavailable · compatibility screen active');}};
+      ws.onerror=()=>{if(epoch===this.epoch)this.fail('PC video unavailable · compatibility screen active');};ws.onclose=()=>{if(epoch===this.epoch)this.fail('PC video ended · compatibility screen active');};return true;
+    }
+    fail(message){this.stop(true);this.onState({state:'error',message});}
+    stop(quiet=false){this.epoch++;this.active=false;clearInterval(this.timer);if(this.socket){this.socket.onclose=this.socket.onerror=this.socket.onmessage=null;this.socket.close();this.socket=null;}try{this.decoder?.close();}catch{}this.decoder=null;if(!quiet)this.onState({state:'stopped',message:'PC video stopped'});}
+  }
+  return {NativeVideoSession};
+});

@@ -4,7 +4,7 @@
 // presentation and history; closing a page still runs its normal cleanup.
 (() => {
   if(window.PCRPages)return;
-  const titles={rs:'Remote screen',rsSettings:'Customize controls',remoteOptions:'Remote tools',workspaceSettings:'Settings',powerPage:'Power controls',filesDialog:'Files & text',filePreviewDialog:'File preview',pcAudioDialog:'PC audio',phoneAudioPage:'Send audio',pcAppsDialog:'Switch apps',guestApprovalDialog:'Guest access',guestScreenDialog:'Shared screens',webrtcVideoDialog:'Watch PC',sessionTools:'Devices & handoff',collaborationDialog:'Collaborate',screenTextDialog:'Copy screen text',imageClipboardDialog:'Image clipboard',installHelp:'Install to phone',localConnectionPage:'Local connection',cameraSharing:'Cameras & microphones',missionSearch:'Find a control',missionActivity:'Recent activity',missionHelp:'Help & support'};
+  const titles={rs:'Remote screen',rsSettings:'Customize controls',remoteOptions:'Remote tools',workspaceSettings:'Settings',powerPage:'Power controls',filesDialog:'Files & text',filePreviewDialog:'File preview',audioPage:'Audio',pcAudioDialog:'PC audio',phoneAudioPage:'Send audio',pcAppsDialog:'Switch apps',guestApprovalDialog:'Guest access',guestScreenDialog:'Shared screens',webrtcVideoDialog:'Watch PC',sessionTools:'Devices & handoff',collaborationDialog:'Collaborate',screenTextDialog:'Copy screen text',imageClipboardDialog:'Image clipboard',installHelp:'Install to phone',localConnectionPage:'Local connection',cameraSharing:'Cameras & microphones',missionSearch:'Find a control',missionActivity:'Recent activity',missionHelp:'Help & support'};
   // Preferences also open from Home. Move the existing controls intact into a
   // real page dialog so they can appear above Settings without starting video.
   const oldPreferences=document.getElementById('rsSettings');
@@ -52,7 +52,7 @@
   function decorate(node){
     if(node.id==='rs')return;
     const root=node.id==='rsSettings'?node.querySelector('.controlSheet'):node.id==='remoteOptions'?node.querySelector('.remoteOptionsPanel'):node;
-    if(!root||root.querySelector('.pcrPageHeader'))return;
+    if(!root||(node.id==='audioPage'?root.querySelector(':scope > .pcrPageHeader'):root.querySelector('.pcrPageHeader')))return;
     let header=root.querySelector('.workspacePageHeader,.nativeDialogHead,.filesHeader,.guestDialogHead,.guestScreenHead,.controlHead,header');
     if(!header){header=document.createElement('header');const title=root.querySelector(':scope > h2')||document.createElement('h2');if(!title.textContent)title.textContent=titles[node.id];header.append(title);root.prepend(header);}
     header.classList.add('pcrPageHeader');
