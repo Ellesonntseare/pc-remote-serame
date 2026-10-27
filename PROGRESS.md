@@ -1,4 +1,4 @@
-# Personal app 2.1.1 reliability update — 27 October 2026
+# Personal app 2.1.1 reliability update — 28 October 2026
 
 - [x] Preserve the original upload snapshot in sync checkpoints so edits made while sending remain pending. Recheck phone files before replacing them with downloads.
 - [x] Recover interrupted upload tickets without replacing them on network/busy errors; release obsolete partials before creating another upload. Refresh the PC listing after recovery can finish an upload.
@@ -11,7 +11,9 @@
 - [x] Presentation pauses other native screen streams in the same session and routine app-settings/clipboard polling. Capture/encoder stop on Pause, page exit, backgrounding and sign-out. Other Windows applications retain their normal resources/priorities.
 - [x] Responsive browser review passed at 320, 390, 844 and 1280 pixels wide; the simulated 256 × 144 floating view fit correctly and restored the full layout. A live Windows check confirmed Chrome field/button detection. Physical Android IME/PiP testing still needs the phone.
 - [x] First host/browser suite: 302 tests passed; first signed Android build and Windows installer passed. The subsequent typing/floating-window pass passed all 13 focused checks.
-- [ ] Complete final browser/host and Android regression checks, then publish the signed 2.1.1 APK and matching Windows installer.
+- [x] Final checks passed: 311 Windows tests, 296 portable checks, native compilation, Android unit/signing checks and installer/runtime verification. All 30 focused typing, floating-view, presentation and native-helper checks also passed.
+- [x] Published the signed personal APK and matching installer in [the 2.1.1 preview release](https://github.com/Ellesonntseare/pc-remote-serame/releases/tag/v2.1.1-preview), with SHA256SUMS. Functional source 54b9247 is on main; APK native source matches its verified build at 9991d52.
+- [x] Updated the running Windows helper, capture runtime and Node host. Local and public HTTPS health/feature-asset checks passed. The verified APK is also in PC Transfers and the project folder; the installer is available from the release.
 - [ ] Physical Android provider and background scheduling checks still need a connected phone.
 
 See [2.1.1 usage and platform requirements](docs/USING-2.1.1.md).
