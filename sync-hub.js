@@ -1,0 +1,30 @@
+'use strict';
+const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
+const SETTINGS=new Set(['pcr_home_layout_v1','pcr_home_panels_v1','pcr_appearance_v1','pcr_haptics','pcr_volume_keys','pcr_wake_mac','pcr_pointer_size','pcr_engine','pcr_remote_split_v1']);
+function createSyncHub({file,clipboard,stageFiles,getFileRevision=()=>0,now=Date.now}={}){
+  let state={revision:0,settings:{},devices:[],inbox:[]},ready=null,saving=Promise.resolve(),clip={text:'',source:'pc',revision:0},clipRead=null,clipAt=0;const clients=new Map();
+  async function load(){if(!ready)ready=(async()=>{if(!file)return;try{const stat=await fs.stat(file);if(stat.size>1024*1024)return;const value=JSON.parse(await fs.readFile(file,'utf8'));if(value.version===1&&Number.isSafeInteger(value.revision)){state.revision=value.revision;for(const [key,text]of Object.entries(value.settings||{}))if(SETTINGS.has(key)&&typeof text==='string'&&text.length<=16000)state.settings[key]=text;state.devices=(value.devices||[]).filter(d=>typeof d.id==='string').slice(-40);state.inbox=(value.inbox||[]).filter(d=>typeof d.id==='string'&&Array.isArray(d.delivered)).slice(-100);}}catch{}})();await ready;}
+  function save(){if(!file)return Promise.resolve();const content=JSON.stringify({version:1,...state});saving=saving.catch(()=>{}).then(async()=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file+'.tmp',content,{mode:0o600});await fs.rename(file+'.tmp',file);});return saving;}
+  async function currentClipboard(){if(!clipboard?.get||now()-clipAt<4000)return;if(clipRead)return clipRead;clipAt=now();clipRead=Promise.resolve().then(()=>clipboard.get()).then(text=>{if(typeof text==='string'&&text.length<=250000&&text!==clip.text)clip={text,source:'pc',revision:++state.revision};}).catch(()=>{}).finally(()=>clipRead=null);return clipRead;}
+  const deviceFor=token=>state.devices.find(d=>d.id===clients.get(token));
+  function devices(){return state.devices.map(d=>({...d,online:now()-d.seen<45000}));}
+  async function enqueue({files=[],text='',target='*'}){await load();let items=[];if(files.length)items=await stageFiles(files);if(text){if(typeof text!=='string'||text.length>250000)throw Error('Use text up to 250,000 characters.');items.push({kind:/^https?:\/\/\S+$/.test(text)?'link':'text',text,label:text.slice(0,100)});}for(const item of items)state.inbox.push({...item,id:crypto.randomUUID(),created:now(),target,delivered:[]});state.inbox=state.inbox.slice(-100);state.revision++;await save();return {ok:true,count:items.length};}
+  async function handle(req,res,{pathname,token,role,readJson,respond}){
+    if(!pathname.startsWith('/api/sync/'))return false;
+    const reply=(status,body)=>{respond(res,status,body);return true;};if(role!=='owner'||req.headers['x-pcr']!=='1')return reply(403,{error:'Pair this device with your PC to join syncing.'});
+    try{await load();const url=new URL(req.url,'http://localhost');
+      if(req.method==='POST'&&pathname==='/api/sync/register'){const value=await readJson(req,8192);if(typeof value.id!=='string'||!/^[a-zA-Z0-9-]{12,80}$/.test(value.id))return reply(400,{error:'Invalid device identifier.'});let device=state.devices.find(d=>d.id===value.id);if(!device){if(state.devices.length>=40)state.devices.sort((a,b)=>a.seen-b.seen).shift();device={id:value.id,name:'Device',platform:'browser',seen:0};state.devices.push(device);}device.name=String(value.name||'Device').slice(0,80);device.platform=value.platform==='android'?'android':'browser';device.seen=now();clients.set(token,device.id);await save();return reply(200,{ok:true,device,revision:state.revision});}
+      const device=deviceFor(token);
+      if(req.method==='GET'&&pathname==='/api/sync/devices')return reply(200,{ok:true,devices:devices()});
+      if(!device)return reply(409,{error:'Register this device before syncing.'});device.seen=now();
+      if(req.method==='GET'&&pathname==='/api/sync/state'){await currentClipboard();return reply(200,{ok:true,revision:state.revision,settings:state.settings,fileRevision:getFileRevision(),clipboard:clip,devices:devices(),inbox:state.inbox.filter(item=>(item.target==='*'||item.target===device.id)&&!item.delivered.includes(device.id)).map(({delivered,...item})=>item)});}
+      if(req.method==='POST'&&pathname==='/api/sync/settings'){const body=await readJson(req,128*1024);for(const [key,value]of Object.entries(body.values||{})){if(!SETTINGS.has(key)||typeof value!=='string'||value.length>16000)continue;state.settings[key]=value;}state.revision++;await save();return reply(200,{ok:true,revision:state.revision});}
+      if(req.method==='POST'&&pathname==='/api/sync/clipboard'){const body=await readJson(req,1024*1024);if(typeof body.text!=='string'||body.text.length>250000||body.text.includes('\0'))return reply(400,{error:'Use plain text up to 250,000 characters.'});if(body.text!==clip.text){await clipboard?.set(body.text);clip={text:body.text,source:device.id,revision:++state.revision};clipAt=now();}return reply(200,{ok:true,revision:clip.revision});}
+      if(req.method==='POST'&&pathname==='/api/sync/inbox/ack'){const body=await readJson(req,4096),item=state.inbox.find(row=>row.id===body.id);if(item&&(item.target==='*'||item.target===device.id)&&!item.delivered.includes(device.id)){item.delivered.push(device.id);await save();}return reply(200,{ok:true});}
+      if(req.method==='POST'&&pathname==='/api/sync/send'){const body=await readJson(req,1024*1024);return reply(200,await enqueue({text:body.text,target:body.target||'*'}));}
+      return reply(404,{error:'Sync action not found.'});
+    }catch(error){return reply(error.status||400,{error:error.status?error.message:'Sync could not finish. Reconnect to the PC and try again.'});}
+  }
+  return {handle,enqueue,devices:async()=>{await load();return devices();},revoke:token=>clients.delete(token),close:()=>saving};
+}
+module.exports={createSyncHub,SETTINGS};

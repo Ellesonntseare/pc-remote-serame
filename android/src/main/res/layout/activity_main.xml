@@ -30,6 +30,8 @@
                 <Button android:id="@+id/modeLocal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:text="Local Wi-Fi" android:textAllCaps="false" android:textColor="#001522" android:textSize="14sp" android:background="@drawable/connect_background" android:backgroundTint="@null" android:layout_marginEnd="6dp" />
                 <Button android:id="@+id/modeWebsite" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:text="Website" android:textAllCaps="false" android:textColor="#A5D5EA" android:textSize="14sp" android:background="@drawable/field_background" android:backgroundTint="@null" android:layout_marginStart="6dp" />
             </LinearLayout>
+            <Button android:id="@+id/nearbyScan" android:layout_width="match_parent" android:layout_height="48dp" android:text="Find my PC nearby" android:textAllCaps="false" android:textColor="#51E2D1" android:background="@drawable/field_background" android:layout_marginBottom="8dp" />
+            <LinearLayout android:id="@+id/nearbyHosts" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginBottom="12dp" />
             <LinearLayout android:id="@+id/websiteConnectionPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
             <Button android:id="@+id/connectWebsite" android:layout_width="match_parent"
                 android:layout_height="56dp" android:text="Connect to website  →" android:textAllCaps="false"

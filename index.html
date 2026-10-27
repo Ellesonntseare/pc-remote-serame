@@ -74,6 +74,9 @@
 <script src="/accessibility.js" defer></script>
 <script src="/transfer-badges.js" defer></script>
 <script src="/pointer-safety.js" defer></script>
+<script src="/context-controls.js" defer></script>
+<script src="/shared-sync.js" defer></script>
+<script src="/folder-sync.js" defer></script>
 <title>PC Remote</title>
 <style>
 html.appBooting .app{visibility:hidden}html.appBooting #pairGate{visibility:hidden}#appBoot{position:fixed;inset:0;z-index:5;display:grid;place-content:center;gap:16px;background:#101820;color:#9db6c4;text-align:center;font:13px system-ui}#appBoot span{width:28px;height:28px;margin:auto;border:2px solid #8bbaa52a;border-top-color:#8ddcc6;border-radius:50%;animation:bootSpin .8s linear infinite}@keyframes bootSpin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){#appBoot span{animation:none}}
@@ -419,7 +422,7 @@ async function rsRun(){
     $('rsst').textContent='Reconnecting…';setTimeout(()=>{if(rs.on&&rs.ab===ab)rsRun()},1500);
   }
 }
-function rsOpen(){rs.on=1;rs.m=null;$('rs').classList.remove('hide');document.body.style.overflow='hidden';$('rsq').textContent=QL[rs.qi];$('rsq').dataset.quality=QN[rs.qi];rsModeUI();$('rsst').textContent='Connecting…';rsRun()}
+function rsOpen(){if(rs.on&&window.PCRPages?.show?.('rs'))return;rs.on=1;rs.m=null;$('rs').classList.remove('hide');document.body.style.overflow='hidden';$('rsq').textContent=QL[rs.qi];$('rsq').dataset.quality=QN[rs.qi];rsModeUI();$('rsst').textContent='Connecting…';rsRun()}
 function rsClose(){window.PCRHoldControl?.release();window.PCRInputTransport?.stop();if(pointerFrame)cancelAnimationFrame(pointerFrame);pointerFrame=0;rs.on=0;rs.m=null;window.PCRScreenTools?.closed();window.PCRPrecisionLens?.closed();if(rs.ab)rs.ab.abort();if(live.sent||$('typeText').value||typeBusy)rsPauseLive('Screen closed. Select the PC field again, then tap New field.');rsPrefsClose();rsTypeClose();$('rs').classList.add('hide');document.body.style.overflow='';qq=[]}
 function rsModeUI(){const button=$('rsm');button.textContent='Touch screen';button.style.display='none';button.setAttribute('aria-label','Direct touch screen. Use the separate trackpad for pointer movement.');}
 function rsMode(){rs.mode='touch';rsModeUI()}

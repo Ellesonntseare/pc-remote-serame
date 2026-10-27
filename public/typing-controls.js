@@ -46,7 +46,7 @@
       if(!draft)rsResetTypingContext(false);
       if(result.editable===true){
         if(draft){input.value=draft;rsPauseLive('Your saved draft is kept. Send it into this field when ready.');confirmedDraft=true;resume.hidden=false;}
-        window.rsKb();updateState();return true;
+        window.rsKb();window.PCRScreenTools?.focusPoint?.(position);updateState();return true;
       }
       if(wasPaused)live.paused=true;
       rsTypeStatus(result.editable===null?'Tap sent. If this is a text field, use Keyboard.':'Tap sent to your PC.');updateState();return true;
@@ -90,7 +90,7 @@
       const draft = input.value; rsResetTypingContext(false); input.value = draft;
       if (current.paused && draft) { rsPauseLive('Field selected. Your saved draft is kept. Send it here when you are ready.'); confirmedDraft = true; resume.hidden = false; }
       else { confirmedDraft = false; resume.hidden = true; rsTypeStatus('Field selected. Type on your phone to write on the PC.'); rsScheduleLive(); }
-      focusKeyboard(); return true;
+      focusKeyboard();window.PCRScreenTools?.focusPoint?.(position); return true;
     }
     for (const button of [choose, options, resume]) button.addEventListener('pointerdown', event => event.preventDefault());
     choose.addEventListener('click', beginChoose);

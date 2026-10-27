@@ -218,5 +218,6 @@
     saved.clear();
   });
   function home(){changing=true;try{for(let i=0;i<30&&stack.length;i++)closePage(stack.at(-1).node);}finally{changing=false;render();syncHistory();}}
-  window.PCRPages={back,home,get current(){reconcile();return stack.at(-1)?.node.id||'home';}};
+  function show(id){reconcile();if(!stack.some(page=>page.node.id===id))return false;changing=true;try{for(let i=0;i<30&&stack.at(-1)?.node.id!==id;i++)closePage(stack.at(-1)?.node);}finally{changing=false;render();syncHistory();}focusPage(stack.at(-1).node);return true;}
+  window.PCRPages={back,home,show,get current(){reconcile();return stack.at(-1)?.node.id||'home';}};
 })();

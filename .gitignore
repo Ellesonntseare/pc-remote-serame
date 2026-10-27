@@ -38,3 +38,4 @@ test/AudioCodecChecks/obj/
 .github/workflows/talentlms-cloud-login.yml
 
 .session-history.json*
+.shared-device-state.json*

@@ -80,7 +80,8 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     }catch(error){queueMicrotask(()=>fail(error));}
     return session;
   }
-  function openAudioOutput({sampleRate,channels,encoding='s16le',volume=.6,onReady=()=>{},onError=()=>{},onClose=()=>{}}={}){
+  function openAudioOutput({sampleRate,channels,encoding='s16le',volume=.6,output:outputDevice='speakers',onReady=()=>{},onError=()=>{},onClose=()=>{}}={}){
+    if(!['speakers','virtual-mic'].includes(outputDevice))throw Error('Choose PC speakers or the Windows microphone.');
     if(!['s16le','opus'].includes(encoding)||encoding==='opus'&&sampleRate!==48000)throw Error('Invalid phone audio encoding.');
     if(!Number.isInteger(sampleRate)||sampleRate<8000||sampleRate>48000||![1,2].includes(channels)||!Number.isFinite(volume)||volume<0||volume>1)throw Error('Invalid phone audio format.');
     const child=helper('--audio-playback');let stopped=false,ended=false,ready=false,output='';const capacity=Math.max(16384,Math.ceil(sampleRate*channels*2*.2));let killTimer;
@@ -93,7 +94,7 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     child.stdin.on('error',()=>fail(Error('PC audio output disconnected.')));child.stderr.resume();child.stdout.setEncoding('utf8');
     child.stdout.on('data',text=>{if(stopped)return;output+=text;if(output.length>8192){fail(Error('Invalid PC audio output response.'));return;}let newline;while((newline=output.indexOf('\n'))>=0){const line=output.slice(0,newline);output=output.slice(newline+1);try{const value=JSON.parse(line);if(value.type==='started'&&!ready){ready=true;clearTimeout(timer);onReady();}else if(value.type==='error')fail(Error('PC audio output is unavailable.'));else throw Error('Unexpected output message');}catch{fail(Error('PC audio output is unavailable.'));}}});
     child.on('error',()=>fail(Error('The Windows output helper could not start.')));child.on('close',()=>{if(!stopped)fail(Error('The Windows output helper stopped.'));finish();});
-    child.stdin.write(JSON.stringify({sampleRate,channels,volume,...encoding==='opus'&&{encoding}})+'\n');return session;
+    child.stdin.write(JSON.stringify({sampleRate,channels,volume,...outputDevice==='virtual-mic'&&{output:outputDevice},...encoding==='opus'&&{encoding}})+'\n');return session;
   }
   function close(){closed=true;appTokens.clear();for(const session of audioSessions)session.stop();}
   async function sendMedia(action){
@@ -106,6 +107,8 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('Use a valid http or https link.');
     return request('--open-link',{url:url.href});
   }
-  return {listApps,focusApp,sendMedia,openLink,openAudio,openAudioOutput,close};
+  let currentAppPending=null,currentAppValue=null,currentAppAt=0;
+  async function currentApp(){if(currentAppValue&&now()-currentAppAt<1500)return currentAppValue;if(currentAppPending)return currentAppPending;currentAppPending=request('--app-current').then(value=>{currentAppValue=value;currentAppAt=now();return value;}).finally(()=>currentAppPending=null);return currentAppPending;}
+  return {listApps,currentApp,focusApp,sendMedia,openLink,openAudio,openAudioOutput,audioDevices:()=>request('--audio-devices'),close};
 }
 module.exports={createNativeFeatures,AudioPacketReader,validFormat};

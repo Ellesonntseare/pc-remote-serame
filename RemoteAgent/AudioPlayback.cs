@@ -8,6 +8,12 @@ using System.Text.Json;
 // speakers/headphones and is never saved to disk or installed as a virtual mic.
 internal static class AudioPlayback
 {
+    static MMDevice? VirtualInput(MMDeviceEnumerator devices)=>devices.EnumerateAudioEndPoints(DataFlow.Render,DeviceState.Active).FirstOrDefault(device=>device.FriendlyName.Contains("CABLE Input",StringComparison.OrdinalIgnoreCase));
+    public static void Devices()
+    {
+        try{using var devices=new MMDeviceEnumerator();using var input=VirtualInput(devices);bool capture=devices.EnumerateAudioEndPoints(DataFlow.Capture,DeviceState.Active).Any(device=>device.FriendlyName.Contains("CABLE Output",StringComparison.OrdinalIgnoreCase));Console.Write(JsonSerializer.Serialize(new {ok=true,virtualMic=new {available=input!=null&&capture,name="CABLE Output",setupUrl="https://vb-audio.com/Cable/"}}));}
+        catch{Console.Write("{\"ok\":true,\"virtualMic\":{\"available\":false,\"name\":\"CABLE Output\",\"setupUrl\":\"https://vb-audio.com/Cable/\"}}");}
+    }
     static bool ReadPacket(Stream input, byte[] bytes)
     {
         int offset=0;
@@ -32,7 +38,9 @@ internal static class AudioPlayback
             if(!float.IsFinite(volume)||volume<0||volume>1)throw new InvalidDataException();
             var format=new WaveFormat(rate,16,channels);
             var queue=new BufferedWaveProvider(format){BufferDuration=TimeSpan.FromMilliseconds(250),DiscardOnBufferOverflow=true,ReadFully=true};
-            using var output=new WasapiOut(AudioClientShareMode.Shared,true,60);
+            bool virtualMic=config.TryGetProperty("output",out var selectedOutput)&&selectedOutput.GetString()=="virtual-mic";
+            using var devices=new MMDeviceEnumerator();using var device=virtualMic?VirtualInput(devices)??throw new InvalidOperationException("Install VB-CABLE first."):devices.GetDefaultAudioEndpoint(DataFlow.Render,Role.Multimedia);
+            using var output=new WasapiOut(device,AudioClientShareMode.Shared,true,60);
             output.Init(queue);output.Volume=volume;output.Play();
             Console.WriteLine(JsonSerializer.Serialize(new {type="started",sampleRate=rate,channels}));Console.Out.Flush();
             var header=new byte[5];

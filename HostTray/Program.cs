@@ -11,6 +11,7 @@ internal static class Program
 {
     [STAThread] static void Main(string[] args)
     {
+        if(args.Length>0&&args[0]=="--send-to-phone"){ApplicationConfiguration.Initialize();Application.Run(new SendToPhone(HostContext.HostRoot(),args.Skip(1)));return;}
         using var mutex=new Mutex(true,"Local\\PCRemotePersonalHost",out bool first);
         if(!first){MessageBox.Show("PC Remote is already in the notification area.","PC Remote");return;}
         ApplicationConfiguration.Initialize();Application.Run(new HostContext(args.Contains("--quiet")));
@@ -19,7 +20,7 @@ internal static class Program
 internal sealed class HostContext:ApplicationContext
 {
     const string ReleasePage="https://github.com/Ellesonntseare/pc-remote-serame/releases";
-    static string HostRoot(){var packaged=Path.Combine(AppContext.BaseDirectory,"host");if(File.Exists(Path.Combine(packaged,"server.js")))return packaged;var dir=new DirectoryInfo(AppContext.BaseDirectory);for(int i=0;i<6&&dir!=null;i++,dir=dir.Parent)if(File.Exists(Path.Combine(dir.FullName,"server.js")))return dir.FullName;throw new DirectoryNotFoundException("Reinstall PC Remote: the Windows host files are missing.");}
+    internal static string HostRoot(){var packaged=Path.Combine(AppContext.BaseDirectory,"host");if(File.Exists(Path.Combine(packaged,"server.js")))return packaged;var dir=new DirectoryInfo(AppContext.BaseDirectory);for(int i=0;i<6&&dir!=null;i++,dir=dir.Parent)if(File.Exists(Path.Combine(dir.FullName,"server.js")))return dir.FullName;throw new DirectoryNotFoundException("Reinstall PC Remote: the Windows host files are missing.");}
     readonly string root=HostRoot();
     readonly NotifyIcon tray=new(){Icon=SystemIcons.Application,Visible=true,Text="PC Remote · checking host"};
     readonly HttpClient http=new(new HttpClientHandler{AllowAutoRedirect=false}){Timeout=TimeSpan.FromSeconds(2)};
@@ -29,7 +30,7 @@ internal sealed class HostContext:ApplicationContext
     public HostContext(bool quiet)
     {
         Directory.CreateDirectory(root);EnsureConfig();
-        var menu=new ContextMenuStrip();state.Enabled=false;menu.Items.Add(state);menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Open PC Remote",null,(_,_)=>Open("http://localhost:7666/"));menu.Items.Add("Pair a phone…",null,(_,_)=>Pair());menu.Items.Add("Import existing settings…",null,async(_,_)=>await ImportSettings());menu.Items.Add(start);menu.Items.Add(stop);menu.Items.Add(new ToolStripSeparator());menu.Items.Add(startup);menu.Items.Add("Check for updates…",null,async(_,_)=>await Updates());menu.Items.Add("Show host log",null,(_,_)=>Open(Path.Combine(root,"host.log")));menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Exit PC Remote",null,(_,_)=>Quit());tray.ContextMenuStrip=menu;tray.DoubleClick+=(_,_)=>Open("http://localhost:7666/");
+        var menu=new ContextMenuStrip();state.Enabled=false;menu.Items.Add(state);menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Open PC Remote",null,(_,_)=>Open("http://localhost:7666/"));menu.Items.Add("Pair a phone…",null,(_,_)=>Pair());menu.Items.Add("Import existing settings…",null,async(_,_)=>await ImportSettings());menu.Items.Add(start);menu.Items.Add(stop);menu.Items.Add(new ToolStripSeparator());menu.Items.Add(startup);menu.Items.Add("Check for updates…",null,async(_,_)=>await Updates());menu.Items.Add("Show host log",null,(_,_)=>Open(Path.Combine(root,"host.log")));menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Exit PC Remote",null,(_,_)=>Quit());menu.Items.Insert(3,new ToolStripMenuItem("Send to my phone…",null,(_,_)=>new SendToPhone(root,[]).Show()));menu.Items.Insert(4,new ToolStripMenuItem("PC folders and network shares…",null,(_,_)=>new SharedFolders(root).ShowDialog()));menu.Items.Insert(5,new ToolStripMenuItem("Set up phone microphone…",null,(_,_)=>Open("https://vb-audio.com/Cable/")));tray.ContextMenuStrip=menu;tray.DoubleClick+=(_,_)=>Open("http://localhost:7666/");
         start.Click+=async(_,_)=>await Start();stop.Click+=(_,_)=>Stop();startup.CheckOnClick=true;startup.Checked=ReadStartup();startup.Click+=(_,_)=>SetStartup(startup.Checked);
         timer.Tick+=async(_,_)=>await Poll();timer.Start();_ = Start();if(!quiet)tray.ShowBalloonTip(4000,"PC Remote","Your host controls are in the notification area. Right-click for pairing, status and updates.",ToolTipIcon.Info);
     }

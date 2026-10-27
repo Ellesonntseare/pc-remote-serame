@@ -4,6 +4,7 @@ function validPhoneFormat(value){return !!value&&value.type==='format'&&['s16le'
 function createPhoneAudio({auth,sessions,sessionExpiry,openOutput}){
   const wss=new WebSocketServer({noServer:true,maxPayload:65536,perMessageDeflate:false});let active=null;
   function upgrade(req,socket,head,token){
+    const output=new URL(req.url,'http://localhost').searchParams.get('output')==='virtual-mic'?'virtual-mic':'speakers';
     wss.handleUpgrade(req,socket,head,ws=>{
       ws.on('error',()=>{});
       if(active){ws.send(JSON.stringify({type:'error',error:'The PC is already receiving audio. Stop that stream before starting another.'}));ws.close(1008,'Audio input is busy');return;}
@@ -24,7 +25,7 @@ function createPhoneAudio({auth,sessions,sessionExpiry,openOutput}){
         if(value?.type==='volume'&&Number.isFinite(value.value)&&value.value>=0&&value.value<=1){entry.output?.setVolume(value.value);return;}
         if(format||!validPhoneFormat(value)){fail('Unsupported phone audio format.');return;}
         format=value;clearTimeout(handshake);
-        try{entry.output=openOutput({sampleRate:value.sampleRate,channels:value.channels,encoding:value.encoding,volume:.6,onReady:()=>{if(!closed){ready=true;send({type:'started',source:value.source,encoding:value.encoding});}},onError:()=>fail('PC speakers or headphones could not start. Check the Windows output device.'),onClose:()=>{if(!closed)fail('PC audio output stopped.');}});}catch{fail('PC audio output is unavailable. Restart the updated Windows host.');}
+        try{entry.output=openOutput({output,sampleRate:value.sampleRate,channels:value.channels,encoding:value.encoding,volume:.6,onReady:()=>{if(!closed){ready=true;send({type:'started',source:value.source,encoding:value.encoding});}},onError:()=>fail(output==='virtual-mic'?'Windows microphone route is unavailable. Install VB-CABLE on the PC, then choose CABLE Output in your Windows app.':'PC speakers or headphones could not start. Check the Windows output device.'),onClose:()=>{if(!closed)fail('PC audio output stopped.');}});}catch{fail('PC audio output is unavailable. Restart the updated Windows host.');}
       });
     });
   }

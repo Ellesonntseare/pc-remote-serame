@@ -26,12 +26,18 @@ function byteRange(header,size){
   else{start=Number(m[1]);end=m[2]?Number(m[2]):size-1;if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=size||start>end)throw problem(416,'Requested range is unavailable.');end=Math.min(end,size-1);}
   return {start,end};
 }
-function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
+function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],watch=false,locationsProvider}={}){
   const root=path.resolve(directory),uploads=new Map();let diskReady;
+  let revision=Date.now();const watched=new Map();
+  function watchFolder(directory){if(!watch||watched.has(directory)||!fs.existsSync(directory))return;try{const watcher=fs.watch(directory,{recursive:true,persistent:false},(event,name)=>{if(name&&String(name).split(/[\\/]/).some(part=>part.startsWith('.')))return;revision=Date.now();});watcher.on('error',()=>{watcher.close();watched.delete(directory);});watched.set(directory,watcher);}catch{}}
+  const roots=new Map();for(const item of locations){if(!item||!/^@[a-z][a-z0-9-]{0,40}$/.test(item.id)||typeof item.directory!=='string'||!path.isAbsolute(item.directory))continue;roots.set(item.id,{id:item.id,label:String(item.label||item.id.slice(1)).slice(0,80),directory:path.resolve(item.directory)});}
+  let locationsAt=0;function reloadLocations(){if(!locationsProvider||Date.now()-locationsAt<2000)return;locationsAt=Date.now();try{const next=locationsProvider();if(!Array.isArray(next))return;roots.clear();for(const item of next.slice(0,20))if(item&&/^@[a-z][a-z0-9-]{0,40}$/.test(item.id)&&typeof item.directory==='string'&&path.isAbsolute(item.directory)){roots.set(item.id,{id:item.id,label:String(item.label||item.id.slice(1)).slice(0,80),directory:path.resolve(item.directory)});watchFolder(item.directory);}}catch{}}
+  for(const item of roots.values())watchFolder(item.directory);watchFolder(root);
+  function locate(name){const parts=relativePath(name).split('/'),chosen=roots.get(parts[0]);if(parts[0].startsWith('@')&&!chosen)throw problem(404,'This PC location is unavailable.');return {base:chosen?.directory||root,parts:chosen?parts.slice(1):parts};}
   if(!Number.isSafeInteger(maxBytes)||maxBytes<1)throw Error('maxFileBytes must be a positive integer');
-  const target=name=>{const file=path.resolve(root,...relativePath(name).split('/'));if(!file.startsWith(root+path.sep))throw problem(400,'Invalid filename');return file;};
+  const target=name=>{const {base,parts}=locate(name),file=path.resolve(base,...parts);if(file!==base&&!file.startsWith(base+path.sep))throw problem(400,'Invalid filename');return file;};
   async function safeTarget(name,create=false){
-    const parts=relativePath(name).split('/');let parent=root;
+    const {base,parts}=locate(name);let parent=base;const baseStat=await fsp.lstat(base);if(!baseStat.isDirectory()||baseStat.isSymbolicLink())throw problem(400,'This PC location is unavailable.');
     for(const part of parts.slice(0,-1)){
       parent=path.join(parent,part);if(create)await fsp.mkdir(parent).catch(error=>{if(error.code!=='EEXIST')throw error;});
       const stat=await fsp.lstat(parent);if(!stat.isDirectory()||stat.isSymbolicLink())throw problem(400,'Folder links are not available for transfers.');
@@ -39,12 +45,14 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
     return target(name);
   }
   const partial=id=>path.join(root,'.pcr-upload-'+id+'.part'),metadata=id=>path.join(root,'.pcr-upload-'+id+'.json');
-  const record=u=>({version:1,id:u.id,token:u.token,account:u.account,secretHash:u.secretHash,name:u.name,...u.relativePath&&{relativePath:u.relativePath},size:u.size,received:u.received,until:u.until,complete:!!u.complete,...u.publishName&&{publishName:u.publishName},...u.file&&{file:u.file}});
+  async function availableLocations(allowed){const available=[{id:'',label:'Transfers'}];if(allowed)for(const item of roots.values()){try{const stat=await fsp.lstat(item.directory);if(stat.isDirectory()&&!stat.isSymbolicLink())available.push({id:item.id,label:item.label});}catch{}}return available;}
+  const record=u=>({version:1,...u.syncETag&&{syncETag:u.syncETag},id:u.id,token:u.token,account:u.account,secretHash:u.secretHash,name:u.name,...u.relativePath&&{relativePath:u.relativePath},size:u.size,received:u.received,until:u.until,complete:!!u.complete,...u.publishName&&{publishName:u.publishName},...u.file&&{file:u.file}});
   async function persist(u){const file=metadata(u.id),temp=file+'.tmp';await fsp.unlink(temp).catch(e=>{if(e.code!=='ENOENT')throw e;});const handle=await fsp.open(temp,'wx',0o600);try{await handle.writeFile(JSON.stringify(record(u)));await handle.sync();}finally{await handle.close();}await fsp.rename(temp,file);}
   async function removeDisk(u){for(const file of [partial(u.id),metadata(u.id),metadata(u.id)+'.tmp'])await fsp.unlink(file).catch(e=>{if(e.code!=='ENOENT')throw e;});}
   async function ensure(){
     if(!diskReady)diskReady=(async()=>{
       await fsp.mkdir(root,{recursive:true});const rootStat=await fsp.lstat(root);if(!rootStat.isDirectory()||rootStat.isSymbolicLink())throw Error('Transfer folder must be a real directory.');const entries=await fsp.readdir(root,{withFileTypes:true});
+      watchFolder(root);
       for(const entry of entries){
         const match=/^\.pcr-upload-([a-f0-9]{32})\.json$/.exec(entry.name);if(!match)continue;const id=match[1];
         try{
@@ -66,8 +74,21 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
     await diskReady;
   }
   async function discard(u){uploads.delete(u.id);u.cancelled=true;u.request?.destroy();await removeDisk(u);}
+  const fileETag=(name,stat)=>'"'+digest(name+':'+stat.size+':'+stat.mtimeMs+':'+stat.ctimeMs)+'"';
+  async function finishSync(u){
+    const name=u.relativePath||u.name,out=await safeTarget(name,true);let before=null;try{before=await fsp.lstat(out);}catch(error){if(error.code!=='ENOENT')throw error;}
+    if(before?.isSymbolicLink()||before&&!before.isFile()||u.syncETag==='new'&&before||u.syncETag!=='new'&&(!before||fileETag(name,before)!==u.syncETag))throw problem(409,'This file changed on another device. Keep both copies and sync again.');
+    const temp=path.join(path.dirname(out),'.pcr-sync-'+u.id+'.tmp');await fsp.copyFile(u.temp,temp);try{
+      if(before){const versions=path.join(root,'.pcr-versions');await fsp.mkdir(versions,{recursive:true});const check=await fsp.lstat(versions);if(!check.isDirectory()||check.isSymbolicLink())throw problem(400,'Sync history is unavailable.');await fsp.copyFile(out,path.join(versions,u.id),fs.constants.COPYFILE_EXCL).catch(error=>{if(error.code!=='EEXIST')throw error;});const latest=await fsp.lstat(out);if(fileETag(name,latest)!==u.syncETag)throw problem(409,'The PC file changed during sync. Keep both copies.');}
+      else{try{await fsp.lstat(out);throw problem(409,'Another device created this file. Keep both copies.');}catch(error){if(error.code!=='ENOENT')throw error;}}
+      // A sibling temporary file allows atomic replacement on the target volume.
+      if(before)await fsp.rename(temp,out);else{await fsp.copyFile(temp,out,fs.constants.COPYFILE_EXCL);await fsp.unlink(temp);}
+      const stat=await fsp.lstat(out);u.complete=true;u.file={name,size:stat.size,modified:stat.mtimeMs,etag:fileETag(name,stat)};await persist(u);await fsp.unlink(u.temp);return u.file;
+    }finally{await fsp.unlink(temp).catch(()=>{});}
+  }
   async function finish(u){
     if(u.complete)return u.file;
+    if(u.syncETag)return finishSync(u);
     async function complete(name){u.complete=true;u.file={name,size:u.size,modified:Date.now()};try{await persist(u);}catch(e){u.complete=false;throw e;}await fsp.unlink(u.temp).catch(e=>{if(e.code!=='ENOENT')throw e;});return u.file;}
     // A stop between publishing the link and saving completion must not produce a duplicate.
     if(u.publishName){try{const [source,stored]=await Promise.all([fsp.stat(u.temp),safeTarget(u.publishName).then(file=>fsp.lstat(file))]);if(stored.isFile()&&!stored.isSymbolicLink()&&source.ino!==0&&source.ino===stored.ino&&source.dev===stored.dev)return await complete(u.publishName);}catch(e){if(e.code!=='ENOENT')throw e;}}
@@ -97,7 +118,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
         if(item.isDirectory()){await walk(name);if(truncated)return;}
         else if(item.isFile()){
           if(files.length>=limit){truncated=true;return;}
-          files.push({name,size:item.size,modified:item.mtimeMs,preview:previewInfo(name)});
+          files.push({name,size:item.size,modified:item.mtimeMs,etag:fileETag(name,item),preview:previewInfo(name)});
         }
       }
     }
@@ -126,13 +147,25 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
     const centralOffset=offset;for(const bytes of central){await write(bytes);offset+=bytes.length;}
     const end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(entries.length,8);end.writeUInt16LE(entries.length,10);end.writeUInt32LE(offset-centralOffset,12);end.writeUInt32LE(centralOffset,16);await write(end);res.end();
   }
-  async function handle(req,res,{pathname,token,accountContext,readJson,respond,chunkBytes=CHUNK_BYTES}){
+  async function handle(req,res,{pathname,token,accountContext,readJson,respond,chunkBytes=CHUNK_BYTES,allowLocations=false}){
     if(pathname!=='/api/files'&&!pathname.startsWith('/api/files/'))return false;
     const chunkLimit=Number.isSafeInteger(chunkBytes)?Math.max(CHUNK_BYTES,Math.min(8*CHUNK_BYTES,chunkBytes)):CHUNK_BYTES;
     try{
       const url=new URL(req.url,'http://localhost');
+      reloadLocations();
+      const allowedName=value=>{if(typeof value==='string'&&value.startsWith('@')&&!allowLocations)throw problem(403,'This folder is available to the PC owner.');return value;};
+      for(const key of ['name','path'])allowedName(url.searchParams.get(key));
       if(req.method!=='GET'&&req.method!=='HEAD'&&req.headers['x-pcr']!=='1')throw problem(403,'Request header missing');
       await ensure();
+      if(req.method==='GET'&&pathname==='/api/files/locations'){
+        respond(res,200,{ok:true,locations:await availableLocations(allowLocations)});return true;
+      }
+      if(req.method==='GET'&&pathname==='/api/files/manifest'){
+        if(!allowLocations)throw problem(403,'Only paired owner devices can sync folders.');const folder=url.searchParams.get('path')||'';if(folder)relativePath(folder);const manifest=await listFiles(folder,2000);respond(res,200,{ok:true,path:folder,...manifest});return true;
+      }
+      if(req.method==='GET'&&pathname==='/api/files/hash'){
+        if(!allowLocations)throw problem(403,'Pair this device to compare sync files.');const name=relativePath(url.searchParams.get('name')),source=await safeTarget(name),before=await fsp.lstat(source);if(!before.isFile()||before.isSymbolicLink())throw problem(404,'File not found');const hash=crypto.createHash('sha256');for await(const bytes of fs.createReadStream(source))hash.update(bytes);const after=await fsp.lstat(source);if(fileETag(name,before)!==fileETag(name,after))throw problem(409,'The PC file changed. Sync again.');respond(res,200,{ok:true,sha256:hash.digest('hex')});return true;
+      }
       if(req.method==='GET'&&pathname==='/api/files/browse'){
         const folder=url.searchParams.get('path')||'';if(folder)relativePath(folder);
         const directory=folder?await safeTarget(folder):root,stat=await fsp.lstat(directory);
@@ -147,10 +180,23 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
           if(entries.length>=2000)break;
         }
         entries.sort((a,b)=>Number(b.directory)-Number(a.directory)||a.label.localeCompare(b.label));
-        respond(res,200,{ok:true,path:folder,entries,truncated:entries.length>=2000});return true;
+        respond(res,200,{ok:true,path:folder,entries,locations:await availableLocations(allowLocations),truncated:entries.length>=2000});return true;
+      }
+      if(req.method==='GET'&&pathname==='/api/files/search'){
+        const folder=url.searchParams.get('path')||'',query=(url.searchParams.get('q')||'').trim().toLocaleLowerCase();if(query.length<2||query.length>160)throw problem(400,'Enter at least two characters to search this folder.');
+        const found=[];let visited=0,truncated=false;const walk=async(prefix,depth)=>{if(req.destroyed||depth>12||visited>=4000||found.length>=300){truncated=true;return;}const directory=prefix?await safeTarget(prefix):root;for(const entry of await fsp.readdir(directory,{withFileTypes:true})){if(req.destroyed)return;if(++visited>4000||found.length>=300){truncated=true;return;}if(entry.name.startsWith('.')||entry.isSymbolicLink())continue;try{filename(entry.name);}catch{continue;}const name=prefix?prefix+'/'+entry.name:entry.name,stat=await fsp.lstat(target(name));if(stat.isSymbolicLink())continue;if(entry.name.toLocaleLowerCase().includes(query))found.push({name,label:entry.name,directory:stat.isDirectory(),size:stat.size,modified:stat.mtimeMs,preview:stat.isFile()?previewInfo(name):null});if(stat.isDirectory())await walk(name,depth+1);}};await walk(folder,0);respond(res,200,{ok:true,path:folder,entries:found,truncated});return true;
+      }
+      if(req.method==='POST'&&pathname==='/api/files/operate'){
+        if(!allowLocations)throw problem(403,'Only the PC owner can rename or move files.');
+        const body=await readJson(req,128*1024);if(!['rename','move'].includes(body.action)||!Array.isArray(body.names)||!body.names.length||body.names.length>100)throw problem(400,'Select up to 100 files or folders.');
+        const names=[...new Set(body.names.map(relativePath))];if(body.action==='rename'&&names.length!==1)throw problem(400,'Select one item to rename.');
+        const destination=body.destination||'';if(destination)relativePath(destination);const destDir=destination?await safeTarget(destination):root;if(!(await fsp.lstat(destDir)).isDirectory())throw problem(400,'Choose a destination folder.');
+        const plans=[];for(const name of names){if(roots.has(name))throw problem(400,'PC locations cannot be renamed or moved.');const source=await safeTarget(name),stat=await fsp.lstat(source);if(stat.isSymbolicLink())throw problem(400,'Folder links cannot be moved.');const label=body.action==='rename'?filename(body.name):name.split('/').at(-1),parent=body.action==='rename'?name.split('/').slice(0,-1).join('/'):destination,next=(parent?parent+'/':'')+label;if(next===name)continue;if(next.startsWith(name+'/'))throw problem(400,'A folder cannot be moved inside itself.');if(names.some(other=>other!==name&&name.startsWith(other+'/')))throw problem(400,'Select the parent folder without its children.');const out=await safeTarget(next);try{await fsp.lstat(out);throw problem(409,'An item named '+label+' already exists. Choose another name or folder.');}catch(error){if(error.code!=='ENOENT')throw error;}plans.push({source,out,next,stat});}
+        const moved=[];for(const plan of plans){try{if(plan.stat.isFile()){try{await fsp.link(plan.source,plan.out);}catch(error){if(!['EXDEV','EPERM','ENOTSUP'].includes(error.code))throw error;await fsp.copyFile(plan.source,plan.out,fs.constants.COPYFILE_EXCL);}await fsp.unlink(plan.source);}else await fsp.rename(plan.source,plan.out);moved.push(plan.next);}catch(error){throw problem(error.code==='EEXIST'?409:400,'Moved '+moved.length+' item(s). '+(error.code==='EXDEV'?'Folders must be moved within the same drive.':'This item changed or could not be moved. Refresh the folder.'));}}
+        respond(res,200,{ok:true,names:moved});return true;
       }
       if(req.method==='POST'&&pathname==='/api/files/mkdir'){
-        const body=await readJson(req,4096),name=relativePath(body.path),directory=await safeTarget(name,true);
+        const body=await readJson(req,4096),name=relativePath(allowedName(body.path)),directory=await safeTarget(name,true);
         try{await fsp.mkdir(directory);}catch(e){if(e.code!=='EEXIST')throw e;const stat=await fsp.lstat(directory);if(!stat.isDirectory()||stat.isSymbolicLink())throw problem(409,'A file already uses that name.');}
         respond(res,200,{ok:true,path:name});return true;
       }
@@ -173,13 +219,14 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
       }
       if(req.method==='POST'&&pathname==='/api/files/uploads'){
         const body=await readJson(req,4096),name=filename(body.name),size=body.size;
-        const destination=body.relativePath===undefined?name:relativePath(body.relativePath);if(destination.split('/').at(-1)!==name)throw problem(400,'Folder path must end with the selected filename.');
+        const destination=body.relativePath===undefined?name:relativePath(allowedName(body.relativePath));if(destination.split('/').at(-1)!==name)throw problem(400,'Folder path must end with the selected filename.');
         if(!Number.isSafeInteger(size)||size<0||size>maxBytes)throw problem(413,'This file exceeds the host file-size limit.');
         const active=[...uploads.values()].filter(u=>!u.complete);
         if(active.length>=8||active.filter(u=>u.token===token).length>=3)throw problem(429,'Finish or discard the current uploads first.');
         const id=crypto.randomBytes(16).toString('hex'),secret=crypto.randomBytes(32).toString('hex'),temp=partial(id);
         const handle=await fsp.open(temp,'wx',0o600);await handle.close();
-        const u={id,token,account:typeof accountContext==='string'&&accountContext?digest(accountContext):null,secretHash:digest(secret),temp,name,relativePath:destination,size,received:0,busy:false,until:Date.now()+RETENTION_MS};
+        const syncETag=body.replaceETag;if(syncETag!==undefined&&(!allowLocations||typeof syncETag!=='string'||!/^new$|^\"[a-f0-9]{64}\"$/.test(syncETag)))throw problem(400,'Refresh the sync folder before replacing a file.');
+        const u={id,token,...syncETag&&{syncETag},account:typeof accountContext==='string'&&accountContext?digest(accountContext):null,secretHash:digest(secret),temp,name,relativePath:destination,size,received:0,busy:false,until:Date.now()+RETENTION_MS};
         try{await persist(u);}catch(e){await removeDisk(u).catch(()=>{});throw e;}uploads.set(id,u);
         const file=size===0?await finish(u):undefined;
         respond(res,200,{ok:true,id,resumeSecret:secret,received:0,chunkBytes:chunkLimit,complete:size===0,expires:u.until,...file&&{file}});return true;
@@ -229,8 +276,13 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024}){
     }
   }
   async function revoke(token){await ensure();for(const u of [...uploads.values()])if(u.token===token)await discard(u).catch(()=>{});}
-  async function close(){clearInterval(cleanup);for(const u of uploads.values()){u.request?.destroy();}}
+  async function close(){clearInterval(cleanup);for(const watcher of watched.values())watcher.close();watched.clear();for(const u of uploads.values()){u.request?.destroy();}}
   async function resolveFile(name){await ensure();const file=await safeTarget(name),stat=await fsp.lstat(file);if(!stat.isFile()||stat.isSymbolicLink())throw problem(400,'Choose a completed file inside the transfer folder.');return file;}
-  return {handle,revoke,close,root,resolveFile};
+  async function stageFromPC(files){
+    await ensure();if(!Array.isArray(files)||!files.length||files.length>100)throw problem(400,'Choose up to 100 files.');const items=[];
+    for(const source of files){if(typeof source!=='string'||!path.isAbsolute(source))throw problem(400,'Choose a file on this PC.');const stat=await fsp.lstat(source);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>maxBytes)throw problem(400,'Choose ordinary files within the transfer size limit.');const label=filename(path.basename(source)),name='From PC/'+Date.now()+'-'+crypto.randomBytes(3).toString('hex')+'/'+label,out=await safeTarget(name,true);try{await fsp.link(source,out);}catch(error){if(!['EXDEV','EPERM','ENOTSUP'].includes(error.code))throw error;await fsp.copyFile(source,out,fs.constants.COPYFILE_EXCL);}items.push({kind:'file',name,label,size:stat.size,modified:stat.mtimeMs});}
+    return items;
+  }
+  return {handle,revoke,close,root,resolveFile,stageFromPC,get revision(){return revision;}};
 }
 module.exports={createFileTransfers,filename,relativePath,crc32};

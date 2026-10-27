@@ -12,7 +12,7 @@ internal static class AppWindows
     private static readonly int Session = Process.GetCurrentProcess().SessionId;
     private static readonly string? User = WindowsIdentity.GetCurrent().User?.Value;
 
-    public static void Run(bool focus)
+    public static void Run(bool focus, bool current = false)
     {
         try
         {
@@ -38,6 +38,10 @@ internal static class AppWindows
                 if (info == null || info.pid != pid || info.startTicks != start) throw new InvalidOperationException("This app closed or changed. Refresh the app list.");
                 Focus(window);
                 result = new { ok = true };
+            }
+            else if(current)
+            {
+                var app=Describe(GetForegroundWindow());result=new {ok=true,app=app==null?null:new {app.processName,app.title}};
             }
             else
             {

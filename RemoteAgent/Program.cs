@@ -52,11 +52,12 @@ internal static class Program
             return;
         }
         if(args.Length>0&&args[0]=="--audio-playback"){AudioPlayback.Run();return;}
-        if (args.Length > 0 && args[0] is "--audio" or "--apps-list" or "--app-focus")
+        if(args.Length==1&&args[0]=="--audio-devices"){AudioPlayback.Devices();return;}
+        if (args.Length > 0 && args[0] is "--audio" or "--apps-list" or "--app-focus" or "--app-current")
         {
             if (args.Length != 1) { Environment.ExitCode = 2; return; }
             if (args[0] == "--audio") AudioLoopback.Run();
-            else AppWindows.Run(args[0] == "--app-focus");
+            else AppWindows.Run(args[0] == "--app-focus",args[0] == "--app-current");
             return;
         }
         if(args.Length==1&&(args[0]=="--clipboard-read"||args[0]=="--clipboard-write"))

@@ -74,7 +74,7 @@ class PhoneAudioService:Service(){
             else if(Build.VERSION.SDK_INT>=30)startForeground(109,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             else if(Build.VERSION.SDK_INT>=29)startForeground(109,notification,0)
             else startForeground(109,notification)
-            val url=origin.replaceFirst("https://","wss://").replaceFirst("http://","ws://")+"/api/phone-audio"
+            val url=origin.replaceFirst("https://","wss://").replaceFirst("http://","ws://")+"/api/phone-audio?output="+(if(intent.getStringExtra("output")=="virtual-mic")"virtual-mic" else "speakers")
             state();socket=client.newWebSocket(Request.Builder().url(url).header("Origin",origin).header("Cookie",cookie).build(),object:WebSocketListener(){
                 override fun onMessage(webSocket:WebSocket,text:String){
                     if(ending||text.length>4096)return

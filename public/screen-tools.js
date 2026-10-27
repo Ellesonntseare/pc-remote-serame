@@ -25,6 +25,7 @@
   const panButton=toolbar.querySelector('#rsPan');
   let zoom=1,pan=false,gesture=null,watchdog=null,lastRatio=0,reconnecting=false;
   let fullscreenRequest=0,requestedFullscreen=false;
+  let typingPoint=null,savedView=null;
   const fullscreenSupported=typeof screen.requestFullscreen==='function'&&document.fullscreenEnabled!==false;
 
   function announce(text,state){
@@ -50,7 +51,17 @@
     stage.style.width=stageW+'px';stage.style.height=stageH+'px';
     canvas.style.width=imageW+'px';canvas.style.height=imageH+'px';
     if(keepCenter){view.scrollLeft=centerX*stageW-w/2;view.scrollTop=centerY*stageH-h/2;}
+    keepTypingVisible();
   }
+  function keepTypingVisible(){
+    if(!typingPoint||!screen.classList.contains('typing')||!rs.m)return;
+    const image=canvas.getBoundingClientRect(),bounds=view.getBoundingClientRect(),viewport=window.visualViewport;
+    const bottom=Math.min(bounds.bottom,viewport?viewport.offsetTop+viewport.height:window.innerHeight)-12,top=bounds.top+12;
+    const x=image.left+typingPoint.x/rs.m.w*image.width,y=image.top+typingPoint.y/rs.m.h*image.height;
+    if(x<bounds.left+24||x>bounds.right-24)view.scrollLeft+=x-(bounds.left+bounds.width/2);
+    if(y<top||y>bottom)view.scrollTop+=y-(top+Math.max(20,bottom-top)*.45);
+  }
+  function focusPoint(point){if(!point||!Number.isFinite(point.x)||!Number.isFinite(point.y))return;typingPoint={x:point.x,y:point.y};requestAnimationFrame(()=>{if(!screen.classList.contains('typing'))return;const readable=Math.min(3,Math.max(zoom,(rs.m?.w||1280)/Math.max(1,view.clientWidth*1.5)));setZoom(readable,{precise:true});keepTypingVisible();});}
   function panUI(){
     panButton.disabled=zoom===1;
     panButton.title=pan?'Control PC':'Pan view';panButton.setAttribute('aria-label',panButton.title);
@@ -74,7 +85,7 @@
     announce('Connecting…','connecting');
     reconnectButton.disabled=true;
     startWatchdog('Connection is taking longer. Try Reconnect.');
-    requestAnimationFrame(()=>layout(false));
+    requestAnimationFrame(()=>{layout(false);if(savedView){setZoom(savedView.zoom,{precise:true});view.scrollLeft=savedView.left;view.scrollTop=savedView.top;}});
   }
   function metadata(){
     announce('Waiting for screen…','connecting');reconnectButton.disabled=true;
@@ -90,6 +101,7 @@
     clearWatchdog();announce(message,'disconnected');
   }
   function closed(){
+    savedView={zoom,left:view.scrollLeft,top:view.scrollTop};typingPoint=null;
     multi=null;multiHeld=false;wheelRemainder=0;
     fullscreenRequest++;requestedFullscreen=false;
     clearWatchdog();announce('Screen closed','closed');stopGesture();
@@ -227,6 +239,8 @@
   view.addEventListener('wheel',event=>{if(!pan)return;consume(event);view.scrollLeft+=event.deltaX;view.scrollTop+=event.deltaY;},{capture:true,passive:false});
   new ResizeObserver(()=>layout()).observe(view);
   new ResizeObserver(()=>{adaptHeight();layout();}).observe(screen);
-  window.PCRScreenTools={connecting,metadata,frame,disconnected,closed,imageBox,reconnect,setZoom,restoreControls,presentation};
+  window.visualViewport?.addEventListener('resize',()=>{if(typingPoint)requestAnimationFrame(()=>layout());});
+  window.addEventListener('pcr:auth',()=>{if(!window.PCRAuth?.signedIn){savedView=null;typingPoint=null;setZoom(1);}});
+  window.PCRScreenTools={connecting,metadata,frame,disconnected,closed,imageBox,reconnect,setZoom,focusPoint,restoreControls,presentation};
   setZoom(1);updateFullscreen();
 })();

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -19,6 +19,9 @@
         android:label="PC Remote"
         android:icon="@drawable/ic_remote"
         android:theme="@style/Theme.PCRemote">
+        <service android:name="androidx.work.impl.foreground.SystemForegroundService" android:foregroundServiceType="dataSync" tools:node="merge" />
+        <receiver android:name=".FolderSyncControl" android:exported="false" />
+        <receiver android:name=".RemoteWidget" android:exported="false"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/remote_widget_info" /></receiver>
         <activity android:name=".TransferActionActivity" android:exported="false" android:excludeFromRecents="true" />
         <service android:name=".ScreenShareService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <service android:name=".PhoneAudioService" android:exported="false" android:foregroundServiceType="microphone|mediaProjection" />
@@ -33,6 +36,7 @@
             android:launchMode="singleTop"
             android:configChanges="orientation|screenSize"
             android:windowSoftInputMode="adjustResize">
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
