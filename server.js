@@ -446,7 +446,9 @@ function createApp(options={}) {
     sessions.set(sessionKey(raw),{ip,until:Date.now()+seconds*1000,persistent:result.remember,role:paired?'owner':'account',identity:result.identity,account:{...registered.profile,newAccount:registered.created},...paired&&{pairContext:pairingContext}});if(result.remember)saveSessions();record(ip,registered.created?'Google account registered':'Signed in with Google');
     return `${COOKIE_NAME}=${raw}; Path=/; HttpOnly; SameSite=Strict${result.remember?'; Max-Age='+seconds:''}${secure?'; Secure':''}`;
   }
+  let stopping=false;
   const server=http.createServer(async(req,res)=>{
+    res.once('finish',()=>{if(stopping&&!req.socket.destroyed)req.socket.end();});
     const ip=req.socket.remoteAddress;
     // Tunnel mode accepts only the local connector and explicitly named host.
     // Never use X-Forwarded-For / CF-Connecting-IP as proof of authorization.
@@ -734,6 +736,9 @@ function createApp(options={}) {
       return respond(res,404,{error:'Not found'});
     }catch(err){if(res.headersSent){res.destroy();return;}return respond(res,err.message==='Request too large'?413:400,{error:err.message});}
   });
+  // Status polls run every five seconds. Keep idle HTTP connections beyond
+  // that boundary so the next control request can reuse a live connection.
+  server.keepAliveTimeout=65000;server.headersTimeout=70000;
   const inputStream=new WebSocketServer({noServer:true,maxPayload:100000,perMessageDeflate:false});
   const audioStream=new WebSocketServer({noServer:true,maxPayload:1024,perMessageDeflate:false});
   const guestScreens=createGuestScreen({sessions,auth,sessionExpiry});
@@ -849,7 +854,7 @@ function createApp(options={}) {
       });
     });
   });
-  function stop(){displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();cameraRevoke();collaboration.revoke();}
+  function stop(){stopping=true;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();cameraRevoke();collaboration.revoke();}
   server.on('close',()=>{google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   return {server,pin,port,addresses:interfaces,stop};
 }

@@ -28,13 +28,13 @@
     const open=Array.from(document.querySelectorAll('dialog[open]')).at(-1),parent=open||document.body;warning.classList.toggle('inDialog',!!open);if(warning.parentElement!==parent){if(open)parent.prepend(warning);else parent.append(warning);}
   }
   async function extend(id,minutes,status,control){
-    control.disabled=true;
-    try{const result=await api('/api/guest/extend',{method:'POST',body:JSON.stringify({id,minutes})});if(!result.ok)throw Error(result.error||'Could not extend this session.');const guest=current.active.find(g=>g.id===id);if(guest)guest.until=result.until;status.textContent='Session extended by '+minutes+' minutes.';render();updateWarning();}
+    control.disabled=true;const account=window.PCRAuth;ownerRevision++;
+    try{const result=await api('/api/guest/extend',{method:'POST',body:JSON.stringify({id,minutes})});ownerRevision++;if(window.PCRAuth!==account||account?.role!=='owner')return;if(!result.ok)throw Error(result.error||'Could not extend this session.');const guest=current.active.find(g=>g.id===id);if(guest)guest.until=result.until;status.textContent='Session extended by '+minutes+' minutes.';render();updateWarning();}
     catch(error){status.textContent=error.message||'Could not extend this session.';}finally{control.disabled=false;}
   }
   warning.querySelector('[data-extend]').addEventListener('click',()=>{if(warningId)void extend(warningId,30,warning.querySelector('p'),warning.querySelector('[data-extend]'));});
   warning.querySelector('[data-manage]').addEventListener('click',()=>{if(!dialog.open)dialog.showModal();void refreshOwner();});
-  let waitingOnOwner=false,guestTimer=null,polling=false,ownerPolling=false,seen=new Set(),current={requests:[],active:[]};
+  let waitingOnOwner=false,guestTimer=null,polling=false,ownerPolling=false,ownerRevision=0,seen=new Set(),current={requests:[],active:[]};
   const el=id=>document.getElementById(id);
   const endAllDialog=document.createElement('dialog');endAllDialog.id='guestEndAllConfirmation';endAllDialog.setAttribute('aria-labelledby','guestEndAllTitle');endAllDialog.innerHTML='<h2 id="guestEndAllTitle">End guest access?</h2><p data-confirm-count></p><p>Screen viewing, controls, transfers and session tools will disconnect immediately.</p><div class="guestEndAllActions"><button type="button" data-cancel>Keep connected</button><button type="button" data-confirm>End access</button></div><p data-result role="status"></p>';document.body.append(endAllDialog);let endAllIds=[],endAllBusy=false;
   function requestEndAll(){endAllIds=[...new Set(current.active.filter(guest=>guest.until>Date.now()).map(guest=>guest.id))];if(!endAllIds.length)return;endAllDialog.querySelector('[data-confirm-count]').textContent='This will disconnect '+endAllIds.length+' '+(endAllIds.length===1?'guest.':'guests.');endAllDialog.querySelector('[data-confirm]').textContent='End '+endAllIds.length+' '+(endAllIds.length===1?'guest':'guests');endAllDialog.querySelector('[data-result]').textContent='';endAllDialog.showModal();}
@@ -109,9 +109,9 @@
   async function refreshOwner(){
     if(ownerPolling||!paired||window.PCRAuth?.role!=='owner'||!window.PCRAuth?.guestEnabled||document.hidden)return;
     ownerPolling=true;
-    const ownerAccount=window.PCRAuth;
+    const ownerAccount=window.PCRAuth,revision=ownerRevision;
     try{
-      const result=await api('/api/guest/requests');if(!result.ok||window.PCRAuth!==ownerAccount||!paired)return;
+      const result=await api('/api/guest/requests');if(!result.ok||window.PCRAuth!==ownerAccount||!paired||revision!==ownerRevision)return;
       const changed=JSON.stringify(current)!==JSON.stringify({requests:result.requests,active:result.active});
       const fresh=result.requests.some(request=>!seen.has(request.id));for(const request of result.requests)seen.add(request.id);
       current={requests:result.requests,active:result.active};if(changed)render();
@@ -123,6 +123,6 @@
   window.addEventListener('pcr:auth',event=>{leaveWaiting();endAllDialog.close();endAllIds=[];if(event.detail?.role==='guest'&&!event.detail.permissions?.clipboard){liveTyping=true;rsUpdateTypingUI();}applyPermissions();button.hidden=!event.detail?.signedIn||event.detail.role!=='owner'||!event.detail.guestEnabled;if(event.detail?.signedIn){void refreshOwner();}else{dialog.close();current={requests:[],active:[]};seen.clear();drafts.clear();}});
   setInterval(()=>{void refreshOwner().catch(()=>{});},2000);document.addEventListener('visibilitychange',()=>{void refreshOwner().catch(()=>{});});
   window.PCRGuestAccess={wait,leaveWaiting,applyPermissions};button.hidden=!(window.PCRAuth?.signedIn&&window.PCRAuth.role==='owner'&&window.PCRAuth.guestEnabled);applyPermissions();void refreshOwner();
-  window.addEventListener('pcr:auth',()=>{updateClock();updateWarning();});setInterval(()=>{updateClock();updateActiveTimes();updateWarning();},1000);setInterval(()=>{if(!document.hidden)void refreshGuest();},5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshGuest();});updateClock();
+  window.addEventListener('pcr:auth',()=>{updateClock();updateWarning();});setInterval(()=>{if(!document.hidden&&window.PCRAuth?.signedIn){updateClock();updateActiveTimes();updateWarning();}},1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){updateClock();updateActiveTimes();updateWarning();}});setInterval(()=>{if(!document.hidden)void refreshGuest();},5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshGuest();});updateClock();
   if(!paired)void api('/api/guest/poll',{method:'POST',body:'{}'}).then(result=>{if(paired)return;if(result.state==='pending'){wait();}else if(result.state==='approved'){void init();}}).catch(()=>{});
 })();

@@ -1,3 +1,18 @@
+# All-area refinement pass — 27 October 2026
+
+- [x] Remote taps use the pointer channel immediately; superseded field checks cannot open the keyboard or block another tap. Windows focus queries run outside the input loop.
+- [x] Ctrl+K stays on the controlled PC while the remote screen is active.
+- [x] Files shares duplicate folder requests, cancels stale/background listings, restores valid destinations after errors, and supports Enter/Escape when creating folders.
+- [x] Transfer progress refreshes the file list once per newly completed transfer rather than on every later queue update.
+- [x] Selecting the current Files shortcut preserves the open page. Search shows available controls and includes Send audio; Send audio also supports the home Settings reorder/hide/add controls.
+- [x] Settings highlights the current section. Home offers Retry when the host is offline.
+- [x] Status requests have an eight-second bound and cancel on background/page changes. Guest clocks pause in the background. HTTP keep-alive exceeds the five-second poll interval; shutdown closes idle and finishing connections.
+- [x] 276 tests passed locally, plus Windows native compilation, five browser layouts and integrated WebRTC/tap/hold/file-transfer bridge checks. A real HTTP connection was reused after 6.1 seconds of idle time.
+- [x] Updated source and Windows helper deployed; local and public HTTPS clients verified. Existing Android 1.9 loads these web changes without reinstalling.
+- [ ] Physical Android testing remains necessary for keyboard appearance, microphone behaviour and device-specific battery measurements.
+
+---
+
 # Latest update — 27 October 2026
 
 - [x] Home: primary Remote Screen, Files and Audio actions; PC wallpaper/hotspots removed; remaining tiles open directly and fill each row.

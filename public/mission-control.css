@@ -88,6 +88,7 @@ button.mcAvatar,.mcAvatar{display:grid;place-items:center;width:40px;height:40px
 @media(max-width:360px){.spatialQuick{gap:6px}.spatialQuick button{font-size:11px;min-height:72px}}
 .missionApp #spatialHome>.hero{margin-bottom:18px}.missionApp #spatialHome .spatialQuick{margin-top:22px}.spatialAllControls .heroactions :is([data-dashboard-tile=screen],[data-dashboard-tile=file],[data-dashboard-tile=audio],[data-dashboard-tile=keyboard],[data-dashboard-tile=video]){display:none!important}
 .spatialAllControls .heroactions{display:flex!important;flex-wrap:wrap;gap:9px!important}.spatialAllControls .heroactions>button{flex:1 1 calc(50% - 9px);min-width:0}.spatialAllControls .heroactions .homeSoloTile{grid-column:auto!important}
+.homeReconnect{flex-shrink:0;min-height:40px;min-width:48px;margin-left:auto;padding:7px 9px;border:1px solid #287a91;border-radius:9px;background:#0b3345;color:#8be9e2;font:600 11px system-ui}.homeReconnect[hidden]{display:none!important}.homeReconnect:disabled{opacity:.6}
 @media(min-width:1100px){.spatialAllControls .heroactions>button{flex-basis:calc(33.333% - 9px)}}
 @keyframes mcFlow{to{stroke-dashoffset:-104}}@keyframes mcBeacon{0%,100%{opacity:.9;stroke-width:3}50%{opacity:1;stroke-width:6}}
 @media(prefers-reduced-motion:reduce){.spatialConnections path,.spatialConnections circle{animation:none!important}.spatialArtwork{transform:none!important;will-change:auto}.mcGaugeArc,.missionTheme button,.mcCard{transition:none!important}.missionTheme .pageArrive,.missionTheme .pageArrive>*{animation:none!important}}

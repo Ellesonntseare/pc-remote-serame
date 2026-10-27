@@ -9,7 +9,7 @@
     panel.prepend(toolbar); panel.append(resume); input.setAttribute('aria-label', 'Type to the selected PC field');
     const hint = document.createElement('div'); hint.id = 'typingFieldHint'; hint.className = 'typingFieldHint'; hint.hidden = true; hint.setAttribute('role', 'status'); hint.textContent = 'Tap the text box you want to type into'; view.prepend(hint);
     const choose = toolbar.querySelector('#choosePCField'), options = toolbar.querySelector('#typingTextOptions');
-    let selection = null, pointer = null, epoch = 0, confirmedDraft = false;
+    let selection = null, pointer = null, epoch = 0, confirmedDraft = false,tapSerial=0,tapChecking=false;
     const feedback=document.createElement('div');feedback.id='remoteTypingFeedback';feedback.className='remoteTypingFeedback';feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');feedback.innerHTML='<span class="typingStateDot" aria-hidden="true"></span><strong></strong><span data-typing-destination></span>';panel.prepend(feedback);
     const badge=document.createElement('span');badge.id='remoteTypingState';badge.className='remoteTypingState';document.querySelector('.screenConnectionGroup')?.append(badge);
     const permitted = () => (!window.PCRCanAccess || window.PCRCanAccess('control')) && (!window.PCRHoldControl || window.PCRHoldControl.can('pc'));
@@ -17,7 +17,8 @@
     const open = () => !panel.classList.contains('hide') && !input.readOnly;
     function updateState(){
       let state='paused',title='Paused',detail='Open Keyboard to type into the current PC field.';
-      if(selection){state='waiting';title='Waiting for PC field';detail=selection.pending?'Selecting the field on your PC…':'Tap the text box in the PC picture. Your draft stays here.';}
+      if(tapChecking){state='waiting';title='Checking PC field';detail='Your tap is sent. Checking whether the keyboard is needed.';}
+      else if(selection){state='waiting';title='Waiting for PC field';detail=selection.pending?'Selecting the field on your PC…':'Tap the text box in the PC picture. Your draft stays here.';}
       else if(open()&&!connected()){state='waiting';title='Waiting for PC connection';detail='Your draft stays on this device until the screen reconnects.';}
       else if(open()&&!permitted()){title='Paused';detail='Control access is required. Your draft stays here.';}
       else if(open()&&live.paused){title='Paused';detail=confirmedDraft?'Field chosen. Send your saved draft when you are ready.':'Tap a PC text field to continue. Your draft stays here.';}
@@ -28,11 +29,20 @@
     function focusKeyboard() { updateState();if (!open()) return; input.focus({preventScroll: true}); window.PCRDeviceInput?.focusKeyboard?.(input); }
     async function tap(point){
       if(!permitted()||!connected())return false;const position=coordinates(point);if(!position)return false;
-      if(typeBusy||qb||qq.length||composing||rsTypingDirty()){window.msg?.('Wait for the current input to finish, then tap again.');return false;}
-      const metadata=rs.m,wasPaused=live.paused,draft=live.paused||!liveTyping?input.value:'';
+      if(typeBusy||composing||rsTypingDirty()){window.msg?.('Wait for the current text to finish, then tap again.');return false;}
+      const metadata=rs.m,wasPaused=live.paused,draft=live.paused||!liveTyping?input.value:'',serial=++tapSerial;
       window.PCRPointerSafety?.release?.();window.PCRDeviceInput?.haptic?.();
-      const result=await submitTyping(['abs '+position.x+' '+position.y,'click l','focus '+position.x+' '+position.y],true);
-      if(!result||!connected()||rs.m!==metadata||!permitted())return false;
+      // Ordinary clicks use the low-latency pointer channel. A separate,
+      // supersedable focus check must never lock out a second/double tap.
+      qc('abs '+position.x+' '+position.y);qc('click l');tapChecking=true;updateState();
+      await new Promise(resolve=>setTimeout(resolve,120));
+      const deadline=performance.now()+4500;
+      while(serial===tapSerial&&connected()&&!document.hidden&&(qb||qq.length)&&performance.now()<deadline)await new Promise(resolve=>setTimeout(resolve,16));
+      if(serial!==tapSerial||!connected()||document.hidden)return false;
+      if(qb||qq.length){tapChecking=false;updateState();return false;}
+      let result;try{result=await typingRequest(['focus '+position.x+' '+position.y]);}catch{if(serial===tapSerial){tapChecking=false;rsTypeStatus('Tap sent. Use Keyboard if this is a text field.');updateState();}return false;}
+      if(serial!==tapSerial)return false;tapChecking=false;
+      if(!result||!connected()||rs.m!==metadata||!permitted()){updateState();return false;}
       if(!draft)rsResetTypingContext(false);
       if(result.editable===true){
         if(draft){input.value=draft;rsPauseLive('Your saved draft is kept. Send it into this field when ready.');confirmedDraft=true;resume.hidden=false;}
@@ -41,6 +51,9 @@
       if(wasPaused)live.paused=true;
       rsTypeStatus(result.editable===null?'Tap sent. If this is a text field, use Keyboard.':'Tap sent to your PC.');updateState();return true;
     }
+    function cancelTap(){tapSerial++;tapChecking=false;updateState();}
+    input.addEventListener('beforeinput',cancelTap);input.addEventListener('compositionstart',cancelTap);
+    window.addEventListener('pcr:page',event=>{if(event.detail?.id!=='rs')cancelTap();});
     function updateSelection() {
       const active = !!selection; screen.classList.toggle('choosingTypingField', active); hint.hidden = !active;
       choose.setAttribute('aria-pressed', String(active)); choose.textContent = selection?.pending ? 'Selecting field…' : active ? 'Cancel selection' : 'Choose PC field'; choose.disabled = !!selection?.pending;
@@ -108,8 +121,8 @@
     window.addEventListener('wheel', event => { if (selection && view.contains(event.target)) consume(event); }, {capture: true, passive: false});
     new MutationObserver(() => { if (!open()) { cancel(); screen.classList.remove('compactTyping'); confirmedDraft = false; resume.hidden = true; }updateState(); }).observe(panel, {attributes: true, attributeFilter: ['class']});
     const connection=document.getElementById('screenConnection');if(connection)new MutationObserver(updateState).observe(connection,{childList:true,attributes:true,attributeFilter:['data-state']});
-    window.addEventListener('pcr:auth', () => { if (!permitted()) cancel('Control access changed. Your draft is kept.');updateState(); });window.addEventListener('pcr:hold-release',updateState);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); });
+    window.addEventListener('pcr:auth', () => { cancelTap();if (!permitted()) cancel('Control access changed. Your draft is kept.');updateState(); });window.addEventListener('pcr:hold-release',()=>{cancelTap();updateState();});
+    document.addEventListener('visibilitychange', () => { if (document.hidden){cancel();cancelTap();} });
     window.PCRTypingControls = {tap,choose: beginChoose, cancel: () => cancel('Field selection cancelled. Your draft is kept.'),updateState, get choosing() { return !!selection; }};updateState();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once: true}); else mount();

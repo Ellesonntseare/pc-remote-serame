@@ -259,8 +259,8 @@ internal static class Program
                         if (fields[2].StartsWith("focus ", StringComparison.Ordinal))
                         {
                             var point = fields[2].Split(' ');
-                            bool? editable = point.Length == 3 ? FieldFocus.EditableAt(Number(point[1]) + primary.Left, Number(point[2]) + primary.Top) : null;
-                            Send(output, 2, JsonSerializer.SerializeToUtf8Bytes(new { id = fields[1], ok = true, editable }));
+                            var id=fields[1];int x=point.Length==3?Number(point[1])+primary.Left:-1,y=point.Length==3?Number(point[2])+primary.Top:-1;
+                            _=Task.Run(()=>{bool? editable=FieldFocus.EditableAt(x,y);Send(output,2,JsonSerializer.SerializeToUtf8Bytes(new {id,ok=true,editable}));});
                         }
                         else
                         {
