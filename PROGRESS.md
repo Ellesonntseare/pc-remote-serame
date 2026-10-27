@@ -4,7 +4,11 @@
 - [x] Recover interrupted upload tickets without replacing them on network/busy errors; release obsolete partials before creating another upload. Refresh the PC listing after recovery can finish an upload.
 - [x] Coalesce rapid PC changes with a trailing sync request. Sign-out and page exit cancel pending timers; returning from the background resumes pending work.
 - [x] Synchronize Android folder-provider observer bookkeeping across background workers and UI callbacks.
-- [ ] Complete browser/host and Android regression checks, then publish the signed 2.1.1 APK and matching Windows installer.
+- [x] A confirmed PC text-field tap starts live typing immediately, including after compose/paused mode. Previous unsent drafts stay available through an optional Insert saved draft action. Delayed Windows focus checks retry without repeating the click.
+- [x] Native keyboard opening waits for the focused WebView editor and retries once; closing typing cancels delayed opening. Windows field detection also checks the native caret when an accessibility provider is slow.
+- [x] Android Remote Screen has a Minimise button for a floating picture-in-picture view. Expanding restores the prior zoom and scroll. Android controls the floating window; expand it to type or control the PC.
+- [x] First host/browser suite: 302 tests passed; first signed Android build and Windows installer passed. The subsequent typing/floating-window pass passed all 13 focused checks.
+- [ ] Complete final browser/host and Android regression checks, then publish the signed 2.1.1 APK and matching Windows installer.
 - [ ] Physical Android provider and background scheduling checks still need a connected phone.
 
 ---

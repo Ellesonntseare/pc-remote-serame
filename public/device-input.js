@@ -15,6 +15,7 @@
     if(hasNative())native({type:'haptic'});else navigator.vibrate?.(9);
   }
   function focusKeyboard(){if(hasNative())native({type:'keyboard'});}
+  function hideKeyboard(){if(hasNative())native({type:'keyboard-hide'});}
   function syncVolume(){const enabled=hasNative()&&volumeKeys&&!!window.PCRAuth?.signedIn&&!!window.PCRCanAccess?.('media')&&!document.hidden;if(enabled!==nativeVolume){nativeVolume=enabled;native({type:'volume-keys',enabled});}}
   async function volume(action){
     if(!volumeKeys||document.hidden||!window.PCRCanAccess?.('media')||!['volup','voldown'].includes(action))return;
@@ -61,7 +62,7 @@
     document.addEventListener('visibilitychange',()=>{if(document.hidden){stopLatency();volumePending=0;}else startLatency();syncVolume();});window.addEventListener('pagehide',()=>{stopLatency();native({type:'volume-keys',enabled:false});});
     auth();
   }
-  window.PCRDeviceInput={haptic,focusKeyboard,volume,screenshot};
+  window.PCRDeviceInput={haptic,focusKeyboard,hideKeyboard,volume,screenshot};
   window.addEventListener('pcr:settings-sync',()=>{vibration=read('pcr_haptics',true);volumeKeys=read('pcr_volume_keys',false);syncVolume();});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();

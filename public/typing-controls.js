@@ -9,7 +9,7 @@
     panel.prepend(toolbar); panel.append(resume); input.setAttribute('aria-label', 'Type to the selected PC field');
     const hint = document.createElement('div'); hint.id = 'typingFieldHint'; hint.className = 'typingFieldHint'; hint.hidden = true; hint.setAttribute('role', 'status'); hint.textContent = 'Tap the text box you want to type into'; view.prepend(hint);
     const choose = toolbar.querySelector('#choosePCField'), options = toolbar.querySelector('#typingTextOptions');
-    let selection = null, pointer = null, epoch = 0, confirmedDraft = false,tapSerial=0,tapChecking=false;
+    let selection = null, pointer = null, epoch = 0, confirmedDraft = false,tapSerial=0,tapChecking=false,savedDraft='';
     const feedback=document.createElement('div');feedback.id='remoteTypingFeedback';feedback.className='remoteTypingFeedback';feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');feedback.innerHTML='<span class="typingStateDot" aria-hidden="true"></span><strong></strong><span data-typing-destination></span>';panel.prepend(feedback);
     const badge=document.createElement('span');badge.id='remoteTypingState';badge.className='remoteTypingState';document.querySelector('.screenConnectionGroup')?.append(badge);
     const permitted = () => (!window.PCRCanAccess || window.PCRCanAccess('control')) && (!window.PCRHoldControl || window.PCRHoldControl.can('pc'));
@@ -40,13 +40,13 @@
       while(serial===tapSerial&&connected()&&!document.hidden&&(qb||qq.length)&&performance.now()<deadline)await new Promise(resolve=>setTimeout(resolve,16));
       if(serial!==tapSerial||!connected()||document.hidden)return false;
       if(qb||qq.length){tapChecking=false;updateState();return false;}
-      let result;try{result=await typingRequest(['focus '+position.x+' '+position.y]);}catch{if(serial===tapSerial){tapChecking=false;rsTypeStatus('Tap sent. Use Keyboard if this is a text field.');updateState();}return false;}
+      let result;try{for(let attempt=0;attempt<3;attempt++){result=await typingRequest(['focus '+position.x+' '+position.y]);if(result?.editable!==null||serial!==tapSerial||!connected()||document.hidden)break;await new Promise(resolve=>setTimeout(resolve,150));}}catch{if(serial===tapSerial){tapChecking=false;rsTypeStatus('Tap sent. Use Keyboard if this is a text field.');updateState();}return false;}
       if(serial!==tapSerial)return false;tapChecking=false;
       if(!result||!connected()||rs.m!==metadata||!permitted()){updateState();return false;}
-      if(!draft)rsResetTypingContext(false);
       if(result.editable===true){
-        if(draft){input.value=draft;rsPauseLive('Your saved draft is kept. Send it into this field when ready.');confirmedDraft=true;resume.hidden=false;}
-        window.rsKb();window.PCRScreenTools?.focusPoint?.(position);updateState();return true;
+        if(draft)savedDraft=savedDraft?savedDraft+'\n'+draft:draft;
+        rsResetTypingContext(false);liveTyping=true;confirmedDraft=!!savedDraft;resume.hidden=!confirmedDraft;resume.textContent='Insert saved draft';
+        window.rsKb();rsTypeStatus('Typing into this PC field.');window.PCRScreenTools?.focusPoint?.(position);updateState();return true;
       }
       if(wasPaused)live.paused=true;
       rsTypeStatus(result.editable===null?'Tap sent. If this is a text field, use Keyboard.':'Tap sent to your PC.');updateState();return true;
@@ -96,7 +96,7 @@
     choose.addEventListener('click', beginChoose);
     options.addEventListener('click', () => { const expanded = screen.classList.contains('compactTyping'); screen.classList.toggle('compactTyping', !expanded); options.setAttribute('aria-expanded', String(expanded)); options.textContent = expanded ? 'Less' : 'Text options'; focusKeyboard(); });
     toolbar.querySelector('#typingDone').addEventListener('click', () => window.rsTypeClose?.());
-    resume.addEventListener('click', () => { if (!confirmedDraft || !permitted() || !connected() || typeBusy) return; const draft = input.value; rsResetTypingContext(false); input.value = draft; confirmedDraft = false; resume.hidden = true; rsScheduleLive(); focusKeyboard(); });
+    resume.addEventListener('click', () => { if (!confirmedDraft || !permitted() || !connected() || typeBusy) return; if(savedDraft){input.value+=savedDraft;savedDraft='';}else{const draft=input.value;rsResetTypingContext(false);input.value=draft;} confirmedDraft = false; resume.hidden = true; rsScheduleLive(); focusKeyboard(); });
     const nativeKb = window.rsKb;
     if (typeof nativeKb === 'function') window.rsKb = function(...args) { if (!permitted()) { window.msg?.('Control access is required to type on this PC.'); return; } const result = nativeKb.apply(this, args); screen.classList.add('compactTyping'); options.setAttribute('aria-expanded', 'false'); options.textContent = 'Text options'; focusKeyboard(); return result; };
     function consume(event) { event.preventDefault(); event.stopImmediatePropagation(); }

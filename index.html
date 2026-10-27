@@ -61,6 +61,8 @@
 <script src="/device-links.js" defer></script>
 <script src="/device-input.js" defer></script>
 <script src="/typing-controls.js" defer></script>
+<script src="/native-window.js" defer></script>
+<link rel="stylesheet" href="/native-window.css">
 <script src="/privacy-mode.js" defer></script>
 <script src="/home-panels.js" defer></script>
 <script src="/mission-control.js" defer></script>
@@ -577,6 +579,7 @@ function rsTypeClose(){
   typingPanelOpen=false;$('typeText').readOnly=true;$('typeText').inputMode='none';
   $('rsKeyboard').setAttribute('aria-expanded','false');
   $('rs').classList.remove('typing');$('typeText').blur();$('typePanel').classList.add('hide');
+  window.PCRDeviceInput?.hideKeyboard?.();
   // Some phone IMEs omit compositionend on blur; commit the visible snapshot
   // rather than leaving all pointer controls blocked by hidden composition.
   if(composing){composing=false;if(rs.on)rsScheduleLive();}

@@ -65,8 +65,13 @@ test('a direct screen tap opens the keyboard only after Windows confirms an edit
 test('automatic field focus keeps uncertain drafts local and ignores stale screen replies',async t=>{
   const f=fixture(t);f.input.value='Keep my draft';f.window.live.paused=true;
   const tap=f.window.PCRTypingControls.tap({x:100,y:75});await new Promise(r=>setTimeout(r,140));f.requests[0].resolve({editable:true});await tap;
-  assert.equal(f.input.value,'Keep my draft');assert.equal(f.window.live.paused,true);assert.equal(f.doc.getElementById('typingResumeDraft').hidden,false);assert.deepEqual(f.scheduled,[]);
+  assert.equal(f.input.value,'');assert.equal(f.window.live.paused,false);assert.equal(f.doc.getElementById('typingResumeDraft').hidden,false);assert.deepEqual(f.scheduled,[]);
+  f.input.value='New typing';f.window.rsScheduleLive();assert.deepEqual(f.scheduled,['New typing'],'new typing needs no draft confirmation');f.doc.getElementById('typingResumeDraft').click();assert.equal(f.input.value,'New typingKeep my draft');
   f.window.rsTypeClose();const stale=f.window.PCRTypingControls.tap({x:100,y:75});await new Promise(r=>setTimeout(r,140));f.window.rs.m={w:1920,h:1080};f.requests[1].resolve({editable:true});await stale;assert.equal(f.input.readOnly,true);
 });
 
 test('a pending field check never blocks the second tap and only the latest field can open the keyboard',async t=>{const f=fixture(t),first=f.window.PCRTypingControls.tap({x:100,y:75});await new Promise(r=>setTimeout(r,140));assert.equal(f.window.typeBusy,false);const second=f.window.PCRTypingControls.tap({x:140,y:75});assert.equal(f.clicks.length,4,'both clicks are delivered immediately');f.requests[0].resolve({editable:true});await first;assert.equal(f.input.readOnly,true,'superseded focus must not summon the IME');await new Promise(r=>setTimeout(r,140));f.requests[1].resolve({editable:false});await second;assert.equal(f.input.readOnly,true);});
+
+test('a delayed Windows field response retries without another tap and switches compose mode to direct typing',async t=>{
+  const f=fixture(t);f.window.liveTyping=false;const tap=f.window.PCRTypingControls.tap({x:100,y:75});await new Promise(r=>setTimeout(r,140));f.requests[0].resolve({editable:null});await new Promise(r=>setTimeout(r,180));assert.equal(f.requests.length,2);assert.equal(f.clicks.length,2,'retry checks focus without clicking again');f.requests[1].resolve({editable:true});await tap;assert.equal(f.input.readOnly,false);assert.equal(f.window.liveTyping,true);assert.equal(f.window.live.paused,false);f.input.value='Direct';f.window.rsScheduleLive();assert.deepEqual(f.scheduled,['Direct']);
+});

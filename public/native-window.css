@@ -1,0 +1,8 @@
+body.pcrMiniWindow{margin:0!important;padding:0!important;overflow:hidden!important;background:#000!important}
+body.pcrMiniWindow> :not(#rs){display:none!important}
+body.pcrMiniWindow #rs{position:fixed!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;background:#000!important;display:block!important}
+body.pcrMiniWindow #rs> :not(#rsv){display:none!important}
+body.pcrMiniWindow #rsv{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;padding:0!important;margin:0!important;overflow:hidden!important;background:#000!important}
+body.pcrMiniWindow #screenStage{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important}
+body.pcrMiniWindow #rsc{width:100%!important;height:100%!important;object-fit:contain!important}
+body.pcrMiniWindow #screenStage> :not(#rsc),body.pcrMiniWindow #rsv> :not(#screenStage){display:none!important}

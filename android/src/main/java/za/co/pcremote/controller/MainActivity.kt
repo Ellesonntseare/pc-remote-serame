@@ -69,6 +69,7 @@ class MainActivity : Activity() {
     private var clipboardDirty=true
     private var pendingShortcut=""
     private var pendingSyncFolder:JSONObject?=null
+    private var keyboardGeneration=0
     private val clipboardListener=ClipboardManager.OnPrimaryClipChangedListener{clipboardDirty=true}
     private var localMedia:LocalMediaCapture?=null
     private var pendingLocalMedia:JSONObject?=null
@@ -209,7 +210,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("folderSync",true).put("widgets",true).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version","2.1.1");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("folderSync",true).put("widgets",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version","2.1.1");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow PC Remote through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -305,7 +306,9 @@ class MainActivity : Activity() {
                     "folder-sync-control" -> {val command=value.optString("command");if(command in listOf("pause","resume","remove","run"))FolderSync.control(this,value.optString("id"),command);folderSyncEvent()}
                     "haptic" -> { val now=SystemClock.elapsedRealtime();if(now-lastHaptic>=35){lastHaptic=now;web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)} }
                     "volume-keys" -> { volumeControlEnabled=value.optBoolean("enabled",false) }
-                    "keyboard" -> { web.requestFocus();(getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(web,InputMethodManager.SHOW_IMPLICIT) }
+                    "keyboard" -> showPhoneKeyboard()
+                    "keyboard-hide" -> hidePhoneKeyboard()
+                    "minimise" -> minimisePc(value.optInt("width",16),value.optInt("height",9))
                     "save-image" -> {
                         val encoded=value.optString("data")
                         if(downloadRequest==null&&encoded.length<=12*1024*1024){
@@ -443,6 +446,45 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun hidePhoneKeyboard(){
+        keyboardGeneration++
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(web.windowToken,0)
+    }
+
+    private fun showPhoneKeyboard(){
+        val generation=++keyboardGeneration
+        web.requestFocus()
+        fun show(){
+            if(generation!=keyboardGeneration||isFinishing||isDestroyed||isInPictureInPictureMode||!isAllowed(web.url?:""))return
+            web.evaluateJavascript("!!(document.activeElement?.id==='typeText'&&!document.activeElement.readOnly)"){focused->
+                if(focused!="true"||generation!=keyboardGeneration||!web.hasWindowFocus())return@evaluateJavascript
+                (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(web,InputMethodManager.SHOW_IMPLICIT)
+                if(Build.VERSION.SDK_INT>=30)window.insetsController?.show(android.view.WindowInsets.Type.ime())
+            }
+        }
+        web.post{show()};web.postDelayed({show()},160)
+    }
+
+    private fun minimisePc(width:Int,height:Int){
+        if(!isAllowed(web.url?:""))return
+        hidePhoneKeyboard()
+        var entered=false
+        if(packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)){
+            val ratio=(width.toDouble().coerceAtLeast(1.0)/height.coerceAtLeast(1)).coerceIn(0.42,2.38)
+            entered=runCatching{enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().setAspectRatio(android.util.Rational((ratio*1000).toInt(),1000)).build())}.getOrDefault(false)
+        }
+        if(!entered)miniWindowEvent(false,"Allow Picture-in-picture for PC Remote in Android app settings, then try again.")
+    }
+
+    private fun miniWindowEvent(active:Boolean,message:String=""){
+        if(isAllowed(web.url?:"")){val value=JSONObject().put("active",active).put("message",message);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:mini-window',{detail:$value}))",null)}
+    }
+
+    override fun onPictureInPictureModeChanged(active:Boolean,newConfig:android.content.res.Configuration){
+        super.onPictureInPictureModeChanged(active,newConfig)
+        miniWindowEvent(active)
+    }
+
     override fun onDestroy() {
         FolderSync.events=null
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).removePrimaryClipChangedListener(clipboardListener)
@@ -467,6 +509,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        hidePhoneKeyboard()
         nearby?.stop()
         stopLocalMedia()
 
