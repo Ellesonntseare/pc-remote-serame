@@ -5,9 +5,7 @@
   const read = (key, fallback) => {try {const value=localStorage.getItem(key);return value===null?fallback:value==='true';}catch{return fallback;}};
   const write = (key,value) => {try{localStorage.setItem(key,String(value));}catch{}};
   let vibration=read('pcr_haptics',true),volumeKeys=read('pcr_volume_keys',false),nativeVolume=false,lastHaptic=-100,volumePending=0,volumeBusy=false;
-  let latencyTimer=null,latencyAbort=null,latencyGeneration=0;
-  const samples=[];
-  let latencyLabel,settingsStatus;
+  let settingsStatus;
   const remoteActive=()=>typeof rs!=='undefined'&&rs.on&&!document.hidden&&!document.getElementById('rs').classList.contains('hide');
   function haptic(){
     if(!vibration||document.hidden||!window.PCRCanAccess?.('control'))return;
@@ -24,15 +22,6 @@
     try{while(volumePending&&volumeKeys&&!document.hidden&&window.PCRCanAccess?.('media')){const next=volumePending>0?'volup':'voldown';volumePending+=volumePending>0?-1:1;const result=await api('/api/cmd',{method:'POST',body:JSON.stringify({action:next})});if(!result.ok)throw Error(result.error||'PC volume is unavailable.');}}
     catch(error){volumePending=0;msg(error.message);}finally{volumeBusy=false;}
   }
-  function stopLatency(){latencyGeneration++;clearTimeout(latencyTimer);latencyTimer=null;latencyAbort?.abort();latencyAbort=null;samples.length=0;}
-  async function measureLatency(){
-    if(!remoteActive())return;
-    const generation=latencyGeneration,start=performance.now(),abort=new AbortController();latencyAbort=abort;const timeout=setTimeout(()=>abort.abort(),3500);
-    try{const result=await api('/api/session',{signal:abort.signal});if(generation!==latencyGeneration)return;if(!result.ok)throw Error();samples.push(Math.round(performance.now()-start));if(samples.length>5)samples.shift();const sorted=samples.slice().sort((a,b)=>a-b),latency=sorted[Math.floor(sorted.length/2)];latencyLabel.textContent=latency+' ms';latencyLabel.dataset.slow=String(latency>180);latencyLabel.title='Round-trip time to your PC, including this connection. Screen decoding can add delay.';}
-    catch{if(generation===latencyGeneration)latencyLabel.textContent='Link…';}
-    finally{clearTimeout(timeout);if(generation===latencyGeneration){latencyAbort=null;if(remoteActive())latencyTimer=setTimeout(measureLatency,5000);}}
-  }
-  function startLatency(){if(!latencyTimer&&!latencyAbort&&remoteActive())void measureLatency();}
   function screenshot(){
     if(!remoteActive()||!window.PCRCanAccess?.('screen'))return;
     const canvas=document.getElementById('rsc');if(!canvas.width||!canvas.height){msg('Wait for a PC picture first.');return;}
@@ -47,7 +36,6 @@
   }
   function mount(){
     const header=document.querySelector('.remoteSwipeDockHeader'),bar=document.querySelector('.rsbot');if(!header||!bar)return;
-    latencyLabel=document.createElement('span');latencyLabel.className='remoteLatency';latencyLabel.textContent='Link…';header.append(latencyLabel);
     const capture=document.createElement('button');capture.type='button';capture.id='remoteScreenshot';capture.textContent='Save screenshot';capture.addEventListener('click',screenshot);bar.append(capture);
     const preferences=document.getElementById('workspaceSettingsPreferences');
     if(preferences){
@@ -57,9 +45,9 @@
       }
       settingsStatus=document.createElement('p');settingsStatus.className='deviceWakeStatus';preferences.append(settingsStatus);
     }
-    const auth=()=>{stopLatency();volumePending=0;capture.hidden=!window.PCRCanAccess?.('screen');syncVolume();startLatency();void saveWake();};
-    window.addEventListener('pcr:auth',auth);window.addEventListener('pcr:page',event=>{if(remoteActive())startLatency();else stopLatency();});
-    document.addEventListener('visibilitychange',()=>{if(document.hidden){stopLatency();volumePending=0;}else startLatency();syncVolume();});window.addEventListener('pagehide',()=>{stopLatency();native({type:'volume-keys',enabled:false});});
+    const auth=()=>{volumePending=0;capture.hidden=!window.PCRCanAccess?.('screen');syncVolume();void saveWake();};
+    window.addEventListener('pcr:auth',auth);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)volumePending=0;syncVolume();});window.addEventListener('pagehide',()=>{native({type:'volume-keys',enabled:false});});
     auth();
   }
   window.PCRDeviceInput={haptic,focusKeyboard,hideKeyboard,volume,screenshot};

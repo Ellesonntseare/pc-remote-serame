@@ -9,7 +9,7 @@
     panel.prepend(toolbar); panel.append(resume); input.setAttribute('aria-label', 'Type to the selected PC field');
     const hint = document.createElement('div'); hint.id = 'typingFieldHint'; hint.className = 'typingFieldHint'; hint.hidden = true; hint.setAttribute('role', 'status'); hint.textContent = 'Tap the text box you want to type into'; view.prepend(hint);
     const choose = toolbar.querySelector('#choosePCField'), options = toolbar.querySelector('#typingTextOptions');
-    let selection = null, pointer = null, epoch = 0, confirmedDraft = false,tapSerial=0,tapChecking=false,savedDraft='';
+    let selection = null, pointer = null, epoch = 0, confirmedDraft = false,tapSerial=0,tapChecking=false,savedDraft='',lastField=null,phoneSelection=null;
     const feedback=document.createElement('div');feedback.id='remoteTypingFeedback';feedback.className='remoteTypingFeedback';feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');feedback.innerHTML='<span class="typingStateDot" aria-hidden="true"></span><strong></strong><span data-typing-destination></span>';panel.prepend(feedback);
     const badge=document.createElement('span');badge.id='remoteTypingState';badge.className='remoteTypingState';document.querySelector('.screenConnectionGroup')?.append(badge);
     const permitted = () => (!window.PCRCanAccess || window.PCRCanAccess('control')) && (!window.PCRHoldControl || window.PCRHoldControl.can('pc'));
@@ -31,6 +31,13 @@
       if(!permitted()||!connected())return false;const position=coordinates(point);if(!position)return false;
       if(typeBusy||composing||rsTypingDirty()){window.msg?.('Wait for the current text to finish, then tap again.');return false;}
       const metadata=rs.m,wasPaused=live.paused,draft=live.paused||!liveTyping?input.value:'',serial=++tapSerial;
+      if(!open()&&lastField&&liveTyping&&input.value&&input.value===live.sent){
+        tapChecking=true;updateState();let focused;
+        try{focused=await typingRequest(['focus '+position.x+' '+position.y]);}catch{if(serial===tapSerial){tapChecking=false;updateState();}return false;}
+        if(serial!==tapSerial||!connected()||rs.m!==metadata)return false;
+        tapChecking=false;
+        if(permitted()&&focused?.editable===true&&focused.fieldId===lastField?.id){live.paused=false;lastField.bounds=focused.fieldBounds||lastField.bounds;window.rsKb();window.PCRScreenTools?.focusPoint?.(position);rsTypeStatus('Continuing in this PC field.');updateState();return true;}
+      }
       window.PCRPointerSafety?.release?.();window.PCRDeviceInput?.haptic?.();
       // Ordinary clicks use the low-latency pointer channel. A separate,
       // supersedable focus check must never lock out a second/double tap.
@@ -46,6 +53,7 @@
       if(result.editable===true){
         if(draft)savedDraft=savedDraft?savedDraft+'\n'+draft:draft;
         rsResetTypingContext(false);liveTyping=true;confirmedDraft=!!savedDraft;resume.hidden=!confirmedDraft;resume.textContent='Insert saved draft';
+        if(/^[a-f0-9]{32}$/.test(result.fieldId||'')&&result.fieldBounds)lastField={id:result.fieldId,bounds:result.fieldBounds};
         window.rsKb();rsTypeStatus('Typing into this PC field.');window.PCRScreenTools?.focusPoint?.(position);updateState();return true;
       }
       if(wasPaused)live.paused=true;
@@ -98,7 +106,10 @@
     toolbar.querySelector('#typingDone').addEventListener('click', () => window.rsTypeClose?.());
     resume.addEventListener('click', () => { if (!confirmedDraft || !permitted() || !connected() || typeBusy) return; if(savedDraft){input.value+=savedDraft;savedDraft='';}else{const draft=input.value;rsResetTypingContext(false);input.value=draft;} confirmedDraft = false; resume.hidden = true; rsScheduleLive(); focusKeyboard(); });
     const nativeKb = window.rsKb;
-    if (typeof nativeKb === 'function') window.rsKb = function(...args) { if (!permitted()) { window.msg?.('Control access is required to type on this PC.'); return; } const result = nativeKb.apply(this, args); screen.classList.add('compactTyping'); options.setAttribute('aria-expanded', 'false'); options.textContent = 'Text options'; focusKeyboard(); return result; };
+    const nativeClose=window.rsTypeClose;
+    if(typeof nativeClose==='function')window.rsTypeClose=function(...args){if(open())phoneSelection={value:input.value,start:input.selectionStart,end:input.selectionEnd,direction:input.selectionDirection};return nativeClose.apply(this,args);};
+    if (typeof nativeKb === 'function') window.rsKb = function(...args) { if (!permitted()) { window.msg?.('Control access is required to type on this PC.'); return; } const result = nativeKb.apply(this, args); screen.classList.add('compactTyping'); options.setAttribute('aria-expanded', 'false'); options.textContent = 'Text options'; focusKeyboard();if(phoneSelection?.value===input.value)input.setSelectionRange(phoneSelection.start,phoneSelection.end,phoneSelection.direction); return result; };
+    window.addEventListener('pcr:typing-reset',()=>{lastField=null;phoneSelection=null;});
     function consume(event) { event.preventDefault(); event.stopImmediatePropagation(); }
     // Window capture runs before the existing document keyboard-dismiss handler.
     function capturePointer(event) {
@@ -121,7 +132,7 @@
     window.addEventListener('wheel', event => { if (selection && view.contains(event.target)) consume(event); }, {capture: true, passive: false});
     new MutationObserver(() => { if (!open()) { cancel(); screen.classList.remove('compactTyping'); confirmedDraft = false; resume.hidden = true; }updateState(); }).observe(panel, {attributes: true, attributeFilter: ['class']});
     const connection=document.getElementById('screenConnection');if(connection)new MutationObserver(updateState).observe(connection,{childList:true,attributes:true,attributeFilter:['data-state']});
-    window.addEventListener('pcr:auth', () => { cancelTap();if (!permitted()) cancel('Control access changed. Your draft is kept.');updateState(); });window.addEventListener('pcr:hold-release',()=>{cancelTap();updateState();});
+    window.addEventListener('pcr:auth', () => { cancelTap();if(!window.PCRAuth?.signedIn){lastField=null;phoneSelection=null;}if (!permitted()) cancel('Control access changed. Your draft is kept.');updateState(); });window.addEventListener('pcr:hold-release',()=>{cancelTap();updateState();});
     document.addEventListener('visibilitychange', () => { if (document.hidden){cancel();cancelTap();} });
     window.PCRTypingControls = {tap,choose: beginChoose, cancel: () => cancel('Field selection cancelled. Your draft is kept.'),updateState, get choosing() { return !!selection; }};updateState();
   }

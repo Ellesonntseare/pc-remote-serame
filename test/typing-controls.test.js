@@ -75,3 +75,15 @@ test('a pending field check never blocks the second tap and only the latest fiel
 test('a delayed Windows field response retries without another tap and switches compose mode to direct typing',async t=>{
   const f=fixture(t);f.window.liveTyping=false;const tap=f.window.PCRTypingControls.tap({x:100,y:75});await new Promise(r=>setTimeout(r,140));f.requests[0].resolve({editable:null});await new Promise(r=>setTimeout(r,180));assert.equal(f.requests.length,2);assert.equal(f.clicks.length,2,'retry checks focus without clicking again');f.requests[1].resolve({editable:true});await tap;assert.equal(f.input.readOnly,false);assert.equal(f.window.liveTyping,true);assert.equal(f.window.live.paused,false);f.input.value='Direct';f.window.rsScheduleLive();assert.deepEqual(f.scheduled,['Direct']);
 });
+
+test('closing and reopening the keyboard retains the phone text, baseline and selection',t=>{
+  const f=fixture(t);f.window.rsKb();f.input.value='Keep typing here';f.window.live.sent=f.input.value;f.input.setSelectionRange(5,5);f.window.rsTypeClose();f.window.rsKb();assert.equal(f.input.value,'Keep typing here');assert.equal(f.window.live.sent,'Keep typing here');assert.equal(f.input.selectionStart,5);assert.equal(f.input.selectionEnd,5);assert.deepEqual(f.scheduled,[]);
+});
+
+test('returning to the same PC field resumes the existing text without another click or resending it',async t=>{
+  const f=fixture(t),field={editable:true,fieldId:'a'.repeat(32),fieldBounds:{x:0,y:0,width:1920,height:1080}};let tap=f.window.PCRTypingControls.tap({x:100,y:75});await new Promise(r=>setTimeout(r,140));f.requests[0].resolve(field);await tap;f.input.value='Already sent';f.window.live.sent=f.input.value;f.input.setSelectionRange(4,4);f.window.rsTypeClose();tap=f.window.PCRTypingControls.tap({x:140,y:75});assert.equal(f.clicks.length,2);f.requests[1].resolve(field);await tap;assert.equal(f.input.value,'Already sent');assert.equal(f.window.live.sent,'Already sent');assert.equal(f.input.selectionStart,4);assert.equal(f.window.live.paused,false);assert.deepEqual(f.scheduled,[]);assert.equal(f.clicks.length,2,'resuming does not move the PC caret or reset text');
+});
+
+test('a different PC field receives its own fresh typing context instead of editing the old text',async t=>{
+  const f=fixture(t),field={editable:true,fieldId:'a'.repeat(32),fieldBounds:{x:0,y:0,width:1920,height:1080}};let tap=f.window.PCRTypingControls.tap({x:100,y:75});await new Promise(r=>setTimeout(r,140));f.requests[0].resolve(field);await tap;f.input.value='Old field';f.window.live.sent=f.input.value;f.window.rsTypeClose();tap=f.window.PCRTypingControls.tap({x:140,y:75});const next={...field,fieldId:'b'.repeat(32)};f.requests[1].resolve(next);await new Promise(r=>setTimeout(r,140));f.requests[2].resolve(next);await tap;assert.equal(f.input.value,'');assert.equal(f.window.live.sent,'');assert.equal(f.clicks.length,4);assert.equal(f.window.live.paused,false);
+});

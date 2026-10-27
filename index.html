@@ -502,6 +502,7 @@ function rsPauseLive(message){
   rsTypeStatus(message,'error');
 }
 function rsResetTypingContext(focus=true){
+  window.dispatchEvent(new Event('pcr:typing-reset'));
   for(const job of live.keys)job.resolve(false);live.keys=[];
   clearTimeout(live.timer);live.timer=null;live.generation++;live.sent='';live.paused=false;
   $('typeText').value='';composing=false;

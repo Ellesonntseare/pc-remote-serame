@@ -5,12 +5,15 @@ using System.Runtime.InteropServices;
 // A slow provider must not stall the input loop or create unbounded workers.
 internal static class FieldFocus
 {
+    internal sealed record Bounds(int x,int y,int width,int height);
+    internal sealed record FocusInfo(bool? Editable,string? FieldId=null,Bounds? FieldBounds=null);
     private static int busy;
-    public static bool? EditableAt(int x, int y)
+    public static bool? EditableAt(int x,int y)=>InspectAt(x,y).Editable;
+    public static FocusInfo InspectAt(int x, int y)
     {
-        var caret = CaretAt(x, y);
+        var caret = new FocusInfo(CaretAt(x, y));
         if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return caret;
-        var result = new TaskCompletionSource<bool?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var result = new TaskCompletionSource<FocusInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
         var worker = new Thread(() =>
         {
             try
@@ -20,13 +23,13 @@ internal static class FieldFocus
                 if (element == null) { result.TrySetResult(caret); return; }
                 var info = element.Current;
                 if(Environment.GetEnvironmentVariable("PCR_FOCUS_DIAGNOSTICS")=="1")Console.Error.WriteLine($"Focus: {info.ControlType.ProgrammaticName}; focused={info.HasKeyboardFocus}; bounds={info.BoundingRectangle}; point={x},{y}; caret={caret}");
-                if (!info.IsEnabled) { result.TrySetResult(false); return; }
+                if (!info.IsEnabled) { result.TrySetResult(new(false)); return; }
                 var bounds = info.BoundingRectangle;
                 if (!bounds.IsEmpty) bounds.Inflate(10, 10); // Text-box borders are valid taps too.
                 if (!info.HasKeyboardFocus || !bounds.Contains(x, y))
                 { result.TrySetResult(caret); return; }
                 var focused = Editable(element);
-                if (focused == true || info.ControlType == ControlType.Edit) { result.TrySetResult(focused);return; }
+                if (focused == true || info.ControlType == ControlType.Edit) { result.TrySetResult(Describe(focused,element));return; }
                 // Chromium and embedded web views can expose the document as
                 // focused while its clicked child is the actual editor.
                 var candidate = AutomationElement.FromPoint(new System.Windows.Point(x,y));
@@ -36,18 +39,32 @@ internal static class FieldFocus
                     if(target.BoundingRectangle.Contains(x,y))
                     {
                         var editable=Editable(candidate);
-                        if(editable==true||target.ControlType==ControlType.Edit){result.TrySetResult(editable);return;}
+                        if(editable==true||target.ControlType==ControlType.Edit){result.TrySetResult(Describe(editable,candidate));return;}
                     }
                     if(candidate.Equals(element))break;
                     candidate=TreeWalker.ControlViewWalker.GetParent(candidate);
                 }
-                result.TrySetResult(focused??false);
+                result.TrySetResult(new(focused??false));
             }
             catch { result.TrySetResult(caret); }
             finally { Volatile.Write(ref busy, 0); }
         }) { IsBackground = true, Name = "Remote field detection" };
         worker.SetApartmentState(ApartmentState.MTA); worker.Start();
         return result.Task.Wait(350) ? result.Task.Result : caret;
+    }
+
+    private static FocusInfo Describe(bool? editable,AutomationElement element)
+    {
+        if(editable!=true)return new(editable);
+        try
+        {
+            var bounds=element.Current.BoundingRectangle;var runtime=element.GetRuntimeId();
+            if(bounds.IsEmpty||runtime.Length==0)return new(true);
+            string identity=element.Current.ProcessId+":"+string.Join(",",runtime);
+            string id=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(identity))).ToLowerInvariant()[..32];
+            return new(true,id,new((int)Math.Floor(bounds.Left),(int)Math.Floor(bounds.Top),(int)Math.Ceiling(bounds.Width),(int)Math.Ceiling(bounds.Height)));
+        }
+        catch{return new(true);}
     }
 
     private static bool? Editable(AutomationElement element)

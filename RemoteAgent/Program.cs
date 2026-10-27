@@ -262,7 +262,7 @@ internal static class Program
                         {
                             var point = fields[2].Split(' ');
                             var id=fields[1];int x=point.Length==3?Number(point[1])+primary.Left:-1,y=point.Length==3?Number(point[2])+primary.Top:-1;
-                            _=Task.Run(()=>{bool? editable=FieldFocus.EditableAt(x,y);Send(output,2,JsonSerializer.SerializeToUtf8Bytes(new {id,ok=true,editable}));});
+                            _=Task.Run(()=>{var focus=FieldFocus.InspectAt(x,y);var bounds=focus.FieldBounds;Send(output,2,JsonSerializer.SerializeToUtf8Bytes(new {id,ok=true,editable=focus.Editable,fieldId=focus.FieldId,fieldBounds=bounds==null?null:new {x=bounds.x-primary.Left,y=bounds.y-primary.Top,bounds.width,bounds.height}}));});
                         }
                         else
                         {

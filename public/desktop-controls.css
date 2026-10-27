@@ -30,3 +30,6 @@
 .holdRepeating{outline:1px solid #70e7ce;outline-offset:-2px;filter:brightness(1.15)}
 #screenTools #remotePrivacy{order:3;width:auto;min-height:36px;padding:6px 8px;font-size:10px}#screenTools #remotePrivacy[aria-pressed=true]{color:#74f2ce;border-color:#41cba6;background:#0a493a}#rs:not(.typing) #remoteTypingState[data-state=paused]{display:none}
 .remotePrivacyNote{max-width:760px;margin:18px auto;padding:12px;border:1px solid #318f77;border-radius:10px;background:#073328;color:#b4eedf;font:12px/1.7 system-ui}
+.remoteSwipeDockHeader:empty,.remoteSwipeDockHeader:not(:has(> :not([hidden]))){display:none}
+#rs #remoteSwipeDock .dockQuickKeys>[data-remote-key="13"]{background:#073da1;border-color:#376dc7;color:#fff}
+#rs #remoteSwipeDock .dockQuickKeys>[data-remote-key="8"]{background:#a32132;border-color:#ce4b5d;color:#fff}

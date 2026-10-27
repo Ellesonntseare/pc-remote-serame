@@ -55,12 +55,12 @@ jobs:
           if (!(Test-Path -LiteralPath $compiler)) { choco install innosetup --yes --no-progress; $compiler = "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" }
           & $compiler installer/PCRemote.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-FileHash dist/PC-Remote-Host-Setup-2.1.1.exe -Algorithm SHA256
+          Get-FileHash dist/PC-Remote-Host-Setup-2.1.2.exe -Algorithm SHA256
       - uses: actions/upload-artifact@v4
         if: github.event_name != 'workflow_dispatch' || !inputs.publish_release
         with:
-          name: PC-Remote-Windows-Host-2.1.1
-          path: dist/PC-Remote-Host-Setup-2.1.1.exe
+          name: PC-Remote-Windows-Host-2.1.2
+          path: dist/PC-Remote-Host-Setup-2.1.2.exe
           if-no-files-found: error
           retention-days: 7
       - uses: actions/upload-artifact@v4
@@ -68,7 +68,7 @@ jobs:
         # copy only for manually requested debugging builds.
         if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
         with:
-          name: PC-Remote-Windows-Host-Package-2.1.1
+          name: PC-Remote-Windows-Host-Package-2.1.2
           path: dist/host-package/
           if-no-files-found: error
           retention-days: 1
@@ -79,7 +79,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view v2.1.1-preview
-          if ($LASTEXITCODE -ne 0) { gh release create v2.1.1-preview --draft --prerelease --target $env:GITHUB_SHA --title "PC Remote 2.1.1 Personal Preview" --notes "Personal preview: folder sync recovery and rapid-change reliability fixes." }
+          gh release view v2.1.2-preview
+          if ($LASTEXITCODE -ne 0) { gh release create v2.1.2-preview --draft --prerelease --target $env:GITHUB_SHA --title "PC Remote 2.1.2 Personal Preview" --notes "Personal preview: persistent typing, Home-button floating view and fullscreen touch controls." }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          gh release upload v2.1.1-preview dist/PC-Remote-Host-Setup-2.1.1.exe --clobber
+          gh release upload v2.1.2-preview dist/PC-Remote-Host-Setup-2.1.2.exe --clobber

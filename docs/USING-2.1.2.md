@@ -1,0 +1,11 @@
+# Personal 2.1.2
+
+- Closing the phone keyboard keeps its text and editing position. Reopening Keyboard continues the same buffer. Tapping the same PC field checks its Windows control identity first, so resuming does not click/move the PC caret or send the existing phone text twice. Selecting a different field starts a fresh context. Providers that do not expose a stable field identity still support reopening Keyboard directly.
+- Press the phone's Home button or swipe to Home while Remote Screen is active to keep the PC view in Android picture-in-picture. Expand it to return to full control. Android 12+ uses automatic entry; Android 8–11 uses the Home callback. If PiP is unavailable or disabled, the app goes into the background normally. Files/transfers and other app pages do not open an unrelated floating screen. Native file/document pickers temporarily disable auto-entry.
+- Manual **Minimise** is now inside **Tools**.
+- Fullscreen Remote Screen remains interactive. Tap PC buttons and text fields; desktop shortcuts retain Windows' normal double-click/double-tap behaviour. The APK keeps its WebView visible while hiding Android system bars. Back or Show controls restores the normal view.
+- The pad has no visible text labels or latency counter. Its vertical scroll indicator remains. Enter is deep blue and Backspace red. Accessibility descriptions remain available to screen readers.
+
+Install the 2.1.2 APK over the previous personal app for Android Home/gesture auto-entry and native immersive full screen. The updated Windows helper and website provide stable field recognition and the interface changes. Text is retained in the current app session; this does not promise recovery after Android terminates the app process.
+
+Automated checks exercise text/baseline/selection continuity, changed fields, input transport, full-screen taps, pad labels/colours and floating-view state transitions. Android compilation/signing is checked in CI; phone-specific Home/IME/PiP behaviour still needs a physical Android check.

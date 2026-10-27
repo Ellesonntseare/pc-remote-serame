@@ -431,7 +431,8 @@ function createApp(options={}) {
       try{
         agent.stdin.write(tagged.join('\n')+'\n');
         const replies=await Promise.all(completion),focus=replies.find(reply=>Object.hasOwn(reply,'editable'));
-        return result(200,{ok:true,delivered:true,...focus&&{editable:typeof focus.editable==='boolean'?focus.editable:null}});
+        const bounds=focus?.fieldBounds,field=typeof focus?.fieldId==='string'&&/^[a-f0-9]{32}$/.test(focus.fieldId)&&bounds&&['x','y','width','height'].every(key=>Number.isInteger(bounds[key])&&Math.abs(bounds[key])<=131072)&&bounds.width>0&&bounds.height>0?{fieldId:focus.fieldId,fieldBounds:{x:bounds.x,y:bounds.y,width:bounds.width,height:bounds.height}}:{};
+        return result(200,{ok:true,delivered:true,...focus&&{editable:typeof focus.editable==='boolean'?focus.editable:null,...field}});
       }catch(e){return result(503,{error:e.message});}
       finally{
         for(const id of ids){const pending=pendingInput.get(id);if(pending){clearTimeout(pending.timer);pendingInput.delete(id);}}

@@ -21,8 +21,8 @@ function packet(type,value){const p=Buffer.from(JSON.stringify(value)),header=Bu
 test('acknowledged screen taps return Windows field detection through HTTP and the input stream',async t=>{
   const f=await fixture();t.after(()=>f.close());await f.openScreen();
   const body={cmds:['abs 100 200','click l','focus 100 200'],wait:true};
-  const httpResult=await request(f.port,'/api/input','POST',body,{Cookie:f.cookie});assert.equal(httpResult.status,200);assert.equal(httpResult.body.delivered,true);assert.equal(httpResult.body.editable,true);
-  const {ws}=await f.connect();ws.send(JSON.stringify({id:22,...body}));await until(()=>ws.messages.some(message=>message.id===22));assert.equal(ws.messages.find(message=>message.id===22).editable,true);
+  const httpResult=await request(f.port,'/api/input','POST',body,{Cookie:f.cookie});assert.equal(httpResult.status,200);assert.equal(httpResult.body.delivered,true);assert.equal(httpResult.body.editable,true);assert.equal(httpResult.body.fieldId,'a'.repeat(32));assert.deepEqual(httpResult.body.fieldBounds,{x:10,y:20,width:300,height:40});
+  const {ws}=await f.connect();ws.send(JSON.stringify({id:22,...body}));await until(()=>ws.messages.some(message=>message.id===22));assert.equal(ws.messages.find(message=>message.id===22).editable,true);assert.equal(ws.messages.find(message=>message.id===22).fieldId,'a'.repeat(32));
   const invalid=await request(f.port,'/api/input','POST',{cmds:['focus 1 2\nkey 13'],wait:true},{Cookie:f.cookie});assert.equal(invalid.status,400);
 });
 
@@ -45,7 +45,7 @@ async function fixture(options={}){
       while((newline=buffer.indexOf('\n'))>=0){
         const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);const ack=/^ack ([a-f0-9]{16}) (.+)$/.exec(line),command=ack?ack[2]:line;written.push(command);
         if(ack){
-          const timer=setTimeout(()=>{timers.delete(timer);if(!closed)agent.stdout.write(packet(2,{id:ack[1],ok:!command.endsWith(Buffer.from('REJECT').toString('base64')),error:'Desktop rejected typing',...command.startsWith('focus ')?{editable:true}:{}}));},120);timers.add(timer);
+          const timer=setTimeout(()=>{timers.delete(timer);if(!closed)agent.stdout.write(packet(2,{id:ack[1],ok:!command.endsWith(Buffer.from('REJECT').toString('base64')),error:'Desktop rejected typing',...command.startsWith('focus ')?{editable:true,fieldId:'a'.repeat(32),fieldBounds:{x:10,y:20,width:300,height:40}}:{}}));},120);timers.add(timer);
         }
       }
       done();

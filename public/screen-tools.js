@@ -106,6 +106,7 @@
     fullscreenRequest++;requestedFullscreen=false;
     clearWatchdog();announce('Screen closed','closed');stopGesture();
     setClean(false);screen.classList.remove('screenExpanded','screenPresentation');
+    if(window.PCRNativeCapabilities?.remoteFullscreen)window.PCRAndroid?.postMessage(JSON.stringify({type:'remote-fullscreen',enabled:false}));
     if(document.fullscreenElement===screen)document.exitFullscreen().catch(()=>{});
     setZoom(1);updateFullscreen();
   }
@@ -132,6 +133,7 @@
     document.body.classList.toggle('screenCleanActive',enabled);
     if(enabled){
       rsPrefsClose();rsTypeClose();setZoom(1);stopGesture();
+      rs.mode='touch';window.rsModeUI?.();
       canvas.focus({preventScroll:true});
     }
     requestAnimationFrame(()=>layout());
@@ -148,12 +150,16 @@
     multi=null;multiHeld=false;wheelRemainder=0;
     fullscreenRequest++;requestedFullscreen=false;
     setClean(false);screen.classList.remove('screenExpanded','screenPresentation');
+    if(window.PCRNativeCapabilities?.remoteFullscreen)window.PCRAndroid?.postMessage(JSON.stringify({type:'remote-fullscreen',enabled:false}));
     if(document.fullscreenElement===screen)document.exitFullscreen().catch(()=>{});
     updateFullscreen();
   }
   function presentation(){screen.classList.add('screenExpanded','screenPresentation');setClean(true);updateFullscreen();}
   async function fullscreen(){
     if(document.fullscreenElement===screen||screen.classList.contains('screenClean')){restoreControls();return;}
+    // Keep the interactive WebView visible. Android's HTML custom-view path
+    // hides it and can pause the capture/input connection behind a frozen image.
+    if(window.PCRAndroid?.postMessage){screen.classList.add('screenExpanded');setClean(true);if(window.PCRNativeCapabilities?.remoteFullscreen)window.PCRAndroid.postMessage(JSON.stringify({type:'remote-fullscreen',enabled:true}));updateFullscreen();return;}
     if(fullscreenSupported){
       const request=++fullscreenRequest;requestedFullscreen=true;setClean(true);
       try{

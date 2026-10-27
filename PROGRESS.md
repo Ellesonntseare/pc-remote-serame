@@ -1,3 +1,15 @@
+# Personal app 2.1.2 keyboard and controls — 28 October 2026
+
+- [x] Closing/reopening the keyboard retains the phone's text, acknowledged baseline and selection. Returning to the same Windows field checks its stable identity and resumes without clicking again or replaying old text; another field starts a fresh context.
+- [x] Minimise moved into Tools. Android 12+ Home/gesture navigation uses automatic picture-in-picture for an active remote screen; Android 8–11 uses the Home callback. Other pages and unsupported/disabled PiP use normal background behaviour. External pickers temporarily disable automatic PiP.
+- [x] Android remote full screen keeps the interactive WebView visible and uses native immersive bars, with direct touch mode. Media custom views also keep the renderer visible. Back/closing Remote Screen restores the system bars.
+- [x] Removed the visible Trackpad header, inner pad/scroll labels and latency readout/polling. Kept the scroll line/arrows and accessibility descriptions. Enter is deep blue and Backspace red.
+- [x] 33 focused typing, floating-window and input-transport checks passed; the served full-screen touch/label/colour check passed. The Windows helper compiles with stable field identity/bounds and does not read PC text values.
+- [ ] Complete final CI, publish the signed 2.1.2 APK/installer and update the running personal host.
+- [ ] Physical Android Home gesture, IME and immersive-view checks still need the phone.
+
+---
+
 # Personal app 2.1.1 reliability update — 28 October 2026
 
 - [x] Preserve the original upload snapshot in sync checkpoints so edits made while sending remain pending. Recheck phone files before replacing them with downloads.

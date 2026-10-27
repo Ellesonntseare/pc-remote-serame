@@ -70,6 +70,11 @@ class MainActivity : Activity() {
     private var pendingShortcut=""
     private var pendingSyncFolder:JSONObject?=null
     private var keyboardGeneration=0
+    private var homeMiniReady=false
+    private var homeMiniWidth=16
+    private var homeMiniHeight=9
+    private var remoteFullscreenActive=false
+    private var externalActivity=false
     private val clipboardListener=ClipboardManager.OnPrimaryClipChangedListener{clipboardDirty=true}
     private var localMedia:LocalMediaCapture?=null
     private var pendingLocalMedia:JSONObject?=null
@@ -180,7 +185,8 @@ class MainActivity : Activity() {
                 if(fullscreenView!=null||!isAllowed(web.url?:"")){callback.onCustomViewHidden();return}
                 fullscreenView=view;fullscreenCallback=callback
                 (findViewById<View>(android.R.id.content) as ViewGroup).addView(view,ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
-                web.visibility=View.GONE;window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                // Keep canvas/WebCodecs streams alive under the full-screen surface.
+                web.visibility=View.VISIBLE;window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
             }
             override fun onHideCustomView(){hideFullscreen()}
             override fun onPermissionRequestCanceled(request: PermissionRequest) { if(microphoneRequest===request)microphoneRequest=null }
@@ -210,7 +216,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("folderSync",true).put("widgets",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version","2.1.1");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version","2.1.2");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow PC Remote through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -309,6 +315,8 @@ class MainActivity : Activity() {
                     "keyboard" -> showPhoneKeyboard()
                     "keyboard-hide" -> hidePhoneKeyboard()
                     "minimise" -> minimisePc(value.optInt("width",16),value.optInt("height",9))
+                    "mini-window-state" -> {homeMiniReady=value.optBoolean("active");homeMiniWidth=value.optInt("width",16);homeMiniHeight=value.optInt("height",9);updateHomeMini()}
+                    "remote-fullscreen" -> setRemoteFullscreen(value.optBoolean("enabled"))
                     "save-image" -> {
                         val encoded=value.optString("data")
                         if(downloadRequest==null&&encoded.length<=12*1024*1024){
@@ -424,6 +432,7 @@ class MainActivity : Activity() {
 
     private fun showConnect(message: String) {
         hideFullscreen()
+        homeMiniReady=false;updateHomeMini(false);setRemoteFullscreen(false)
         volumeControlEnabled=false;
         pendingProjection = false; ScreenShareService.stopSharing()
         web.stopLoading()
@@ -436,6 +445,7 @@ class MainActivity : Activity() {
     @Deprecated("Android navigation compatibility")
     override fun onBackPressed() {
         if(fullscreenView!=null){hideFullscreen();return}
+        if(remoteFullscreenActive){setRemoteFullscreen(false);web.evaluateJavascript("window.PCRScreenTools?.restoreControls()",null);return}
         if (web.visibility != View.VISIBLE) {
             super.onBackPressed()
             return
@@ -465,15 +475,38 @@ class MainActivity : Activity() {
         web.post{show()};web.postDelayed({show()},160)
     }
 
-    private fun minimisePc(width:Int,height:Int){
+    private fun miniParams(width:Int,height:Int,auto:Boolean):android.app.PictureInPictureParams{
+        val ratio=(width.toDouble().coerceAtLeast(1.0)/height.coerceAtLeast(1)).coerceIn(0.42,2.38)
+        val builder=android.app.PictureInPictureParams.Builder().setAspectRatio(android.util.Rational((ratio*1000).toInt(),1000))
+        if(Build.VERSION.SDK_INT>=31)builder.setAutoEnterEnabled(auto)
+        return builder.build()
+    }
+    private fun canHomeMini()=homeMiniReady&&!externalActivity&&web.visibility==View.VISIBLE&&isAllowed(web.url?:"")&&!isFinishing&&filesResult==null&&downloadRequest==null&&pendingSyncFolder==null&&!pendingProjection
+    private fun updateHomeMini(enabled:Boolean=canHomeMini()){
+        if(Build.VERSION.SDK_INT>=31&&packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE))runCatching{setPictureInPictureParams(miniParams(homeMiniWidth,homeMiniHeight,enabled))}
+    }
+    override fun onUserLeaveHint(){
+        super.onUserLeaveHint()
+        if(!canHomeMini()){updateHomeMini(false);return}
+        web.evaluateJavascript("window.PCRMiniWindow?.prepare()",null)
+        if(Build.VERSION.SDK_INT<31)minimisePc(homeMiniWidth,homeMiniHeight,false)
+    }
+    override fun startActivityForResult(intent:Intent,requestCode:Int,options:Bundle?){externalActivity=true;updateHomeMini(false);super.startActivityForResult(intent,requestCode,options)}
+    override fun startActivity(intent:Intent,options:Bundle?){externalActivity=true;updateHomeMini(false);super.startActivity(intent,options)}
+    private fun setRemoteFullscreen(enabled:Boolean){
+        remoteFullscreenActive=enabled
+        if(Build.VERSION.SDK_INT>=30){if(enabled){window.insetsController?.hide(android.view.WindowInsets.Type.systemBars());window.insetsController?.systemBarsBehavior=android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE}else window.insetsController?.show(android.view.WindowInsets.Type.systemBars())}
+        else{@Suppress("DEPRECATION") window.decorView.systemUiVisibility=if(enabled)View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY else View.SYSTEM_UI_FLAG_VISIBLE}
+        if(enabled)window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)else window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+    }
+    private fun minimisePc(width:Int,height:Int,notifyFailure:Boolean=true){
         if(!isAllowed(web.url?:""))return
         hidePhoneKeyboard()
         var entered=false
         if(packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)){
-            val ratio=(width.toDouble().coerceAtLeast(1.0)/height.coerceAtLeast(1)).coerceIn(0.42,2.38)
-            entered=runCatching{enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().setAspectRatio(android.util.Rational((ratio*1000).toInt(),1000)).build())}.getOrDefault(false)
+            entered=runCatching{enterPictureInPictureMode(miniParams(width,height,canHomeMini()))}.getOrDefault(false)
         }
-        if(!entered)miniWindowEvent(false,"Allow Picture-in-picture for PC Remote in Android app settings, then try again.")
+        if(!entered)miniWindowEvent(false,if(notifyFailure)"Allow Picture-in-picture for PC Remote in Android app settings, then try again."else"")
     }
 
     private fun miniWindowEvent(active:Boolean,message:String=""){
@@ -598,7 +631,7 @@ class MainActivity : Activity() {
             }.setOnCancelListener{ScreenShareService.respondControl(id,false);controlDialog=null}.create()
         controlDialog?.show()
     }
-    override fun onResume() { super.onResume();web.postDelayed({showControlRequest()},400);if(connectScreen.visibility==View.VISIBLE)nearby?.start() }
+    override fun onResume() { super.onResume();externalActivity=false;if(!isInPictureInPictureMode){miniWindowEvent(false);if(remoteFullscreenActive)setRemoteFullscreen(true);web.postDelayed({showControlRequest()},400)};updateHomeMini();if(connectScreen.visibility==View.VISIBLE)nearby?.start() }
 
     private fun nearbyEvent(value:JSONObject){
         if(isFinishing||isDestroyed)return
