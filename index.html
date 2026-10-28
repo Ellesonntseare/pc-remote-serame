@@ -42,9 +42,11 @@
 <link rel="stylesheet" href="/guest-screen.css">
 <script src="/file-transfers.js" defer></script>
 <script src="/file-manager.js" defer></script>
+<script src="/explorer-workspace.js"></script>
 <script src="/native-transfers.js" defer></script>
 <link rel="stylesheet" href="/file-manager.css">
 <link rel="stylesheet" href="/file-browser.css">
+<link rel="stylesheet" href="/explorer-workspace.css">
 <script src="/image-tools.js" defer></script>
 <link rel="stylesheet" href="/file-transfers.css">
 <link rel="stylesheet" href="/desktop-controls.css">
@@ -82,6 +84,7 @@
 <script src="/transfer-badges.js" defer></script>
 <script src="/pointer-safety.js" defer></script>
 <script src="/context-controls.js" defer></script>
+<script src="/sync-settings.js"></script>
 <script src="/shared-sync.js" defer></script>
 <script src="/folder-sync.js" defer></script>
 <title>PC Remote</title>
@@ -261,7 +264,7 @@ function concealPassword(){$('pin').type=passwordMode?'password':'text';$('passw
 $('passwordPeek').addEventListener('click',()=>{const visible=$('pin').type==='password';$('pin').type=visible?'text':'password';$('passwordPeek').setAttribute('aria-pressed',String(visible));$('passwordPeek').setAttribute('aria-label',visible?'Hide password':'Show password');});
 function configureLogin(d){passwordMode=d.requirePassword===true;concealPassword();$('passwordPeek').hidden=!passwordMode;$('loginTitle').textContent=passwordMode?'Welcome back.':'Connect to your PC';$('loginDescription').textContent=passwordMode?'Your PC, wherever you are. Sign in to continue.':'Enter the pairing PIN shown on your PC.';$('loginLabel').textContent=passwordMode?'Password':'Pairing PIN';$('pin').name=passwordMode?'password':'pin';$('pin').autocomplete=passwordMode?'current-password':'one-time-code';$('pin').inputMode=passwordMode?'text':'numeric';$('pin').maxLength=passwordMode?256:8;$('pin').placeholder=passwordMode?'Enter your password':'8-digit PIN';$('rememberChoice').hidden=!passwordMode;$('pairSubmit').textContent=passwordMode?'Sign in ↗':'Connect';}
 function showPair(error=''){statusPollAbort?.abort();paired=false;authGeneration++;if(rs.on)rsClose();concealPassword();window.PCRAccount=null;window.PCRAuth={signedIn:false};window.dispatchEvent(new CustomEvent('pcr:auth',{detail:window.PCRAuth}));$('pairGate').classList.remove('hide');document.querySelector('.app').inert=true;document.body.style.overflow='hidden';$('pairError').textContent=error;connectionLight('Signed out');}
-function showConnected(d){paired=true;authGeneration++;$('pin').blur();window.PCRAccount=d.account||null;window.PCRAuth={signedIn:true,mainAdmin:d.mainAdmin===true,account:d.account||null,role:d.role||'owner',until:d.until,permissions:d.permissions||{},guestId:d.guestId||'',guestEnabled:d.guestEnabled===true};window.dispatchEvent(new CustomEvent('pcr:auth',{detail:window.PCRAuth}));const wasHidden=!$('pairGate').classList.contains('hide');$('pairGate').classList.add('hide');const app=document.querySelector('.app');app.inert=false;if(wasHidden){app.classList.remove('pageArrive');requestAnimationFrame(()=>app.classList.add('pageArrive'));}document.body.style.overflow=rs.on?'hidden':'';connectionLight('Connected');if(d.name)$('name').textContent=d.name;$('screenBtn').classList.toggle('hide',!d.screen);window.PCRGuestAccess?.applyPermissions();poll();}
+function showConnected(d){paired=true;authGeneration++;$('pin').blur();window.PCRAccount=d.account||null;window.PCRAuth={signedIn:true,workspaceId:d.workspaceId||null,mainAdmin:d.mainAdmin===true,account:d.account||null,role:d.role||'owner',until:d.until,permissions:d.permissions||{},guestId:d.guestId||'',guestEnabled:d.guestEnabled===true};window.dispatchEvent(new CustomEvent('pcr:auth',{detail:window.PCRAuth}));const wasHidden=!$('pairGate').classList.contains('hide');$('pairGate').classList.add('hide');const app=document.querySelector('.app');app.inert=false;if(wasHidden){app.classList.remove('pageArrive');requestAnimationFrame(()=>app.classList.add('pageArrive'));}document.body.style.overflow=rs.on?'hidden':'';connectionLight('Connected');if(d.name)$('name').textContent=d.name;$('screenBtn').classList.toggle('hide',!d.screen);window.PCRGuestAccess?.applyPermissions();poll();}
 async function init(){try{const d=await api('/api/ping');configureLogin(d);if(d.paired)showConnected(d);else if(d.account){showPair();window.PCRAccount=d.account;window.dispatchEvent(new CustomEvent('pcr:account',{detail:d.account}));connectionLight('Account signed in');}else if(!d.requirePin&&!d.requirePassword){const connected=await api('/api/pair',{method:'POST',body:'{}'});if(!connected.ok)throw new Error(connected.error);return init();}else showPair();}catch{showPair('PC is not reachable. Check that the Windows host is running.');}}
 $('pairForm').addEventListener('submit',async e=>{e.preventDefault();const b=$('pairSubmit');b.disabled=true;$('pairError').textContent='Connecting…';try{const body=passwordMode?{password:$('pin').value,remember:$('rememberMe').checked}:{pin:$('pin').value};const d=await api('/api/pair',{method:'POST',body:JSON.stringify(body)});if(d.pending){$('pin').value='';window.PCRGuestAccess?.wait();}else if(d.ok){$('pin').value='';init();}else $('pairError').textContent=d.error||'Sign-in failed';}catch{$('pairError').textContent='Cannot reach this PC';}finally{b.disabled=false;}});
 async function unpair(){rsClose();try{await api('/api/unpair',{method:'POST',body:'{}'});}catch{}showPair();}
@@ -429,7 +432,7 @@ async function rsRun(){
     $('rsst').textContent='Reconnecting…';setTimeout(()=>{if(rs.on&&rs.ab===ab)rsRun()},1500);
   }
 }
-function rsOpen(){if(rs.on&&window.PCRPages?.show?.('rs'))return;rs.on=1;rs.m=null;$('rs').classList.remove('hide');document.body.style.overflow='hidden';$('rsq').textContent=QL[rs.qi];$('rsq').dataset.quality=QN[rs.qi];rsModeUI();$('rsst').textContent='Connecting…';rsRun()}
+function rsOpen(){if(rs.on&&window.PCRPages?.show?.('rs'))return;rs.qi=['0','1','2','3','4'].includes(ls('pcr_q'))?Number(ls('pcr_q')):4;rs.on=1;rs.m=null;$('rs').classList.remove('hide');document.body.style.overflow='hidden';$('rsq').textContent=QL[rs.qi];$('rsq').dataset.quality=QN[rs.qi];rsModeUI();$('rsst').textContent='Connecting…';rsRun()}
 function rsClose(){window.PCRHoldControl?.release();window.PCRInputTransport?.stop();if(pointerFrame)cancelAnimationFrame(pointerFrame);pointerFrame=0;rs.on=0;rs.m=null;window.PCRScreenTools?.closed();window.PCRPrecisionLens?.closed();if(rs.ab)rs.ab.abort();if(live.sent||$('typeText').value||typeBusy)rsPauseLive('Screen closed. Select the PC field again, then tap New field.');rsPrefsClose();rsTypeClose();$('rs').classList.add('hide');document.body.style.overflow='';qq=[]}
 function rsModeUI(){const button=$('rsm');button.textContent='Touch screen';button.style.display='none';button.setAttribute('aria-label','Direct touch screen. Use the separate trackpad for pointer movement.');}
 function rsMode(){rs.mode='touch';rsModeUI()}
@@ -467,6 +470,20 @@ V.addEventListener('lostpointercapture',releaseMouse);
 V.addEventListener('contextmenu',e=>e.preventDefault());
 V.addEventListener('wheel',e=>{e.preventDefault();if(rsCanPoint())qc('wheel '+Math.max(-9999,Math.min(9999,Math.round(-e.deltaY))));},{passive:false});
 
+let syncedTypingPending=false;
+function rsApplySyncedTyping(){if(!syncedTypingPending||$('rs').classList.contains('typing')||typeBusy||rsTypingDirty())return;syncedTypingPending=false;liveTyping=ls('pcr_live_typing')!=='false';rsUpdateTypingUI();}
+window.addEventListener('pcr:settings-sync',event=>{
+  const key=event.detail?.key;
+  if(key==='pcr_sensitivity'){sens=Math.min(2.5,Math.max(.5,Number(ls(key)||1)||1));$('sensValue').textContent=sens.toFixed(1)+'×';}
+  if(key==='pcr_keycols')cols=['3','4','5'].includes(ls(key))?ls(key):'4';
+  if(key==='pcr_keyheight')keyHeight=['44','56'].includes(ls(key))?ls(key):'44';
+  if(key==='pcr_keys_visible')showKeys=ls(key)==='true';
+  if(key==='pcr_shortcuts_v1')shortcuts=loadShortcuts();
+  if(['pcr_keycols','pcr_keyheight','pcr_keys_visible','pcr_shortcuts_v1'].includes(key))rsRenderShortcuts();
+  if(key==='pcr_q'&&!rs.on){rs.qi=['0','1','2','3','4'].includes(ls(key))?Number(ls(key)):4;$('rsq').textContent=QL[rs.qi];$('rsq').dataset.quality=QN[rs.qi];}
+  if(key==='pcr_live_typing'){syncedTypingPending=true;rsApplySyncedTyping();}
+});
+new MutationObserver(rsApplySyncedTyping).observe($('rs'),{attributes:true,attributeFilter:['class']});
 // Compose locally through IME, then transmit committed edits in order.
 let composing=false;
 let typingPanelOpen=false;

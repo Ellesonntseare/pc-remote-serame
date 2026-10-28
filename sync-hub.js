@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
-const SETTINGS=new Set(['pcr_home_layout_v1','pcr_home_panels_v1','pcr_appearance_v1','pcr_haptics','pcr_volume_keys','pcr_wake_mac','pcr_pointer_size','pcr_engine','pcr_remote_split_v1','pcr_touch_trail']);
-function createSyncHub({file,clipboard,stageFiles,getFileRevision=()=>0,getHostName=()=> 'PC',setHostName,identity='PC Remote',now=Date.now}={}){
+const SETTINGS=new Set(require('./public/sync-settings'));
+function createScopeHub({file,clipboard,stageFiles,getFileRevision=()=>0,getHostName=()=> 'PC',setHostName,onActivity,onRegister,identity='PC Remote',now=Date.now}={}){
   const hostId=crypto.createHash('sha256').update(identity).digest('hex').slice(0,24);
   let state={revision:0,settings:{},devices:[],inbox:[]},ready=null,saving=Promise.resolve(),clip={text:'',source:'pc',revision:0},clipRead=null,clipAt=0;const clients=new Map();
   async function load(){if(!ready)ready=(async()=>{if(!file)return;try{const stat=await fs.stat(file);if(stat.size>1024*1024)return;const value=JSON.parse(await fs.readFile(file,'utf8'));if(value.version===1&&Number.isSafeInteger(value.revision)){state.revision=value.revision;for(const [key,text]of Object.entries(value.settings||{}))if(SETTINGS.has(key)&&typeof text==='string'&&text.length<=16000)state.settings[key]=text;state.devices=(value.devices||[]).filter(d=>typeof d.id==='string').slice(-40);state.inbox=(value.inbox||[]).filter(d=>typeof d.id==='string'&&Array.isArray(d.delivered)).slice(-100);}}catch{}})();await ready;}
@@ -15,7 +15,7 @@ function createSyncHub({file,clipboard,stageFiles,getFileRevision=()=>0,getHostN
     if(!pathname.startsWith('/api/sync/'))return false;
     const reply=(status,body)=>{respond(res,status,body);return true;};if(role!=='owner'||req.headers['x-pcr']!=='1')return reply(403,{error:'Pair this device with your PC to join syncing.'});
     try{await load();const url=new URL(req.url,'http://localhost');
-      if(req.method==='POST'&&pathname==='/api/sync/register'){const value=await readJson(req,8192);if(typeof value.id!=='string'||value.id===hostId||!/^[a-zA-Z0-9-]{12,80}$/.test(value.id))return reply(400,{error:'Invalid device identifier.'});let device=state.devices.find(d=>d.id===value.id);if(!device){if(state.devices.length>=40)state.devices.sort((a,b)=>a.seen-b.seen).shift();device={id:value.id,name:'Device',platform:'browser',seen:0};state.devices.push(device);}if(!device.customName)device.name=String(value.name||'Device').slice(0,80);device.platform=value.platform==='android'?'android':'browser';device.seen=now();clients.set(token,device.id);await save();return reply(200,{ok:true,device,revision:state.revision});}
+      if(req.method==='POST'&&pathname==='/api/sync/register'){const value=await readJson(req,8192);if(typeof value.id!=='string'||value.id===hostId||!/^[a-zA-Z0-9-]{12,80}$/.test(value.id))return reply(400,{error:'Invalid device identifier.'});let device=state.devices.find(d=>d.id===value.id);if(!device){if(state.devices.length>=40)state.devices.sort((a,b)=>a.seen-b.seen).shift();device={id:value.id,name:'Device',platform:'browser',seen:0};state.devices.push(device);}if(!device.customName)device.name=String(value.name||'Device').slice(0,80);device.platform=value.platform==='android'?'android':'browser';device.seen=now();clients.set(token,device.id);await save();onRegister?.(token,device);return reply(200,{ok:true,device,revision:state.revision});}
       const device=deviceFor(token);
       if(req.method==='GET'&&pathname==='/api/sync/devices')return reply(200,{ok:true,devices:devices(),host:host()});
       if(req.method==='POST'&&pathname==='/api/sync/devices/name'){
@@ -28,12 +28,21 @@ function createSyncHub({file,clipboard,stageFiles,getFileRevision=()=>0,getHostN
       if(!device)return reply(409,{error:'Register this device before syncing.'});device.seen=now();
       if(req.method==='GET'&&pathname==='/api/sync/state'){await currentClipboard();const changed=!url.searchParams.has('after')||Number(url.searchParams.get('after'))!==state.revision;return reply(200,{ok:true,hostId,host:host(),revision:state.revision,fileRevision:getFileRevision(),devices:devices(),...changed&&{settings:state.settings,clipboard:clip,inbox:state.inbox.filter(item=>(item.target==='*'||item.target===device.id)&&item.source!==device.id&&!item.delivered.includes(device.id)).map(({delivered,...item})=>item)}});}
       if(req.method==='POST'&&pathname==='/api/sync/settings'){const body=await readJson(req,128*1024);for(const [key,value]of Object.entries(body.values||{})){if(!SETTINGS.has(key)||typeof value!=='string'||value.length>16000)continue;state.settings[key]=value;}state.revision++;await save();return reply(200,{ok:true,revision:state.revision});}
-      if(req.method==='POST'&&pathname==='/api/sync/clipboard'){const body=await readJson(req,1024*1024);if(typeof body.text!=='string'||body.text.length>250000||body.text.includes('\0'))return reply(400,{error:'Use plain text up to 250,000 characters.'});if(body.text!==clip.text){await clipboard?.set(body.text);clip={text:body.text,source:device.id,revision:++state.revision};clipAt=now();}return reply(200,{ok:true,revision:clip.revision});}
+      if(req.method==='POST'&&pathname==='/api/sync/clipboard'){const body=await readJson(req,1024*1024);if(typeof body.text!=='string'||body.text.length>250000||body.text.includes('\0'))return reply(400,{error:'Use plain text up to 250,000 characters.'});if(body.text!==clip.text){await clipboard?.set(body.text);clip={text:body.text,source:device.id,revision:++state.revision};clipAt=now();}onActivity?.({type:'clipboard',action:'clipboard.sent',label:'Copied text to PC',device:device.name,text:body.text,payload:{source:device.id}});return reply(200,{ok:true,revision:clip.revision});}
       if(req.method==='POST'&&pathname==='/api/sync/inbox/ack'){const body=await readJson(req,4096),item=state.inbox.find(row=>row.id===body.id);if(item&&(item.target==='*'||item.target===device.id)&&!item.delivered.includes(device.id)){state.revision++;item.delivered.push(device.id);if(item.target===device.id||item.target==='*'&&state.devices.filter(d=>d.id!==item.source&&now()-d.seen<30*86400000).every(d=>item.delivered.includes(d.id)))state.inbox=state.inbox.filter(row=>row!==item);await save();}return reply(200,{ok:true});}
       if(req.method==='POST'&&pathname==='/api/sync/send'){const body=await readJson(req,1024*1024);return reply(200,await enqueue({text:body.text,target:body.target||'*',source:device.id}));}
       return reply(404,{error:'Sync action not found.'});
     }catch(error){return reply(error.status||400,{error:error.status?error.message:'Sync could not finish. Reconnect to the PC and try again.'});}
   }
-  return {handle,enqueue,devices:async()=>{await load();return devices();},revoke:token=>clients.delete(token),close:()=>saving};
+  return {handle,enqueue,device:token=>deviceFor(token),devices:async()=>{await load();return devices();},revoke:token=>clients.delete(token),close:()=>saving};
+}
+function createSyncHub(options={}){
+  const scopes=new Map();
+  function scoped(key='owner'){
+    if(typeof key!=='string'||!/^[a-zA-Z0-9:_-]{1,160}$/.test(key))throw Error('Invalid account scope.');
+    if(!scopes.has(key)){const file=key==='owner'?options.file:options.file?options.file.replace(/\.json$/,'')+'.'+crypto.createHash('sha256').update(key).digest('hex').slice(0,24)+'.json':undefined;scopes.set(key,createScopeHub({...options,file,onActivity:event=>options.onActivity?.(key,event),onRegister:(token,device)=>options.onRegister?.(key,token,device)}));}
+    return scopes.get(key);
+  }
+  return{handle:(req,res,context)=>scoped(context.accountKey||'owner').handle(req,res,context),enqueue:({accountKey='owner',...value})=>scoped(accountKey).enqueue(value),devices:(accountKey='owner')=>scoped(accountKey).devices(),device:(token,accountKey='owner')=>scoped(accountKey).device(token),revoke:token=>{for(const scope of scopes.values())scope.revoke(token);},close:()=>Promise.all([...scopes.values()].map(scope=>scope.close()))};
 }
 module.exports={createSyncHub,SETTINGS};

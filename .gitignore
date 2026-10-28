@@ -40,3 +40,5 @@ test/AudioCodecChecks/obj/
 
 .session-history.json*
 .shared-device-state.json*
+.shared-device-state.*.json*
+.account-workspace.sqlite*

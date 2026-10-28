@@ -17,14 +17,21 @@ This is the active implementation plan after personal 2.1.3. The current persona
 - [x] Connect the catalogue to an asynchronous, cached file-location provider. Keep filesystem fallback and configured locations. Avoid recursive watchers on drive roots.
 - [x] Compile the Windows helper and verify the real folder catalogue. Seven focused provider/workspace checks passed.
 - [ ] Rebuild the Files workspace structure against the screenshots, with responsive inner scrolling and working existing actions.
-- [ ] Add persistent per-account workspace/history storage. Keep full historical records on the PC rather than the current in-memory recent-event list.
-- [ ] Link main Google owner and local-owner identity; isolate other accounts' account data.
-- [ ] Scope existing settings/clipboard/shared-content sync to accounts and migrate the main owner's existing data.
+- [x] Add persistent per-account workspace/history storage. SQLite keeps full event text and indexed history; list responses use previews and pagination. Restart, deduplication and account-isolation checks passed. The Windows installer already bundles Node 22; source now requires Node 22.13 or newer.
+- [x] Link main Google owner and local-owner identity; isolate other accounts' account data. Integration checks verify shared preferences/history across both sign-in methods and across host restart. Online account counts also combine those methods.
+- [x] Scope existing settings/clipboard/shared-content sync to accounts and migrate the main owner's existing data. The main owner retains the original sync file; other account stores are separate. Integration checks verify isolated settings, inventories and deliveries.
 - [ ] Record server-side actions, transfers and clipboard events; update completed/paused/resumed/cancelled records without duplicates.
 - [ ] Sync favourites, file view, folder tabs/bookmarks, supported preferences and saved workspace state without replaying remote input or duplicating transfers.
 - [ ] Provide a full account History page and synchronise it across active devices, with search/filtering and retained clipboard text.
 - [ ] Check reconnects, server restart, Google/local owner linking, other-account isolation and cross-device updates.
 - [ ] Run appropriate full checks, responsive/live Windows checks, native builds and Android signing checks as required; publish and update the personal host.
+
+## Current implementation state
+
+- Explorer layout modules are implemented and pass an isolated browser review with the real Windows catalogue and fixture files at 1024, 844, 390 and 320 pixels. Remaining refinement includes native sidebar/type icons, complete toolbar operations, tab/state persistence and regression coverage. The live personal host has not been updated with this development branch.
+- New account APIs expose revisioned workspace values, paginated/searchable history, full event detail and retry-safe client activity. Existing semantic host activity and sync clipboard sends now enter account history. Transfer lifecycle hooks, native clipboard observation, broader activity hooks and the visible History/sync client remain to be connected.
+- Shared preference coverage now includes the existing control sensitivity, shortcut/key layout, live-typing preference, quality, hold-control and transfer-notification preferences. Device IDs, local permissions, connection grants and pending file handles remain device-bound.
+- Targeted checks have passed for the store, canonical account scope, Google/password integration, legacy sync compatibility, keyboard transport and existing account/session controls. Complete-suite and release checks are still pending.
 
 ## Current verified mapping
 

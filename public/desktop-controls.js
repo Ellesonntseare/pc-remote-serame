@@ -173,6 +173,7 @@
     document.addEventListener('keyup',event=>{if(event.key==='Shift'&&shift){shift=false;for(const scope of ['pc','phone'])if(!pressed.has(scope))notify(scope);sync();}},true);
     for(const event of ['touchend','touchcancel'])document.addEventListener(event,event=>{for(const touch of event.changedTouches)touchIds.delete(touch.identifier);},{capture:true,passive:true});
     window.addEventListener('blur',releaseAll);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll();});window.addEventListener('pcr:auth',()=>{releaseAll();sync();});
+    window.addEventListener('pcr:settings-sync',event=>{if(event.detail?.key!=='pcr_hold_control')return;let next=false;try{next=localStorage.getItem('pcr_hold_control')==='true';}catch{}if(next!==enabled){releaseAll();enabled=next;sync();}});
     window.addEventListener('pcr:hold-release',event=>{
       if(event.detail.scope!=='pc'||!rs.on)return;
       if(g){clearTimeout(g.lp);if(g.dr)qc('up l');g=null;}releaseMouse();qq=qq.filter(command=>/^up [lrm]$/.test(command));

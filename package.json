@@ -9,7 +9,7 @@
     "test": "node --require ./test/use-sandbox-home.cjs --test test/*.test.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "license": "UNLICENSED",
   "dependencies": {

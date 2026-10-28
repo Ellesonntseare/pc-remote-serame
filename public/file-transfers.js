@@ -17,6 +17,7 @@
   const batchList=document.createElement('ol');batchList.id='filesBatchList';batchList.className='filesBatchList';batchList.hidden=true;el('filesProgress').before(batchList);
   const filePaths=new WeakMap();let folders=[];
   function selectedPath(file,fallback){const name=filePaths.get(file)||file.webkitRelativePath||file.name;return fallback||(window.PCRFileManager?.destination?window.PCRFileManager.destination+'/'+name:name);}
+  window.addEventListener('pcr:settings-sync',event=>{if(event.detail?.key==='pcr_transfer_notifications')try{el('filesNotify').checked=localStorage.getItem('pcr_transfer_notifications')==='true'&&globalThis.Notification?.permission==='granted';}catch{}});
   const notificationKey='pcr_transfer_notifications';try{el('filesNotify').checked=localStorage.getItem(notificationKey)==='true'&&globalThis.Notification?.permission==='granted';}catch{}
   el('filesNotify').addEventListener('change',async()=>{
     const input=el('filesNotify');if(input.checked){

@@ -3,7 +3,7 @@ const path=require('node:path'),fs=require('node:fs'),vm=require('node:vm'),asse
 (async()=>{
  const packageRoot=path.resolve(process.argv[2]),root=path.join(packageRoot,'host');
  for(const name of ['PCRemoteHost.exe','host/server.js','host/runtime/node.exe','host/RemoteAgent/bin/RemoteAgent.exe','host/RemoteAgent/bin/Concentus.dll'])assert.ok(fs.statSync(path.join(packageRoot,name)).isFile(),name);
- for(const name of ['config.json','.remembered-sessions.json','.google-accounts.json','.session-history.json','.signing','.env'])assert.equal(fs.existsSync(path.join(root,name)),false,'Private data in package: '+name);
+ for(const name of ['config.json','.remembered-sessions.json','.google-accounts.json','.session-history.json','.account-workspace.sqlite','.account-workspace.sqlite-wal','.account-workspace.sqlite-shm','.signing','.env'])assert.equal(fs.existsSync(path.join(root,name)),false,'Private data in package: '+name);
  const localRequire=createRequire(path.join(root,'server.js'));for(const name of ['ws','google-auth-library'])assert.ok(localRequire.resolve(name).startsWith(path.join(root,'node_modules')+path.sep));
  const videoRuntime=localRequire('ffmpeg-static');assert.ok(fs.statSync(videoRuntime).isFile(),'Bundled video encoder');assert.ok(fs.statSync(videoRuntime+'.LICENSE').isFile(),'Video encoder license');
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'pcr-package-verify-'));const {createApp}=localRequire('./server.js'),app=createApp({port:0,password:'package-smoke-only',disableAgent:true,disableActions:true,transferDirectory:temp});

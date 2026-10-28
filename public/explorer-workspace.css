@@ -1,0 +1,138 @@
+/* Explorer geometry follows the supplied Windows screenshots; colours follow PC Remote. */
+#filesDialog.explorerFiles{--ex-bg:#071923;--ex-panel:#0b202d;--ex-line:#92b1c225;--ex-select:#224659;--ex-hover:#173747;--ex-text:#dceaf0;--ex-muted:#9eb6c6;--ex-accent:#72cce0;padding:0 0 90px!important;width:100%;max-width:none;background:var(--ex-bg);color:var(--ex-text);font-family:'Segoe UI',Tahoma,system-ui,sans-serif}
+#filesDialog.explorerFiles>*{max-width:none!important}
+#filesDialog.explorerFiles .pcrPageHeader{padding:8px 14px!important;min-height:40px;gap:12px;border-bottom:0;margin:0}
+#filesDialog.explorerFiles .pcrPageHeader h2{font:12px 'Segoe UI',system-ui!important}
+#filesDialog.explorerFiles .pcrPageHeader .filesEyebrow,#filesDialog.explorerFiles .pcrPageHeader p{display:none}
+#filesDialog.explorerFiles .pcrPageBack{min-height:30px;padding:3px 9px;border:0;background:transparent}
+#filesDialog.explorerFiles .filesTabs{max-width:none!important;margin:0!important;padding:0 8px!important;border:0;border-radius:0;background:var(--ex-panel);justify-content:flex-start}
+#filesDialog.explorerFiles .filesTabs>button{flex:0 0 200px;min-height:32px!important;padding:5px 14px!important;border-radius:8px 8px 0 0!important;border:1px solid transparent;background:transparent!important;font:12px 'Segoe UI',system-ui}
+#filesDialog.explorerFiles .filesTabs>button[aria-selected=true],#filesDialog.explorerFiles .filesTabs>button.active{background:var(--ex-bg)!important;border-color:var(--ex-line)}
+#filesDialog.explorerFiles #filesPane{padding:0!important;margin:0!important;max-width:none!important}
+#filesDialog.explorerFiles .fileManager.explorerWorkspace{margin:0!important;max-width:none}
+#filesDialog.explorerFiles .fileManager [data-pc-files]{display:flex;flex-direction:column;align-items:stretch;column-gap:0}
+#filesDialog.explorerFiles .fileManager [data-pc-files]>*{width:100%;box-sizing:border-box;grid-column:auto}
+#filesDialog.explorerFiles .fmLocations{position:static;display:flex;align-items:center;right:auto;top:auto;margin:0;padding:0;gap:3px;z-index:1}
+#filesDialog.explorerFiles .fmLocations>button{flex:0 0 auto;min-height:28px;min-width:44px;padding:3px 8px;border:0!important;font:11px 'Segoe UI',system-ui}
+#filesDialog.explorerFiles .fmSendBar{display:flex!important;position:relative;margin:0!important;padding:5px 12px!important;gap:8px;background:var(--ex-panel);border-bottom:1px solid var(--ex-line);order:1}
+#filesDialog.explorerFiles .fmSendBar .fmDestination{min-height:28px!important;padding:3px 8px!important;border:0;border-radius:4px;background:transparent}
+#filesDialog.explorerFiles .fmSendBar #filesChoose,#filesDialog.explorerFiles .fmSendBar #filesChooseFolder{min-height:28px!important;padding:4px 8px!important;border-radius:4px;font:11px 'Segoe UI',system-ui!important}
+#filesDialog.explorerFiles .explorerAddress{display:grid;grid-template-columns:36px 36px 36px 36px minmax(160px,1fr) minmax(160px,23%);gap:4px;align-items:center;padding:8px 12px;background:var(--ex-panel);border-bottom:1px solid var(--ex-line)}
+#filesDialog.explorerFiles .explorerAddress>button{height:32px;min-height:32px!important;padding:0!important;border:0!important;border-radius:3px;background:transparent!important;color:var(--ex-text);font:18px 'Segoe UI',system-ui}
+#filesDialog.explorerFiles .explorerAddress>button:disabled{opacity:.32}
+#filesDialog.explorerFiles .explorerAddress>*{grid-column:auto!important;grid-row:auto!important;min-width:0}
+#filesDialog.explorerFiles .explorerAddress{height:48px;min-height:48px}
+#filesDialog.explorerFiles .explorerSearch .fmSearch{display:block;line-height:0}
+#filesDialog.explorerFiles .explorerSearch input{display:block;min-height:32px!important;height:32px!important}
+#filesDialog.explorerFiles .explorerCrumbs{min-width:0;border-radius:4px;background:var(--ex-bg);height:32px;display:flex;align-items:center;padding:0 10px}
+#filesDialog.explorerFiles [data-breadcrumb]{display:flex;align-items:center;gap:7px;min-width:0;width:100%;overflow:auto;white-space:nowrap;font:12px 'Segoe UI',system-ui}
+#filesDialog.explorerFiles [data-breadcrumb] button{flex:0 0 auto;border:0!important;background:none!important;padding:3px!important;min-height:26px!important;color:var(--ex-text)!important;font:12px 'Segoe UI',system-ui!important}
+#filesDialog.explorerFiles .explorerSearch .fmSearch{margin:0;font-size:0}
+#filesDialog.explorerFiles .explorerSearch input{height:32px;min-height:32px;width:100%;margin:0;padding:5px 12px;border:0;border-radius:4px;background:var(--ex-bg);color:var(--ex-text);font:12px 'Segoe UI',system-ui}
+#filesDialog.explorerFiles .explorerCommands{display:flex;align-items:center;gap:12px;padding:5px 16px;min-height:46px;border-bottom:1px solid var(--ex-line);background:var(--ex-bg);overflow-x:auto;scrollbar-width:thin}
+#filesDialog.explorerFiles .explorerCommands button,#filesDialog.explorerFiles .explorerCommands select{border:0!important;background:transparent!important;border-radius:4px;color:var(--ex-text);min-height:32px;padding:5px 8px;font:12px 'Segoe UI',system-ui!important;white-space:nowrap}
+#filesDialog.explorerFiles .explorerCommands button:hover,#filesDialog.explorerFiles .explorerCommands select:hover{background:var(--ex-hover)!important}
+#filesDialog.explorerFiles .explorerCommands button:disabled{opacity:.35}
+#filesDialog.explorerFiles .explorerCommands [data-new]{display:flex;align-items:center;gap:7px;margin:0;border-right:1px solid var(--ex-line)!important;border-radius:0;padding-right:18px}
+#filesDialog.explorerFiles .explorerCommands [data-new]>span{color:var(--ex-accent);font-size:18px}
+#filesDialog.explorerFiles .explorerCommands .fmSelection{position:static;display:flex;align-items:center;gap:4px;margin:0;padding:0;border:0;background:none;flex-wrap:nowrap}
+#filesDialog.explorerFiles .explorerCommands .fmSelection strong{display:none}
+#filesDialog.explorerFiles .explorerDownload{display:flex;align-items:center;gap:8px;border-right:1px solid var(--ex-line)!important;border-radius:0;padding-right:16px}
+#filesDialog.explorerFiles .explorerDownload>span:first-child{font-size:19px;color:var(--ex-accent)}
+#filesDialog.explorerFiles .explorerSort{display:flex;align-items:center;white-space:nowrap;color:var(--ex-text);font-size:12px}
+#filesDialog.explorerFiles .explorerSort select{max-width:100px}
+#filesDialog.explorerFiles .explorerViewMenu{margin:0;gap:6px;white-space:nowrap}
+#filesDialog.explorerFiles .explorerViewMenu>div{padding:0;border:0;background:none}
+#filesDialog.explorerFiles .explorerViewMenu>.fmDeep{font-size:11px;min-height:28px;gap:4px;color:var(--ex-muted)}
+#filesDialog.explorerFiles .explorerViewMenu input{width:14px;height:14px;margin:0}
+#filesDialog.explorerFiles .explorerCommands>[data-favourite]{margin-left:auto}
+#filesDialog.explorerFiles .explorerCommands{height:46px;min-height:46px;scrollbar-width:none}
+#filesDialog.explorerFiles .explorerCommands button{min-height:32px!important}
+#filesDialog.explorerFiles .explorerBody{display:grid;grid-template-columns:164px minmax(0,1fr);min-height:360px;height:calc(100dvh - 283px);background:var(--ex-bg)}
+#filesDialog.explorerFiles .explorerSidebar{overflow:auto;padding:6px 3px 0 2px;border-right:1px solid var(--ex-line);scrollbar-width:thin;min-width:0}
+#filesDialog.explorerFiles .explorerBody .fmRoots{position:static!important;display:flex!important;flex-direction:column!important;align-items:stretch;gap:0;margin:0;padding:0;border:0;grid-row:auto;min-width:0}
+#filesDialog.explorerFiles .explorerLocation{display:flex;align-items:center;gap:8px;width:100%;min-width:0;min-height:32px!important;padding:5px 12px!important;flex:0 0 auto;border:1px solid transparent!important;border-radius:2px!important;background:transparent!important;box-shadow:none!important;color:var(--ex-text)!important;text-align:left;font:12px 'Segoe UI',system-ui!important}
+#filesDialog.explorerFiles .explorerLocation:before{display:none!important}
+#filesDialog.explorerFiles .explorerLocation>span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#filesDialog.explorerFiles .explorerLocation .explorerLocationIcon{flex:0 0 16px;width:16px;color:#e3b947;font-size:17px;text-align:center;line-height:18px}
+#filesDialog.explorerFiles .explorerLocationIcon.desktop,#filesDialog.explorerFiles .explorerLocationIcon.pictures,#filesDialog.explorerFiles .explorerLocationIcon.cloud{color:#4cbbdf}
+#filesDialog.explorerFiles .explorerLocationIcon.downloads{color:#41c5a7;font-size:20px}
+#filesDialog.explorerFiles .explorerLocationIcon.music{color:#dd7c92}.explorerLocationIcon.videos{color:#b48be7}
+#filesDialog.explorerFiles .explorerLocation>small{margin-left:auto;font-size:14px;color:var(--ex-muted)}
+#filesDialog.explorerFiles .explorerLocation[aria-current=true]{background:var(--ex-select)!important;border-color:#89bfc552!important}
+#filesDialog.explorerFiles .explorerLocation:hover{background:var(--ex-hover)!important}
+#filesDialog.explorerFiles .explorerLocation.explorerDriveChild{padding-left:28px!important;font-size:11px!important}
+#filesDialog.explorerFiles .fmRoots hr{height:1px;min-height:1px;background:var(--ex-line);border:0;margin:14px 10px}
+#filesDialog.explorerFiles .fmFavourites{display:flex;flex-direction:column;padding:0 8px}
+#filesDialog.explorerFiles .fmFavourites button{min-height:32px;font:11px 'Segoe UI',system-ui;text-align:left;background:none;border:0;color:var(--ex-muted)}
+#filesDialog.explorerFiles .explorerContent{overflow:auto;min-width:0;padding:0 16px 14px 8px;scrollbar-width:thin;scrollbar-color:#6b8597 transparent;outline-offset:-2px}
+#filesDialog.explorerFiles .explorerContent .fmColumns{position:sticky;top:0;z-index:3;display:grid!important;grid-template-columns:245px 145px 120px 80px;gap:0;min-width:617px;padding:0 0 0 22px;margin:0;min-height:31px;align-items:center;border-bottom:1px solid var(--ex-line);background:var(--ex-bg)}
+#filesDialog.explorerFiles .fmColumns>span{display:flex;align-items:center;min-height:26px;padding:0 7px;border-right:1px solid var(--ex-line);font:11px 'Segoe UI',system-ui;cursor:pointer;color:var(--ex-accent)}
+#filesDialog.explorerFiles .fmColumns>span[data-sorted=true]:after{content:'⌃';font-size:12px;margin-left:auto;color:var(--ex-muted)}
+#filesDialog.explorerFiles .fmColumns>span[data-sorted=true][data-descending=true]:after{content:'⌄'}
+#filesDialog.explorerFiles .fileManager[data-view=details] [data-entries]{display:flex;flex-direction:column;min-width:580px;gap:0;margin:0!important}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile{display:grid;grid-template-columns:6px 18px 242px 145px 120px 80px;grid-template-rows:auto;gap:0;min-height:28px;padding:0 0 0 3px;border:1px solid transparent;border-radius:1px;align-items:center;margin:0}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmSelect{grid-column:1;grid-row:1;width:14px;height:14px;opacity:0;margin:0;justify-self:center}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile:hover .fmSelect,#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile.fmSelected .fmSelect,#filesDialog.explorerFiles .fileManager[data-view=details] .fmSelect:focus{opacity:1}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmFileIcon{grid-column:2;grid-row:1;width:16px;height:20px;justify-self:center}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmFileName{grid-column:3;grid-row:1;padding:4px!important;min-height:26px!important;max-height:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:12px 'Segoe UI',system-ui!important;line-height:18px!important}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmModified{grid-column:4;grid-row:1;padding:0 6px;white-space:nowrap;font:11px 'Segoe UI',system-ui;color:var(--ex-muted)}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmType{display:block;grid-column:5;grid-row:1;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:11px 'Segoe UI',system-ui;color:var(--ex-muted)}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmFileSize{grid-column:6;grid-row:1;padding:0 6px;white-space:nowrap;justify-self:start;font:11px 'Segoe UI',system-ui;color:var(--ex-muted)}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile>a{display:none}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile:hover{border-color:transparent;background:var(--ex-hover)}
+#filesDialog.explorerFiles .fileManager[data-view=details] .fmFile.fmSelected{background:var(--ex-select);border-color:#6ca1b044}
+#filesDialog.explorerFiles .fileManager .explorerGroup{display:block;min-height:28px!important;padding:4px 5px!important;text-align:left;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:var(--ex-accent);font:14px 'Segoe UI',system-ui;grid-column:1/-1}
+#filesDialog.explorerFiles .fileManager .explorerGroup:hover{background:var(--ex-hover)}
+#filesDialog.explorerFiles .fileManager[data-view=icons] .fmColumns{display:none!important}
+#filesDialog.explorerFiles .explorerViewPopup{position:relative}
+#filesDialog.explorerFiles .explorerViewPopup>summary{list-style:none;cursor:pointer;min-height:32px;display:flex;align-items:center;white-space:nowrap;font:12px 'Segoe UI',system-ui;padding:5px 8px;border-radius:4px}
+#filesDialog.explorerFiles .explorerViewPopup>summary::-webkit-details-marker{display:none}
+#filesDialog.explorerFiles .explorerViewPopup[open]>.explorerViewChoices{display:flex;flex-direction:column;gap:5px;position:fixed;z-index:450;min-width:170px;overflow:auto;padding:7px;border:1px solid var(--ex-line);border-radius:7px;background:var(--ex-panel);box-shadow:0 8px 24px #0006}
+#filesDialog.explorerFiles .explorerViewChoices>div{display:flex;flex-direction:column}
+#filesDialog.explorerFiles .explorerViewChoices button{text-align:left}
+#filesDialog.explorerFiles .explorerViewChoices>.fmDeep{display:flex;align-items:center;gap:6px;padding:6px;font:11px 'Segoe UI',system-ui;color:var(--ex-muted)}
+#filesDialog.explorerFiles [data-explorer-drive=true] .fmColumns{display:none!important}
+#filesDialog.explorerFiles [data-explorer-drive=true] [data-entries]{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));min-width:0!important;padding:8px;align-items:start}
+#filesDialog.explorerFiles [data-explorer-drive=true] .fmFile{grid-template-columns:48px minmax(0,1fr)!important;grid-template-rows:24px 34px!important;min-height:64px!important;padding:5px!important;gap:0 8px!important;border-radius:1px!important}
+#filesDialog.explorerFiles [data-explorer-drive=true] .fmFile .fmSelect,#filesDialog.explorerFiles [data-explorer-drive=true] .fmFile .fmType,#filesDialog.explorerFiles [data-explorer-drive=true] .fmFile .fmModified,#filesDialog.explorerFiles [data-explorer-drive=true] .fmFile small,#filesDialog.explorerFiles [data-explorer-drive=true] .fmFile>a{display:none!important}
+#filesDialog.explorerFiles [data-explorer-drive=true] .fmFile .fmFileIcon{grid-column:1!important;grid-row:1/3!important;width:42px!important;height:44px!important}
+#filesDialog.explorerFiles [data-explorer-drive=true] .fmFile .fmFileName{grid-column:2!important;grid-row:1!important;min-height:20px!important;padding:0!important}
+#filesDialog.explorerFiles .explorerCapacity{grid-column:2;grid-row:2;display:flex;flex-direction:column;gap:2px;max-width:200px;color:var(--ex-muted);font:11px 'Segoe UI',system-ui}
+#filesDialog.explorerFiles .explorerCapacity progress{width:100%;height:13px;accent-color:#62b8cd}
+#filesDialog.explorerFiles .explorerStatus{display:flex;align-items:center;gap:15px;min-height:28px;padding:4px 14px;border-top:1px solid var(--ex-line);color:var(--ex-accent);font:11px 'Segoe UI',system-ui}
+#filesDialog.explorerFiles .explorerStatus .fmStatus{margin:0;font:11px 'Segoe UI',system-ui;color:var(--ex-accent)}
+#filesDialog.explorerFiles .explorerLocalConnection{margin-left:auto!important;min-height:24px!important;max-width:130px;font-size:10px!important;padding:3px 7px!important}
+#filesDialog.explorerFiles [data-pc-files][hidden]{display:none!important}
+#filesDialog.explorerFiles[open]{display:block!important;gap:0!important}
+#filesDialog.explorerFiles .pcrPageHeader[hidden]{display:none!important}
+#filesDialog.explorerFiles .filesTabs{display:flex!important;height:32px;margin:0!important;align-items:stretch}
+#filesDialog.explorerFiles .filesTabs .explorerClose{margin-left:auto;flex:0 0 42px;min-width:42px;border:0!important;border-radius:0!important;color:var(--ex-text);font-size:23px!important}
+#filesDialog.explorerFiles .fileManager .explorerCommands .fmSendBar{display:contents!important}
+#filesDialog.explorerFiles .explorerCommands .fmDestination{display:none!important}
+#filesDialog.explorerFiles .fileManager .explorerCommands .fmSendBar #filesDrop{display:flex!important;position:relative;flex:0 0 auto;margin:0!important;padding:0!important;border:0!important;background:none!important}
+#filesDialog.explorerFiles .explorerCommands .filesPickers{display:flex!important;position:relative;gap:3px!important}
+#filesDialog.explorerFiles .explorerCommands .filesPickerSlot{display:inline-flex!important;position:relative;flex:0 0 auto;min-width:82px;height:32px;overflow:hidden}
+#filesDialog.explorerFiles .explorerCommands .filesPickerSlot #filesInput{position:absolute!important;inset:0!important;max-width:100%;max-height:100%}
+#filesDialog.explorerFiles .fileManager .explorerCommands .fmSendBar #filesDrop[hidden]{display:none!important}
+#filesDialog.explorerFiles .fileManager .explorerCommands .fmSendBar #filesChoose,#filesDialog.explorerFiles .fileManager .explorerCommands .fmSendBar #filesChooseFolder{min-height:32px!important;background:transparent!important;border:0!important;border-radius:3px!important;color:var(--ex-text)!important;font:12px 'Segoe UI',system-ui!important}
+#filesDialog.explorerFiles .explorerBody{height:calc(100dvh - 236px)}
+#filesDialog.explorerFiles .explorerStatus .fmLocations{margin-left:auto}
+#filesDialog.explorerFiles .filesHeader{display:none!important}
+@media(max-width:600px){
+  #filesDialog.explorerFiles .pcrPageHeader{padding:6px 8px!important;min-height:38px}
+  #filesDialog.explorerFiles .fmLocations{top:7px;right:6px}
+  #filesDialog.explorerFiles .filesTabs>button{flex:1;min-height:32px!important}
+  #filesDialog.explorerFiles .explorerAddress{grid-template-columns:26px 26px 26px 26px minmax(0,1fr);padding:6px;gap:1px;height:80px;min-height:80px}
+  #filesDialog.explorerFiles .explorerCrumbs{padding:0 6px}
+  #filesDialog.explorerFiles .explorerAddress>.explorerSearch{grid-column:1/-1!important;padding-top:3px}
+  #filesDialog.explorerFiles .explorerCommands{gap:5px;padding:3px 6px;min-height:40px}
+  #filesDialog.explorerFiles .explorerCommands button{min-height:34px;font-size:11px}
+  #filesDialog.explorerFiles .explorerDownload>span:last-child{display:none}
+  #filesDialog.explorerFiles .explorerBody{grid-template-columns:116px minmax(0,1fr);height:calc(100dvh - 272px);min-height:300px}
+  #filesDialog.explorerFiles .explorerLocation{min-height:36px!important;padding:6px!important;gap:5px;font-size:11px!important}
+  #filesDialog.explorerFiles .explorerLocation>small{display:none}
+  #filesDialog.explorerFiles .explorerContent{padding-right:5px;padding-left:4px}
+  #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile{min-height:36px}
+  #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmSelect{opacity:1}
+}
