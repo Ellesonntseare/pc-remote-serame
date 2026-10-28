@@ -5,9 +5,14 @@
 - [x] Fixed original download filenames/extensions and MIME types, with ASCII and Unicode headers. Added APK filename parsing and unit checks for Android's document picker.
 - [x] Files has Icons/Details views, Windows shell icons/thumbnails, natural name sorting and persistent view preference. Native preview work is bounded and cached.
 - [x] Finger trail now blends with soft shading and a fading tail instead of separate hard circles.
+- [x] Combined the touchpad and scroll rail into one continuous surface and border, retaining the vertical arrows/line inside the right edge. The trail covers the shared surface; browser input/fade checks passed.
 - [x] 50 focused checks passed. Real Windows shell previews were read successfully. Browser review passed at 320/390/844/1280 px, including fullscreen Fit, scroll-strip input, typing-close Fit and Home transition stream continuity.
-- [ ] Finish full application checks, publish signed 2.1.3 APK/installer and update the personal host.
-- [ ] Complete the function audit and record remaining improvements and physical-phone checks.
+- [x] Final checks passed on functional source 40e6f56: 330 Windows tests, 314 portable checks, native builds/codec checks and the matching installer/runtime verification. Android build, filename unit tests and signing checks passed; native APK source is unchanged from its verified build at 5ead7f4. The local full pass exposed two outdated generic-MIME assertions, which were corrected and passed with all 19 focused download/recovery checks.
+- [x] Real Windows GPU/Intel Quick Sync video decoded successfully in Chromium, continued through a simulated hidden/PiP transition, and stopped on selected-session revocation. A 64 MiB durable-write transfer preserved its hash with both 1 MiB and 8 MiB chunks.
+- [x] Published the signed [2.1.3 personal APK and Windows installer](https://github.com/Ellesonntseare/pc-remote-serame/releases/tag/v2.1.3-preview) with SHA256SUMS. APK signing matches 2.1.2; the downloaded APK matches its CI asset digest. The release tag points to functional source 40e6f56.
+- [x] Updated the running Windows helper and Node host. Local/public HTTPS asset and health checks passed. Authenticated live checks verified the APK's original name, extension, MIME and Windows thumbnail output. The verification session was signed out. The APK is also in PC Transfers and the project folder.
+- [x] Completed the [function audit and prioritised improvements](docs/FUNCTION-AUDIT-2026-10-28.md), distinguishing automated/live Windows checks from physical Android checks. Usage is in [USING-2.1.3.md](docs/USING-2.1.3.md).
+- [ ] Physical Android Home/PiP, Save/Open/Share filename, keyboard and microphone checks still need the user's phone.
 
 ---
 
