@@ -52,3 +52,24 @@ This audit combines the complete automated application suite, native builds, res
 - File icons use small Windows previews rather than downloading full-resolution originals to populate the file grid.
 
 Published test/build results and the deployment checklist are recorded in [PROGRESS.md](../PROGRESS.md).
+
+
+## Account workspace and Explorer review (2.1.4)
+
+The new Explorer workspace was reviewed against the supplied Windows screenshots using actual Windows folder discovery and native shell icons. Two independent Chromium contexts verified folder/tab changes and full clipboard-history delivery. Reviews at 320, 390, 844 and 1024 pixels had no page errors or page-wide horizontal overflow. The table itself scrolls to retain the Explorer columns on phones. A new clipboard event retained an already expanded full-text history entry.
+
+Account tests cover canonical Google/password identity, restart persistence, full text versus list previews, indexed search, per-account separation, key revision conflicts, event/import deduplication, atomic batch rejection, disconnected drafts, last-moment page exit, current scroll preservation, stale tabs after another sign-in, and retained chat/notes after live sessions end. Native clipboard readiness, receipt of an existing clipboard event and shutdown passed without printing or changing the clipboard.
+
+A diagnostic in-memory history query retained 5,000 events, returned 50 previews (22,778 bytes), and took 2.85 ms on this PC. It measures the query path, not disk durability, mobile hardware or internet transfer speed. The production store uses durable SQLite transactions. UI state writes are coalesced; progress writes are throttled and unchanged progress is ignored.
+
+The 51b13df foundation passed 344 Windows and 328 portable checks, native helper/tray builds and encoder/audio checks. Subsequent hooks and download-ID fixes passed their focused checks; final full-source CI and release verification are recorded in PROGRESS.md. Physical Android checks remain outstanding.
+
+Next practical improvements for this app:
+
+1. Add network-aware automatic resume to Android transfers while preserving a pause the user deliberately chose. The current transfer service keeps recovery state but still pauses on connection errors.
+2. Reuse a Windows preview worker for uncached icons instead of starting a helper for every uncached preview. Keep the existing bounded concurrency/cache and measure cold-folder time before and after.
+3. Complete file operations with Copy/Cut/Paste, Undo and Windows Recycle Bin support. Current Explorer actions are functional, but those additional Windows operations have not been represented by placeholder buttons.
+4. Add account history export/backup and a storage-size view. Full recorded history now persists rather than being capped at recent activity.
+5. Run the physical-phone checklist: real Home/PiP, background Pause/Cancel, Android document providers, keyboard/rotation, and camera/microphone contention. Browser/native unit checks cannot verify those Android interactions.
+
+The final two-browser review also verified live transfer progress and shared folder-sync metadata without copying Android document URIs. It exposed a cancelled progress timer left set during sign-in; resetting that handle fixed the first post-login update. A regression covers progress before/after sign-in. The isolated review uses a memory clipboard provider; an earlier fixture isolation error that replaced the PC clipboard was disclosed and corrected.

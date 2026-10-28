@@ -53,7 +53,7 @@
     }
     function auth(){
       const nextScope=window.PCRAuth?.signedIn?window.PCRAuth.workspaceId||'':'';if(nextScope===scope)return;
-      persist(true);epoch++;controller?.abort();clearTimeout(timer);clearTimeout(saveTimer);clearTimeout(progressTimer);progress=null;progressSignature='';controller=null;busy=false;scope=nextScope;ready=false;revision=historyRevision=0;values={};changes={};events=[];listEpoch++;page.querySelector('.mcActivityList').replaceChildren();if(snippets)snippets.hidden=true;states.clear();nativeStates.clear();if(page.open)page.close();card.hidden=!scope;card.querySelector('label').hidden=scope!=='owner';
+      persist(true);epoch++;controller?.abort();clearTimeout(timer);clearTimeout(saveTimer);clearTimeout(progressTimer);progressTimer=null;progress=null;progressSignature='';controller=null;busy=false;scope=nextScope;ready=false;revision=historyRevision=0;values={};changes={};events=[];listEpoch++;page.querySelector('.mcActivityList').replaceChildren();if(snippets)snippets.hidden=true;states.clear();nativeStates.clear();if(page.open)page.close();card.hidden=!scope;card.querySelector('label').hidden=scope!=='owner';
       if(!scope)return;try{const saved=JSON.parse(localStorage.getItem(key())||'{}');values=saved.values||{};changes=saved.changes||{};events=Array.isArray(saved.events)?saved.events:[];}catch{}apply(values,true);wake();
     }
     page.querySelector('h2').textContent='Account history';const list=page.querySelector('.mcActivityList');
