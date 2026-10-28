@@ -15,6 +15,8 @@ const {createAccountWorkspace}=require('./account-workspace');
 const {createAccountAPI}=require('./account-api');
 const {accountScope}=require('./account-scope');
 const {createClipboardWatch}=require('./clipboard-watch');
+const {createSharedClipboard}=require('./shared-clipboard');
+const {createDeviceCompanions}=require('./device-companions');
 const {saveDeviceName}=require('./host-settings');
 const {createNetworkDevices}=require('./network-devices');
 const nativeClipboard=require('./native-clipboard');
@@ -60,6 +62,7 @@ const PWA_ASSETS = new Map([
   ['/audio-capture-worklet.js',['audio-capture-worklet.js','text/javascript; charset=utf-8']],
   ['/google-signin.js',['google-signin.js','text/javascript; charset=utf-8']],
   ['/native-media.js',['native-media.js','text/javascript; charset=utf-8']],
+  ['/device-companion.js',['device-companion.js','text/javascript; charset=utf-8']],
   ...['mission-control','camera-sharing','local-connection'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/media-recording.js',['media-recording.js','text/javascript; charset=utf-8']],
   ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
@@ -146,6 +149,7 @@ async function jsonBody(req, max=4096) {
 function validInput(c) {
   if(typeof c !== 'string' || c.length > 90000) return false;
   const [verb, ...rest] = c.split(' '), v=rest.join(' ');
+  if(verb==='focuscurrent')return c==='focuscurrent';
   if (['mv','abs','focus'].includes(verb)) return /^-?\d{1,6} -?\d{1,6}$/.test(v);
   if (verb === 'wheel' || verb === 'hwheel') return /^-?\d{1,5}$/.test(v);
   if (['click','down','up'].includes(verb)) return /^[lrm]$/.test(v);
@@ -201,6 +205,7 @@ function createApp(options={}) {
   const accountData=options.accountWorkspace||createAccountWorkspace({file:options.workspaceFile||':memory:'}),accountAPI=createAccountAPI({store:accountData});
   const workspaceScope=token=>accountScope(sessions.get(token),identity=>google.isOwner(identity));
   let clipboardObserver=null,clipboardEcho=null;
+  const sharedClipboard=createSharedClipboard({store:accountData,directory:options.sharedClipboardDirectory,apply:async value=>{if(options.sharedClipboardProvider?.apply)return options.sharedClipboardProvider.apply(value);if(options.clipboardProvider?.set&&['text','empty'].includes(value.kind))return options.clipboardProvider.set(value.text||'');if(!clipboardObserver?.active)throw Error('The Windows clipboard connection is starting.');return clipboardObserver.set(value);}});
   const nativeFeatures=options.nativeFeatures||createNativeFeatures({root:ROOT});
   const displayPrivacy=options.displayPrivacy||createDisplayPrivacy({root:ROOT});
   const audioSockets=new Set();
@@ -431,7 +436,7 @@ function createApp(options={}) {
     if(!agent.stdin.writable)return result(503,{error:'Desktop agent disconnected'});
     if(agent.stdin.writableLength>262144||pendingInput.size>512)return result(429,{error:'PC input queue is busy'});
     if(b.wait===true){
-      if(b.cmds.length<1||b.cmds.length>25||!b.cmds.every(c=>/^(text|paste|edit|key|combo|abs|click|focus) /.test(c)))
+      if(b.cmds.length<1||b.cmds.length>25||!b.cmds.every(c=>c==='focuscurrent'||/^(text|paste|edit|key|combo|abs|click|focus) /.test(c)))
         return result(400,{error:'Invalid typing request'});
       const tagged=[],ids=[];
       const completion=b.cmds.map(c=>new Promise((resolve,reject)=>{
@@ -601,7 +606,7 @@ function createApp(options={}) {
           const body=await jsonBody(req,16384);if(!body||typeof body!=='object'||Array.isArray(body))return respond(res,400,{error:'Choose the devices to sign out.'});if(body.all!==true&&(!Array.isArray(body.ids)||!body.ids.length||body.ids.length>200||body.ids.some(id=>typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id))))return respond(res,400,{error:'Choose the devices to sign out.'});
           const ids=new Set(body.all===true?[]:body.ids),selected=[...sessions].filter(([,session])=>body.all===true||ids.has(session.id));
           record(ip,'Administrator signed out '+selected.length+' device sessions',undefined,token);
-          for(const [key]of selected){sessionAdmin.end(key,'Signed out by administrator');sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);nativeVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);displayPrivacy.revoke(key);for(const viewer of [...viewers])if(viewer.token===key){viewer.res.end();viewers.delete(viewer);}}
+          for(const [key]of selected){sessionAdmin.end(key,'Signed out by administrator');sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);nativeVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);companions.revoke(key);closeInputSockets(key);closeAudioSockets(key);displayPrivacy.revoke(key);for(const viewer of [...viewers])if(viewer.token===key){viewer.res.end();viewers.delete(viewer);}}
           saveSessions();await Promise.allSettled(selected.map(([key])=>fileTransfers.revoke(key)));updateVideoDemand();if(!viewers.size)endAgent();
           return respond(res,200,{ok:true,revoked:selected.length,signedOut:selected.some(([key])=>key===token)});
         }
@@ -614,6 +619,13 @@ function createApp(options={}) {
       if(await accountAPI.handle(req,res,{pathname,scope:workspaceScope(token),valid:()=>!!sessions.get(token)&&sessions.get(token).until>Date.now(),device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC Remote',readJson:jsonBody,respond}))return;
       if(sessions.get(token).role==='account'&&!['/api/unpair','/api/session','/api/presence'].includes(pathname))return respond(res,403,{error:'Your Google account is signed in. Pair this PC before accessing its controls or files.',needsPairing:true});
       if(await syncHub.handle(req,res,{pathname,token,accountKey:workspaceScope(token)||'owner',role:sessions.get(token)?.role,readJson:jsonBody,respond}))return;
+      if(await sharedClipboard.handle(req,res,{pathname,scope:workspaceScope(token),role:sessions.get(token)?.role,device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||'PC Remote',sourceId:syncHub.device(token,workspaceScope(token)||'owner')?.id||'device',readJson:jsonBody,respond}))return;
+      if(pathname==='/api/companion/devices'||pathname.startsWith('/api/companion/devices/')){
+        if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Pair your own device first.'});
+        const scope=workspaceScope(token);if(req.method==='GET'&&pathname==='/api/companion/devices')return respond(res,200,{ok:true,devices:companions.devices(scope)});
+        const match=/^\/api\/companion\/devices\/([-a-zA-Z0-9]{12,80})\/command$/.exec(pathname);if(req.method==='POST'&&match){try{const body=await jsonBody(req,128*1024),result=await companions.request(scope,match[1],body.action,body.payload||{},body.action==='file-hash'?60000:15000);if(['ring','stop-ring'].includes(body.action))accountData.record(scope,{type:'devices',action:'devices.'+body.action,label:body.action==='ring'?'Find my phone started':'Find my phone stopped',device:sessions.get(token)?.deviceName||'PC Remote'});return respond(res,200,{ok:true,result});}catch(error){return respond(res,error.status||503,{error:error.status?error.message:'The phone could not complete that action.'});}}
+        return respond(res,405,{error:'Device action unavailable.'});
+      }
       if(pathname==='/api/host/send'&&req.method==='POST'||pathname==='/api/host/targets'&&req.method==='GET'){
         if(viaTunnel||!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)||!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Use Send to my phone from this Windows PC.'});
         try{if(req.method==='GET')return respond(res,200,{ok:true,devices:await syncHub.devices(workspaceScope(token)||'owner')});const body=await jsonBody(req,1024*1024);return respond(res,200,await syncHub.enqueue({accountKey:workspaceScope(token)||'owner',files:body.files||[],text:body.text||'',target:body.target||'*'}));}catch(error){return respond(res,error.status||400,{error:error.status?error.message:'The selected files could not be queued.'});}
@@ -667,7 +679,7 @@ function createApp(options={}) {
         }
         if(req.method==='POST'&&pathname==='/api/guest/revoke'){
           const body=await jsonBody(req,4096);let revoked=false;
-          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);nativeVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);await fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
+          for(const [key,session]of [...sessions])if(session.role==='guest'&&session.guestId===body.id){sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);nativeVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);companions.revoke(key);closeInputSockets(key);closeAudioSockets(key);await fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked=true;}
           record(ip,'Guest access ended',undefined,token);return respond(res,200,{ok:true,revoked});
         }
         if(req.method==='POST'&&pathname==='/api/guest/revoke-all'){
@@ -675,7 +687,7 @@ function createApp(options={}) {
           if(!Array.isArray(ids)||ids.length<1||ids.length>50||new Set(ids).size!==ids.length||ids.some(id=>typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id)))return respond(res,400,{error:'Choose the active guests to end.'});
           const selected=new Set(ids);let revoked=0;
           for(const [key,session]of [...sessions])if(session.role==='guest'&&selected.has(session.guestId)){
-            sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);nativeVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);closeInputSockets(key);closeAudioSockets(key);await fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked++;
+            sessions.delete(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);nativeVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);companions.revoke(key);closeInputSockets(key);closeAudioSockets(key);await fileTransfers.revoke(key);for(const v of [...viewers])if(v.token===key)v.res.end();revoked++;
           }
           record(ip,'Ended '+revoked+' guest sessions',undefined,token);return respond(res,200,{ok:true,revoked});
         }
@@ -735,8 +747,7 @@ function createApp(options={}) {
           }
           const body=await jsonBody(req,1024*1024);
           if(typeof body.text!=='string'||body.text.length>250000||body.text.includes('\0')||Buffer.from(body.text,'utf8').toString('utf8')!==body.text)return respond(res,400,{error:'Use text up to 250,000 characters.'});
-          if(options.clipboardProvider)await options.clipboardProvider.set(body.text);else await nativeClipboard(ROOT,'set',body.text);
-          record(ip,'Copied text to PC',body.text,token);
+          if(sessions.get(token)?.role==='owner'&&sharedClipboard.enabled(workspaceScope(token)))await sharedClipboard.copy(workspaceScope(token),{kind:'text',text:body.text},{source:syncHub.device(token,workspaceScope(token))?.name||sessions.get(token)?.deviceName||'PC Remote',sourceId:syncHub.device(token,workspaceScope(token))?.id||'device',activityLabel:'Copied text to PC'});else{if(options.clipboardProvider)await options.clipboardProvider.set(body.text);else await nativeClipboard(ROOT,'set',body.text);record(ip,'Copied text to PC',body.text,token);}
           return respond(res,200,{ok:true});
         }catch(e){return respond(res,503,{error:e.message});}
       }
@@ -764,7 +775,7 @@ function createApp(options={}) {
       }
       if(req.method==='POST'&&pathname==='/api/unpair'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
-        record(ip,'Phone unpaired',undefined,token);sessionAdmin.end(token,'Signed out');sessions.delete(token);saveSessions();await fileTransfers.revoke(token);deviceLinks.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);nativeVideo.revoke(token);cameraRevoke(token);collaboration.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
+        record(ip,'Phone unpaired',undefined,token);sessionAdmin.end(token,'Signed out');sessions.delete(token);saveSessions();await fileTransfers.revoke(token);deviceLinks.revoke(token);guestScreens.revoke(token);webRtcVideo.revoke(token);nativeVideo.revoke(token);cameraRevoke(token);collaboration.revoke(token);companions.revoke(token);closeInputSockets(token);closeAudioSockets(token);for(const v of [...viewers])if(v.token===token){try{v.res.end();}catch{} viewers.delete(v);}updateVideoDemand();if(!viewers.size)endAgent();
         displayPrivacy.revoke(token);return respond(res,200,{ok:true},{'Set-Cookie':`${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`});
       }
       if(req.method==='GET'&&pathname==='/api/screen'){
@@ -813,6 +824,7 @@ function createApp(options={}) {
   const cameraChannels=new Map(['pc','phone'].map(room=>[room,createWebRtcVideo({sessions,auth,sessionExpiry})]));
   const phoneAudio=createPhoneAudio({sessions,auth,sessionExpiry,openOutput:settings=>nativeFeatures.openAudioOutput(settings)});
   function cameraRevoke(token){phoneAudio.revoke(token);for(const channel of cameraChannels.values())channel.revoke(token);}
+  const companions=createDeviceCompanions({clipboard:sharedClipboard,sessions,auth,scopeFor:workspaceScope,sessionExpiry});
   const collaboration=createCollaboration({sessions,auth,sessionExpiry,accountKey:workspaceScope,onActivity:(scope,event)=>accountData.record(scope,event)});
   function rejectUpgrade(socket,status,message) {
     socket.on('error',()=>{});
@@ -822,7 +834,7 @@ function createApp(options={}) {
   server.on('upgrade',(req,socket,head)=>{
     socket.on('error',()=>{});
     let pathname;try{pathname=new URL(req.url,'http://localhost').pathname;}catch{return rejectUpgrade(socket,400,'Bad URL');}
-    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video','/api/native-video','/api/collaboration','/api/camera','/api/phone-audio'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
+    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video','/api/native-video','/api/collaboration','/api/camera','/api/phone-audio','/api/device-channel'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
     if(!allowedRequest(req))return rejectUpgrade(socket,403,'Input stream host rejected');
     try{
       const origin=new URL(req.headers.origin);
@@ -831,6 +843,7 @@ function createApp(options={}) {
     const token=auth(req);
     if(!token)return rejectUpgrade(socket,401,'Pair your phone first');
     if(sessions.get(token).role==='account')return rejectUpgrade(socket,403,'Pair this PC before opening a remote session');
+    if(pathname==='/api/device-channel'){if(sessions.get(token)?.role!=='owner'||!workspaceScope(token))return rejectUpgrade(socket,403,'Pair your own device first.');return companions.upgrade(req,socket,head,token);}
     if(pathname==='/api/native-video'){
       if(!enabled||!permits(token,'screen'))return rejectUpgrade(socket,403,'Screen viewing was not approved');
       const params=new URL(req.url,'http://localhost').searchParams,preset=params.get('p')||'auto';if(!Object.hasOwn(NATIVE_VIDEO_PROFILES,preset))return rejectUpgrade(socket,400,'Invalid video quality');
@@ -927,16 +940,21 @@ function createApp(options={}) {
       });
     });
   });
-  function stop(){stopping=true;accountAPI.close();clipboardObserver?.close();clipboardObserver=null;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();}
-  server.on('close',()=>{sessionAdmin.close();google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();nativeVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
+  function stop(){stopping=true;accountAPI.close();clipboardObserver?.close();clipboardObserver=null;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();companions.revoke();}
+  server.on('close',()=>{sessionAdmin.close();google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();nativeVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();companions.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   if(options.discovery===true)discovery=require('./local-discovery').advertise(server,{name:hostname,identity:hostIdentity,enabled:allowLan});
-  server.once('close',()=>{networkDevices.close();clipboardObserver?.close();clipboardObserver=null;void syncHub.close();accountData.close();});
+  server.once('close',()=>{networkDevices.close();clipboardObserver?.close();clipboardObserver=null;void syncHub.close();void sharedClipboard.close().finally(()=>accountData.close());});
   function clipboardPreferences(){
-    const enabled=!stopping&&options.observeClipboard===true&&!options.disableAgent&&accountData.getValue('owner','history.preferences')?.clipboardCapture!==false;
+    const history=accountData.getValue('owner','history.preferences')?.clipboardCapture!==false,sync=sharedClipboard.enabled('owner');
+    const enabled=!stopping&&options.observeClipboard===true&&!options.disableAgent&&(history||sync);
     if(!enabled){clipboardObserver?.close();clipboardObserver=null;return;}if(clipboardObserver)return;
-    clipboardObserver=createClipboardWatch({root:ROOT,...options.clipboardWatchDependencies,onChange:value=>{
-      if(value.kind==='text'&&clipboardEcho?.text===value.text&&Date.now()-clipboardEcho.at<1500){clipboardEcho=null;return;}
-      const files=(value.files||[]).slice();while(files.length&&Buffer.byteLength(JSON.stringify(files))>24000)files.pop();
+    clipboardObserver=createClipboardWatch({root:ROOT,captureImages:true,...options.clipboardWatchDependencies,onChange:async value=>{
+      if(value.local)return;
+      const echoed=value.kind==='text'&&clipboardEcho?.text===value.text&&Date.now()-clipboardEcho.at<1500;if(echoed)clipboardEcho=null;
+      const history=accountData.getValue('owner','history.preferences')?.clipboardCapture!==false;
+      const share=sharedClipboard.enabled('owner')&&(['text','empty'].includes(value.kind)||value.kind==='image'&&value.data&&accountData.getValue('owner','clipboard.preferences')?.images!==false);
+      if(share){await sharedClipboard.native(value,{device:hostname,history:history&&!echoed});return;}
+      if(!history||echoed)return;const files=(value.files||[]).slice();while(files.length&&Buffer.byteLength(JSON.stringify(files))>24000)files.pop();
       accountData.record('owner',{id:'pc-clipboard:'+value.id,type:'clipboard',action:'clipboard.captured',label:value.initial?'PC clipboard at host start':value.kind==='text'?'Copied text on PC':value.kind==='files'?'Copied files on PC':value.kind==='image'?'Copied an image on PC':'PC clipboard changed',device:hostname,text:value.kind==='text'?value.text:'',payload:{kind:value.kind,initial:!!value.initial,...files.length&&{files,total:value.files.length}}});
     }});
   }
@@ -951,7 +969,7 @@ if(require.main===module){
   catch(e) { if(e.code!=='ENOENT'){console.error('Cannot load config.json:',e.message);process.exit(1);} }
   const allowLan=config.allowLan!==false;
   if(typeof config.password!=='string'||!config.password||['serame','admin'].includes(config.password)){console.error('Set your owner password in local config.json, or use the Windows host setup. The old default sign-ins are disabled.');process.exit(1);}
-  const app=createApp({workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),observeClipboard:true,useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
+  const app=createApp({workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),sharedClipboardDirectory:path.join(ROOT,'.shared-clipboard'),observeClipboard:true,useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
   app.server.listen(app.port,allowLan?'0.0.0.0':'127.0.0.1',()=>{
     const actual=app.server.address().port;
     const ip=app.addresses.find(a=>a.startsWith('192.168.'))||app.addresses[0]||'127.0.0.1';

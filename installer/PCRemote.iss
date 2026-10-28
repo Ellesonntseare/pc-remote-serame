@@ -14,6 +14,7 @@ OutputBaseFilename=PC-Remote-Host-Setup-2.1.4
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\HostTray\Assets\remote.ico
 UninstallDisplayIcon={app}\PCRemoteHost.exe
 CloseApplications=yes
 [Tasks]

@@ -31,3 +31,19 @@ No physical Android device is attached. Distinguish CI/native/browser checks fro
 ## Serame Keyboard approval
 
 The user identified Serame Keyboard, said it is not currently active but they can switch to it, and approved all six integration ideas: automatic shared clipboard, a synced/pinned clipboard strip, PC typing mode, Ctrl/Alt/Tab/Esc and shortcuts, voice dictation into the PC, and connection/transfer status above the keys. Target repository is Ellesonntseare/my-keyboard (README identifies Serame Keyboard). Do not use the separate Mathapelo keyboard or its private defaults. Embedding the Serame IME in PC Remote is a practical single-app approach; preserve normal phone typing and make PC mode explicit. No default keyboard has been changed on the phone.
+
+## Additional approved functions
+
+From the later ten-item list the user selected 1, 4, 5, 6, 9 and 10: browse allowed phone folders from the PC; Find my phone; per-app PC audio controls; document scanning to multipage PDF; custom gamepad-style controls; and file conflict comparison. Other ideas from that list were not approved.
+
+The user then explicitly selected side-chat 4, 5 and 9 and pasted the source list: connection troubleshooting (host/LAN/Cloudflare/permissions with actionable results), one search across connected devices/indexed files/shared content/history, and a duplicate-file finder comparing selected phone/PC folders. These are additional requirements, not replacements for the earlier list. Keep them in existing Devices/Files/Search surfaces. Duplicate removal must remain an explicit user choice.
+
+## Current integration checkpoint (28 October 2026)
+
+- Windows typed clipboard observation/application and account-scoped text/PNG snapshots are implemented; 11 transport/storage/reconnection tests passed.
+- Serame IME is embedded with normal phone typing, explicit PC mode, shortcuts and dictation. Android compilation and physical-device testing are still pending. Clipboard credentials remain in memory; reopen/sign in after Android kills the process. No default keyboard is changed automatically.
+- The requested direct-typing change removes the visible app editor and field-selection menu. Trackpad clicks now probe the selected PC field; Android retries IME opening after WebView focus catches up. Host/browser tests pass; physical IME display remains unverified.
+- Adaptive IME controls are available in PC Remote and through an explicit linked-PC toolbar elsewhere. A normal browser does not reliably expose its current website to an IME, so do not claim automatic website detection.
+- The complete host/web suite passed 355 tests with zero failures after fixing the new companion asset route. RemoteAgent and HostTray compile without warnings.
+- The Windows Send window now has the app colour scheme, a file list/removal, recipient chooser and text area. Its real PC Remote icon is embedded in the executable/tray/installer. Visual validation and the Android build are next.
+- Remaining required work above is still open; no new APK or installer has been published for this checkpoint.

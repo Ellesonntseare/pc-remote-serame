@@ -8,6 +8,11 @@ internal static class FieldFocus
     internal sealed record Bounds(int x,int y,int width,int height);
     internal sealed record FocusInfo(bool? Editable,string? FieldId=null,Bounds? FieldBounds=null);
     private static int busy;
+    public static FocusInfo InspectCurrent()
+    {
+        if(!GetCursorPos(out var point))return new(null);
+        return InspectAt(point.X,point.Y);
+    }
     public static bool? EditableAt(int x,int y)=>InspectAt(x,y).Editable;
     public static FocusInfo InspectAt(int x, int y)
     {
@@ -44,7 +49,7 @@ internal static class FieldFocus
                     if(candidate.Equals(element))break;
                     candidate=TreeWalker.ControlViewWalker.GetParent(candidate);
                 }
-                result.TrySetResult(new(focused??false));
+                result.TrySetResult(new(focused??caret.Editable??false));
             }
             catch { result.TrySetResult(caret); }
             finally { Volatile.Write(ref busy, 0); }
@@ -89,6 +94,9 @@ internal static class FieldFocus
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint { public int X,Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
     [StructLayout(LayoutKind.Sequential)]
     private struct GuiThreadInfo
     {

@@ -22,7 +22,7 @@ internal sealed class HostContext:ApplicationContext
     const string ReleasePage="https://github.com/Ellesonntseare/pc-remote-serame/releases";
     internal static string HostRoot(){var packaged=Path.Combine(AppContext.BaseDirectory,"host");if(File.Exists(Path.Combine(packaged,"server.js")))return packaged;var dir=new DirectoryInfo(AppContext.BaseDirectory);for(int i=0;i<6&&dir!=null;i++,dir=dir.Parent)if(File.Exists(Path.Combine(dir.FullName,"server.js")))return dir.FullName;throw new DirectoryNotFoundException("Reinstall PC Remote: the Windows host files are missing.");}
     readonly string root=HostRoot();
-    readonly NotifyIcon tray=new(){Icon=SystemIcons.Application,Visible=true,Text="PC Remote · checking host"};
+    readonly NotifyIcon tray=new(){Icon=HostTheme.AppIcon(),Visible=true,Text="PC Remote · checking host"};
     readonly HttpClient http=new(new HttpClientHandler{AllowAutoRedirect=false}){Timeout=TimeSpan.FromSeconds(2)};
     readonly System.Windows.Forms.Timer timer=new(){Interval=3000};
     readonly ToolStripMenuItem state=new("Checking host…"),start=new("Start host"),stop=new("Stop host"),startup=new("Start when I sign in");

@@ -8,3 +8,11 @@ test('clipboard observation is event driven, decodes fragmented lines and closes
 test('a storage error cannot crash the clipboard reader and a later successful event recovers',t=>{
   let fail=true;const f=fixture(t,()=>{if(fail)throw Error('Storage unavailable');});f.child.stdout.write('{"type":"ready"}\n');assert.doesNotThrow(()=>f.child.stdout.write('{"type":"clipboard","kind":"text","id":"one","text":"first"}\n'));assert.equal(f.watcher.active,false);fail=false;f.child.stdout.write('{"type":"clipboard","kind":"text","id":"two","text":"second"}\n');assert.equal(f.watcher.active,true);
 });
+
+test('clipboard writes reuse the hidden connection and mark sequence echoes before delivering events',async t=>{
+ const f=fixture(t);f.child.stdout.write('{"type":"ready"}\n');let command;f.child.stdin.once('data',buffer=>command=JSON.parse(buffer.toString()));const pending=f.watcher.set({kind:'text',text:'Fixture clipboard text'});assert.equal(command.type,'set');assert.equal(command.text,'Fixture clipboard text');f.child.stdout.write(JSON.stringify({type:'applied',id:command.id,ok:true,sequence:42})+'\n'+JSON.stringify({type:'clipboard',kind:'text',id:'native-42',sequence:42,text:'Fixture clipboard text'})+'\n');assert.equal((await pending).sequence,42);assert.equal(f.events[0].local,true);f.child.stdout.write(JSON.stringify({type:'clipboard',kind:'text',id:'native-43',sequence:43,text:'A separate copy'})+'\n');assert.equal(f.events[1].local,false);
+});
+
+test('closing the clipboard connection rejects an outstanding write without retrying its content',async t=>{
+ const f=fixture(t);f.child.stdout.write('{"type":"ready"}\n');const pending=f.watcher.set({kind:'text',text:'Pending fixture'});const rejected=assert.rejects(pending,/connection ended/);f.watcher.close();await rejected;await assert.rejects(f.watcher.set({kind:'text',text:'Later'}),/not ready/);
+});

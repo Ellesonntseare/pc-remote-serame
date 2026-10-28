@@ -89,6 +89,7 @@
 <script src="/folder-sync.js" defer></script>
 <link rel="stylesheet" href="/account-workspace.css">
 <script src="/account-workspace.js" defer></script>
+<script src="/device-companion.js" defer></script>
 <title>PC Remote</title>
 <style>
 html.appBooting .app{visibility:hidden}html.appBooting #pairGate{visibility:hidden}#appBoot{position:fixed;inset:0;z-index:5;display:grid;place-content:center;gap:16px;background:#101820;color:#9db6c4;text-align:center;font:13px system-ui}#appBoot span{width:28px;height:28px;margin:auto;border:2px solid #8bbaa52a;border-top-color:#8ddcc6;border-radius:50%;animation:bootSpin .8s linear infinite}@keyframes bootSpin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){#appBoot span{animation:none}}
@@ -368,7 +369,7 @@ function qc(c){
   if(liveTyping && !live.paused && /^(click|down|dbl|key|combo)\b/.test(c))rsResetTypingContext(false);
   const l=qq[qq.length-1],[a,x,y]=c.split(' ');
   if(l&&l.startsWith(a+' ')&&['mv','wheel','hwheel','abs'].includes(a)){const[,lx,ly]=l.split(' ');qq[qq.length-1]=a==='abs'?c:a==='wheel'||a==='hwheel'?a+' '+(+lx + +x):'mv '+(+lx + +x)+' '+(+ly + +y)}else qq.push(c);
-  flush();
+  flush();window.PCRTypingControls?.afterPointer?.(c);
 }
 let pointerFrame=0,lastPointerSend=0;
 function schedulePointer(){if(!pointerFrame)pointerFrame=requestAnimationFrame(flushPointer);}

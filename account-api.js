@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto');
 const {SETTINGS}=require('./sync-hub');
-const allowedKey=key=>key.startsWith('setting:')?SETTINGS.has(key.slice(8)):/^(?:files\.(?:favourites|view|location|sorting|tabs|selection|columns)|workspace\.(?:recent|resume)|drafts\.compose|media\.preferences|controls\.shortcuts|history\.preferences|(?:transfers|folders)\.device:[a-zA-Z0-9-]{12,80})$/.test(key);
+const allowedKey=key=>key.startsWith('setting:')?SETTINGS.has(key.slice(8)):/^(?:files\.(?:favourites|view|location|sorting|tabs|selection|columns)|workspace\.(?:recent|resume)|drafts\.compose|media\.preferences|controls\.shortcuts|history\.preferences|clipboard\.preferences|(?:transfers|folders)\.device:[a-zA-Z0-9-]{12,80})$/.test(key);
 const clientActions=new Set(['screen.opened','screen.closed','typing.started','typing.closed','audio.started','audio.stopped','audio.paused','camera.started','camera.stopped','recording.started','recording.saved','recording.stopped','screenshot.saved','screenshot.prepared','recording.prepared','presentation.started','presentation.stopped','page.opened','transfer.paused','transfer.resumed','transfer.cancelled','transfer.saved','files.selected','shared.opened','clipboard.local']);
 function createAccountAPI({store}={}){
   const waiting=new Set();

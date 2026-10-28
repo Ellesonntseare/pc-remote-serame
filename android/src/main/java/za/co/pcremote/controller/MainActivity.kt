@@ -67,6 +67,7 @@ class MainActivity : Activity() {
     private var connectionGeneration = 0
     private var nearby:NearbyComputers?=null
     private var clipboardDirty=true
+    private var companionObserver:(()->Unit)?=null
     private var pendingShortcut=""
     private var pendingSyncFolder:JSONObject?=null
     private var keyboardGeneration=0
@@ -216,7 +217,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version","2.1.3");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow PC Remote through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -275,6 +276,7 @@ class MainActivity : Activity() {
 
     private fun connectTo(origin: String) {
         connectionGeneration++
+        DeviceCompanion.disconnect()
         selectedOrigin = TrustedOrigin.normalize(origin) ?: return
         getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("lastOrigin",selectedOrigin).apply()
         if (bridgeInstalled) WebViewCompat.removeWebMessageListener(web, "PCRAndroid")
@@ -292,7 +294,11 @@ class MainActivity : Activity() {
                     "transfer-shared" -> { val items=org.json.JSONArray();sharedUris.forEach{items.put(JSONObject().put("direction","upload").put("uri",it.toString()).put("destination",value.optString("destination").take(700)))};if(items.length()>0){enqueueTransfers(items);sharedUris.clear();sharedText="";transferReady()} }
                     "transfer-control" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("pause","resume","cancel"))startForegroundService(Intent(this,TransferService::class.java).setAction(TransferService.CONTROL).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("id",value.optString("id")).putExtra("command",command))}
                     "transfer-file-action" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("open","share")&&TransferService.completedDownload(this,origin,value.optString("id"))!=null)startActivity(Intent(this,TransferActionActivity::class.java).putExtra("origin",origin).putExtra("id",value.optString("id")).putExtra("command",command))}
-                    "transfer-signout" -> selectedOrigin?.let{TransferService.stopOrigin(this,it);FolderSync.disconnect(this,it)}
+                    "transfer-signout" -> {DeviceCompanion.disconnect();selectedOrigin?.let{TransferService.stopOrigin(this,it);FolderSync.disconnect(this,it)}}
+                    "companion-connect" -> {val origin=selectedOrigin?:return@addWebMessageListener;DeviceCompanion.connect(this,origin,CookieManager.getInstance().getCookie(origin).orEmpty(),value.optString("account"),value.optString("deviceId"),value.optString("name"))}
+                    "companion-disconnect" -> DeviceCompanion.disconnect()
+                    "companion-context" -> DeviceCompanion.context(value.optString("page"),value.optBoolean("pcInput"))
+                    "keyboard-settings" -> startActivity(Intent(this,za.co.pcremote.controller.keyboard.KeyboardSettingsActivity::class.java))
                     "phone-audio-start" -> {phoneAudioOutput=if(value.optString("output")=="virtual-mic")"virtual-mic" else "speakers";compressedPhoneAudio=value.optBoolean("compressed",true);requestPhoneAudio(value.optString("source"),value.optDouble("volume",.6))}
                     "phone-audio-stop" -> {pendingPhoneAudio=null;PhoneAudioService.stop()}
                     "phone-audio-control" -> PhoneAudioService.control(value.optDouble("volume",.6),value.optBoolean("muted",false))
@@ -464,15 +470,22 @@ class MainActivity : Activity() {
     private fun showPhoneKeyboard(){
         val generation=++keyboardGeneration
         web.requestFocus()
+        var attempts=0
         fun show(){
             if(generation!=keyboardGeneration||isFinishing||isDestroyed||isInPictureInPictureMode||!isAllowed(web.url?:""))return
             web.evaluateJavascript("!!(document.activeElement?.id==='typeText'&&!document.activeElement.readOnly)"){focused->
                 if(focused!="true"||generation!=keyboardGeneration||!web.hasWindowFocus())return@evaluateJavascript
-                (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(web,InputMethodManager.SHOW_IMPLICIT)
+                if(Build.VERSION.SDK_INT>=30&&web.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime())==true)return@evaluateJavascript
+                val manager=getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                // DOM focus and WebView's editor connection update on separate
+                // frames after the Windows field reply. Refresh that connection
+                // before asking Android to show the IME.
+                if(attempts++<2)manager.restartInput(web)
+                manager.showSoftInput(web,InputMethodManager.SHOW_IMPLICIT)
                 if(Build.VERSION.SDK_INT>=30)window.insetsController?.show(android.view.WindowInsets.Type.ime())
             }
         }
-        web.post{show()};web.postDelayed({show()},160)
+        for(delay in longArrayOf(0,80,220,450,800,1400))web.postDelayed({show()},delay)
     }
 
     private fun miniParams(width:Int,height:Int,auto:Boolean):android.app.PictureInPictureParams{
@@ -538,10 +551,15 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        DeviceCompanion.foreground(this,true)
+        companionObserver?.invoke()
+        companionObserver=DeviceCompanion.observe{if(isAllowed(web.url?:"")){val value=JSONObject().put("state",DeviceCompanion.state).put("connected",DeviceCompanion.connected);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:companion-state',{detail:$value}))",null)}}
         ScreenShareService.previewEnabled = true
     }
 
     override fun onStop() {
+        DeviceCompanion.foreground(this,false)
+        companionObserver?.invoke();companionObserver=null
         hidePhoneKeyboard()
         nearby?.stop()
         stopLocalMedia()
@@ -666,7 +684,7 @@ class MainActivity : Activity() {
         val config=pendingSyncFolder;pendingSyncFolder=null;val uri=data?.data;val origin=selectedOrigin;if(resultCode!=RESULT_OK||uri==null||origin==null||config==null||!isAllowed(web.url?:""))return
         try{val flags=data.flags and(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION);contentResolver.takePersistableUriPermission(uri,flags);if(config.optString("direction")!="upload"&&(flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)==0)throw IllegalStateException("Choose a writable phone folder for two-way sync.");var name="Phone folder";contentResolver.query(android.provider.DocumentsContract.buildDocumentUriUsingTree(uri,android.provider.DocumentsContract.getTreeDocumentId(uri)),arrayOf(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME),null,null,null)?.use{c->if(c.moveToFirst())name=c.getString(0)};FolderSync.add(this,uri,name,origin,CookieManager.getInstance().getCookie(origin).orEmpty(),config.optString("destination").take(800),config.optString("direction"));folderSyncEvent()}catch(e:Exception){Toast.makeText(this,e.message?:"Folder access could not be saved. Choose it again.",Toast.LENGTH_LONG).show()}
     }
-    override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus);if(hasFocus)clipboardDirty=true;if(hasFocus)web.post{showControlRequest()} }
+    override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus);DeviceCompanion.foreground(this,hasFocus);if(hasFocus)clipboardDirty=true;if(hasFocus)web.post{showControlRequest()} }
 
     override fun onKeyDown(keyCode: Int,event: KeyEvent): Boolean {
         if(volumeControlEnabled&&web.visibility==View.VISIBLE&&isAllowed(web.url?:"")&&keyCode in listOf(KeyEvent.KEYCODE_VOLUME_UP,KeyEvent.KEYCODE_VOLUME_DOWN)){

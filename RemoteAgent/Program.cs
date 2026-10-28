@@ -43,6 +43,7 @@ internal static class Program
             catch(Exception ex){Console.WriteLine(JsonSerializer.Serialize(new {ok=false,error="Could not open link. "+ex.Message}));Environment.ExitCode=1;}
             return;
         }
+        if(args.Length==1&&args[0]=="--clipboard-sync"){ClipboardWatch.Run(true);return;}
         if(args.Length==1&&args[0]=="--clipboard-watch"){ClipboardWatch.Run();return;}
         if(args.Length==1&&args[0]=="--file-locations"){FileLocations.Run();return;}
         if(args.Length==1&&args[0]=="--file-thumbnail"){FileThumbnail.Run();return;}
@@ -261,11 +262,12 @@ internal static class Program
                     if (fields.Length != 3) continue;
                     try
                     {
-                        if (fields[2].StartsWith("focus ", StringComparison.Ordinal))
+                        if (fields[2]=="focuscurrent"||fields[2].StartsWith("focus ", StringComparison.Ordinal))
                         {
                             var point = fields[2].Split(' ');
                             var id=fields[1];int x=point.Length==3?Number(point[1])+primary.Left:-1,y=point.Length==3?Number(point[2])+primary.Top:-1;
-                            _=Task.Run(()=>{var focus=FieldFocus.InspectAt(x,y);var bounds=focus.FieldBounds;Send(output,2,JsonSerializer.SerializeToUtf8Bytes(new {id,ok=true,editable=focus.Editable,fieldId=focus.FieldId,fieldBounds=bounds==null?null:new {x=bounds.x-primary.Left,y=bounds.y-primary.Top,bounds.width,bounds.height}}));});
+                            bool current=fields[2]=="focuscurrent";
+                            _=Task.Run(()=>{var focus=current?FieldFocus.InspectCurrent():FieldFocus.InspectAt(x,y);var bounds=focus.FieldBounds;Send(output,2,JsonSerializer.SerializeToUtf8Bytes(new {id,ok=true,editable=focus.Editable,fieldId=focus.FieldId,fieldBounds=bounds==null?null:new {x=bounds.x-primary.Left,y=bounds.y-primary.Top,bounds.width,bounds.height}}));});
                         }
                         else
                         {

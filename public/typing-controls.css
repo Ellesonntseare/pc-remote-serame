@@ -5,5 +5,9 @@
 .remoteTypingFeedback[data-state=active]{color:#55e8c3;border-color:#1e8d7660}.remoteTypingFeedback[data-state=waiting]{color:#ffd27e;border-color:#ac7d3e66}
 .remoteTypingState{margin-left:auto;padding:5px 7px;border:1px solid #60798f40;border-radius:7px;color:#9aafc2;background:#091725;font:9px/1.1 system-ui;white-space:nowrap}
 .remoteTypingState[data-state=active]{color:#65e6c8;border-color:#298a7166}.remoteTypingState[data-state=waiting]{color:#ffd48c;border-color:#9f7d4155}
+.directTyping #typePanel:not(.hide){position:fixed!important;left:0!important;bottom:0!important;top:auto!important;width:1px!important;height:1px!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;overflow:hidden!important;opacity:.01;pointer-events:none;background:transparent!important;box-shadow:none!important}
+.directTyping #typePanel>:not(#typeText){display:none!important}
+.directTyping #typeText{position:absolute!important;left:0;top:0;width:1px!important;height:1px!important;min-height:0!important;max-height:1px!important;padding:0!important;border:0!important;font-size:16px!important}
+.remoteTypingState[hidden]{display:none!important}
 .compactTyping #choosePCField{display:none}.compactTyping .remoteTypingToolbar{justify-content:flex-end}.compactTyping .remoteTypingToolbar #typingTextOptions{margin-right:auto}
 @media(max-height:500px){.remoteTypingFeedback{padding:5px 8px;margin-bottom:5px}.remoteTypingFeedback [data-typing-destination]{display:none}}
