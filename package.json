@@ -1,6 +1,6 @@
 {
   "name": "pc-remote-repaired",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "private": true,
   "description": "Explicitly activated, PIN-paired LAN remote desktop for personal Windows PCs",
   "main": "server.js",

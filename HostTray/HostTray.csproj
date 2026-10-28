@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>PCRemoteHost</AssemblyName><Version>2.1.4</Version><ApplicationIcon>Assets/remote.ico</ApplicationIcon></PropertyGroup>
+  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>PCRemoteHost</AssemblyName><Version>2.1.5</Version><ApplicationIcon>Assets/remote.ico</ApplicationIcon></PropertyGroup>
   <ItemGroup><EmbeddedResource Include="Assets/remote.ico" LogicalName="PCRemoteHost.remote.ico" /></ItemGroup>
 </Project>

@@ -44,3 +44,8 @@ test/AudioCodecChecks/obj/
 .account-workspace.sqlite*
 
 .shared-clipboard/
+
+test/HostTrayChecks/bin/
+test/HostTrayChecks/obj/
+
+/--nologo*

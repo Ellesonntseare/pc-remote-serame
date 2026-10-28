@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 namespace PCRemoteHost;
-internal sealed class SendToPhone:Form
+internal class SendToPhone:Form
 {
     readonly string root;
     readonly HttpClient http=new(new HttpClientHandler{AllowAutoRedirect=false,UseProxy=false,CookieContainer=new CookieContainer()}){BaseAddress=new Uri("http://127.0.0.1:7666"),Timeout=TimeSpan.FromMinutes(2)};
@@ -27,6 +27,8 @@ internal sealed class SendToPhone:Form
         panel.Controls.Add(new Label{Text="Text or link",Dock=DockStyle.Fill,TextAlign=ContentAlignment.BottomLeft,ForeColor=HostTheme.Muted},0,4);panel.Controls.Add(text,0,5);
         var footer=new TableLayoutPanel{Dock=DockStyle.Fill,Padding=new Padding(0,16,0,0),ColumnCount=2};footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,170));footer.Controls.Add(status,0,0);footer.Controls.Add(send,1,0);panel.Controls.Add(footer,0,6);panel.Controls.Add(progress,0,7);
         targets.BackColor=text.BackColor=fileList.BackColor=HostTheme.Surface;targets.ForeColor=text.ForeColor=fileList.ForeColor=HostTheme.Text;status.ForeColor=HostTheme.Muted;
+        targets.DrawMode=DrawMode.OwnerDrawFixed;targets.DrawItem+=(_,e)=>{using var brush=new SolidBrush(HostTheme.Surface);e.Graphics.FillRectangle(brush,e.Bounds);var label=e.Index>=0?targets.Items[e.Index]?.ToString()??"":"Choose a receiving device";TextRenderer.DrawText(e.Graphics,label,Font,e.Bounds,HostTheme.Text,TextFormatFlags.VerticalCenter|TextFormatFlags.Left);};
+        fileList.OwnerDraw=true;fileList.DrawColumnHeader+=(_,e)=>{using var brush=new SolidBrush(HostTheme.Surface);e.Graphics.FillRectangle(brush,e.Bounds);TextRenderer.DrawText(e.Graphics,e.Header?.Text??"",Font,e.Bounds,HostTheme.Muted,TextFormatFlags.VerticalCenter|TextFormatFlags.Left);};fileList.DrawItem+=(_,e)=>e.DrawDefault=true;fileList.DrawSubItem+=(_,e)=>e.DrawDefault=true;
         HostTheme.Button(choose);HostTheme.Button(remove);HostTheme.Button(send,true);
         choose.Click+=(_,_)=>{using var picker=new OpenFileDialog{Multiselect=true,Title="Send files to your devices"};if(picker.ShowDialog(this)==DialogResult.OK)Add(picker.FileNames);};
         remove.Click+=(_,_)=>RemoveSelected();fileList.SelectedIndexChanged+=(_,_)=>remove.Enabled=!delivering&&fileList.SelectedItems.Count>0;
