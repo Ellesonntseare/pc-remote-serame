@@ -410,7 +410,7 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if(requestCode==512){
             val folder=data?.data
-            if(resultCode==RESULT_OK&&folder?.scheme=="content"&&isAllowed(web.url?:""))runCatching{contentResolver.takePersistableUriPermission(folder,(data?.flags?:0) and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION));prefs.edit().putString("phoneDropFolder",folder.toString()).apply();Toast.makeText(this,"Incoming files will save to this folder with their original names.",Toast.LENGTH_LONG).show()}
+            if(resultCode==RESULT_OK&&folder?.scheme=="content"&&isAllowed(web.url?:""))runCatching{contentResolver.takePersistableUriPermission(folder,(data?.flags?:0) and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION));getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("phoneDropFolder",folder.toString()).apply();Toast.makeText(this,"Incoming files will save to this folder with their original names.",Toast.LENGTH_LONG).show()}
             return
         }
         if(requestCode==511){finishSyncFolder(resultCode,data);return}

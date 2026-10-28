@@ -95,7 +95,7 @@ class SerameKeyboardService : InputMethodService() {
         if(!isInputViewShown||currentInputEditorInfo?.packageName==packageName)return false
         val connection=currentInputConnection?:return false
         if(command.action=="insert")return connection.commitText(command.text,1)
-        if(command.key=="Enter"&&performDefaultEditorAction(true))return true
+        if(command.key=="Enter"&&sendDefaultEditorAction(true))return true
         val context=za.co.pcremote.controller.PhoneKeys.context(command)
         if(context!=null)return connection.performContextMenuAction(context)
         val down=connection.sendKeyEvent(za.co.pcremote.controller.PhoneKeys.event(command,KeyEvent.ACTION_DOWN))

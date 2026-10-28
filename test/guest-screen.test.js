@@ -4,7 +4,7 @@ const {createApp}=require('../server'),{jpegSize,validMark}=require('../guest-sc
 const {command}=require('../phone-control');
 const jpeg=Buffer.from('ffd8ffc00011080002000303012200021101031101ffd9','hex');
 function request(port,route,{method='GET',body,cookie}={}){return new Promise((resolve,reject)=>{const req=http.request({hostname:'127.0.0.1',port,path:route,method,headers:{'X-PCR':'1',...cookie&&{Cookie:cookie}}},res=>{let text='';res.on('data',c=>text+=c);res.on('end',()=>resolve({status:res.statusCode,json:JSON.parse(text),cookie:res.headers['set-cookie']?.[0].split(';')[0]}));});req.on('error',reject);if(body)req.write(JSON.stringify(body));req.end();});}
-async function fixture(t){const dir=await fs.mkdtemp(path.join(__dirname,'.transfer-check-'));let audioStops=0,audioOpens=0;const app=createApp({password:'serame',disableAgent:true,disableActions:true,transferDirectory:dir,nativeFeatures:{close(){},openAudio(callbacks){audioOpens++;setImmediate(()=>{callbacks.onMetadata({type:'format',encoding:'f32le',sampleRate:48000,channels:2,source:'system-output'});callbacks.onPcm(Buffer.alloc(32));});let stopped=false;return {stop(){if(!stopped){audioStops++;stopped=true;}}};}}});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const port=app.server.address().port,call=(route,options)=>request(port,route,options),owner=(await call('/api/pair',{method:'POST',body:{password:'serame'}})).cookie,sockets=[];
+async function fixture(t,nativeOverrides={}){const dir=await fs.mkdtemp(path.join(__dirname,'.transfer-check-'));let audioStops=0,audioOpens=0;const app=createApp({password:'serame',disableAgent:true,disableActions:true,transferDirectory:dir,clipboardProvider:{get:async()=>'',set:async()=>{}},nativeFeatures:{...nativeOverrides,close(){},openAudio(callbacks){audioOpens++;setImmediate(()=>{callbacks.onMetadata({type:'format',encoding:'f32le',sampleRate:48000,channels:2,source:'system-output'});callbacks.onPcm(Buffer.alloc(32));});let stopped=false;return {stop(){if(!stopped){audioStops++;stopped=true;}}};}}});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const port=app.server.address().port,call=(route,options)=>request(port,route,options),owner=(await call('/api/pair',{method:'POST',body:{password:'serame'}})).cookie,sockets=[];
   function ws(cookie,route='/api/guest-screen',origin='http://127.0.0.1:'+port){const client=new WebSocket('ws://127.0.0.1:'+port+route,{headers:{Cookie:cookie,Origin:origin}});client.queue=[];client.on('message',(data,binary)=>client.queue.push(binary?Buffer.from(data):JSON.parse(data.toString())));sockets.push(client);return client;}
   t.after(async()=>{for(const s of sockets)s.terminate();app.stop();await new Promise(r=>app.server.close(r));if(path.dirname(dir)===__dirname&&path.basename(dir).startsWith('.transfer-check-'))await fs.rm(dir,{recursive:true,force:true});});
   async function guest(permissions={}){const pending=(await call('/api/pair',{method:'POST',body:{password:'guest'}})).cookie,id=(await call('/api/guest/requests',{cookie:owner})).json.requests[0].id;await call('/api/guest/decide',{method:'POST',cookie:owner,body:{id,approve:true,permissions}});return {id,cookie:(await call('/api/guest/poll',{method:'POST',cookie:pending,body:{}})).cookie};}
@@ -89,4 +89,37 @@ test('an owner phone can publish and accept its PC mouse without a guest login; 
   pc.send(JSON.stringify(input('pointer',3,{action:'hide-pointer'})));assert.equal((await next(phone,v=>v.type==='pointer'&&v.seq===3)).command.action,'hide-pointer');
   phone.send(JSON.stringify({type:'control-stop'}));await next(pc,v=>v.type==='control-state'&&v.state==='off');
   pc.send(JSON.stringify(input('pointer',4,{action:'pointer',points:[{x:.1,y:.1}]})));assert.equal((await next(pc,v=>v.type==='control-result'&&v.seq===4)).ok,false);
+});
+
+test('desktop mouse requires the approved PC, receives rotation dimensions and releases on a lost phone connection',async t=>{
+  let native=null,stops=0,lastDimensions=null;
+  const f=await fixture(t,{openPhoneInput:options=>{native=options;return {stop(){stops++},release(){},update(value){lastDimensions=value}}}}),phone=f.ws(f.owner),pc=f.ws(f.owner),other=f.ws(f.owner);
+  await Promise.all([opened(phone),opened(pc),opened(other)]);
+  const key='b'.repeat(32),clientKey='c'.repeat(32),proof='d'.repeat(32);
+  phone.send(JSON.stringify({type:'start',shareKey:key,controlSupported:true,mouseSupported:true,advancedInput:true}));await next(phone,v=>v.type==='sharing');phone.send(JSON.stringify({type:'capture',generation:1,width:1080,height:2400}));phone.send(jpeg);
+  const id=(await next(pc,v=>v.type==='shares'&&v.shares.length)).shares[0].id;pc.send(JSON.stringify({type:'watch',id}));await next(pc,v=>v.type==='watching');await next(pc,Buffer.isBuffer);
+  pc.send(JSON.stringify({type:'desktop-start',side:'right',sensitivity:1}));await next(pc,v=>v.type==='desktop-state'&&v.state==='off');assert.equal(native,null);
+  pc.send(JSON.stringify({type:'control-request',clientKey}));const request=await next(phone,v=>v.type==='control-request');assert.equal(request.clientKey,clientKey);
+  phone.send(JSON.stringify({type:'control-response',id:request.id,approved:true,resumeProof:proof,expiresIn:120000}));const active=await next(pc,v=>v.type==='control-state'&&v.state==='active');assert.equal(active.resumeProof,proof);assert.ok(active.expiresIn<=120000);
+  other.send(JSON.stringify({type:'watch',id}));await next(other,v=>v.type==='watching');const unapproved=await next(other,v=>v.type==='control-state');assert.equal(unapproved.resumeProof,undefined);
+  other.send(JSON.stringify({type:'desktop-start',side:'right',sensitivity:1}));await next(other,v=>v.type==='desktop-state');assert.equal(native,null);
+  pc.send(JSON.stringify({type:'desktop-start',side:'left',sensitivity:1.2}));await next(pc,v=>v.type==='desktop-state'&&v.state==='armed');assert.equal(native.width,1080);assert.equal(native.side,'left');
+  native.onEvent({kind:'text',text:'fixture'});assert.equal((await next(pc,v=>v.type==='desktop-input')).event.text,'fixture');
+  phone.send(JSON.stringify({type:'capture',generation:2,width:2400,height:1080}));await next(pc,v=>v.type==='capture');assert.equal(lastDimensions.width,2400);
+  phone.terminate();assert.equal((await next(pc,v=>v.type==='stopped')).reconnect,true);assert.equal(stops,1);
+  const rejoined=f.ws(f.owner);await opened(rejoined);rejoined.send(JSON.stringify({type:'start',shareKey:key,controlSupported:true,mouseSupported:true,advancedInput:true}));await next(rejoined,v=>v.type==='sharing');rejoined.send(JSON.stringify({type:'capture',generation:2,width:2400,height:1080}));rejoined.send(jpeg);
+  assert.equal((await next(pc,v=>v.type==='shares'&&v.shares.length)).shares[0].id,id,'the same projection keeps its identity');
+  pc.send(JSON.stringify({type:'watch',id}));await next(pc,v=>v.type==='watching');await next(pc,Buffer.isBuffer);pc.send(JSON.stringify({type:'control-request',clientKey,resumeProof:proof}));assert.equal((await next(rejoined,v=>v.type==='control-request')).resumeProof,proof,'only the phone can approve the previous session proof');
+});
+
+test('phone file drop delivers original names to only the selected registered owner device',async t=>{
+  const f=await fixture(t),target='phone-device-0123456789';
+  await f.call('/api/sync/register',{method:'POST',cookie:f.owner,body:{id:target,name:'Fixture phone',platform:'android'}});
+  const phone=f.ws(f.owner);await opened(phone);phone.send(JSON.stringify({type:'start',deviceId:target}));await next(phone,v=>v.type==='sharing');
+  const name='Photo + résumé.png',upload=await f.call('/api/files/uploads',{method:'POST',cookie:f.owner,body:{name,relativePath:'Phone drops/fixture/'+name,size:0}});assert.equal(upload.status,200);
+  const body={target,names:[upload.json.file.name],group:'a'.repeat(32)};
+  const delivered=await f.call('/api/phone/files',{method:'POST',cookie:f.owner,body});assert.equal(delivered.status,200);assert.equal(delivered.json.receiving,true);
+  const offer=(await next(phone,v=>v.type==='file-offer')).offers[0];assert.equal(offer.name,name);assert.equal(offer.size,0);assert.match(offer.path,/^\/api\/files\/download\?name=/);
+  assert.equal((await f.call('/api/phone/files',{method:'POST',cookie:f.owner,body:{...body,names:['../outside.txt']}})).status,400);
+  const guest=await f.guest();assert.equal((await f.call('/api/phone/files',{method:'POST',cookie:guest.cookie,body})).status,403);
 });
