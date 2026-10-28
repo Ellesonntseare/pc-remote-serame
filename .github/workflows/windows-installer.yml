@@ -57,7 +57,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-FileHash dist/PC-Remote-Host-Setup-2.1.5.exe -Algorithm SHA256
       - uses: actions/upload-artifact@v4
-        if: github.event_name != 'workflow_dispatch' || !inputs.publish_release
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
         with:
           name: PC-Remote-Windows-Host-2.1.5
           path: dist/PC-Remote-Host-Setup-2.1.5.exe
