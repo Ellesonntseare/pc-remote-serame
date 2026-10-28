@@ -60,6 +60,8 @@
 <script src="/remote-video.js" defer></script>
 <script src="/device-links.js" defer></script>
 <script src="/device-input.js" defer></script>
+<script src="/touch-trail.js" defer></script>
+<link rel="stylesheet" href="/touch-trail.css">
 <script src="/typing-controls.js" defer></script>
 <script src="/native-window.js" defer></script>
 <link rel="stylesheet" href="/native-window.css">
@@ -502,7 +504,7 @@ function rsPauseLive(message){
   rsTypeStatus(message,'error');
 }
 function rsResetTypingContext(focus=true){
-  window.dispatchEvent(new Event('pcr:typing-reset'));
+  window.dispatchEvent?.(new Event('pcr:typing-reset'));
   for(const job of live.keys)job.resolve(false);live.keys=[];
   clearTimeout(live.timer);live.timer=null;live.generation++;live.sent='';live.paused=false;
   $('typeText').value='';composing=false;

@@ -1,0 +1,19 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
+async function fixture(t,{reduced=false}={}){
+  const dom=new JSDOM('<section class="appearanceSettings"></section><div id="rs"><div id="remoteSwipePad"></div></div>',{runScripts:'outside-only',pretendToBeVisual:true,url:'https://pc.test'}),w=dom.window,pad=w.document.getElementById('remoteSwipePad'),frames=new Map(),strokes=[],tips=[];let time=0,next=0,delivered=0;
+  w.rs={on:1};w.PCRAuth={signedIn:true};w.PCRAppearance={light:false};w.matchMedia=()=>({matches:reduced,addEventListener(){}});w.performance.now=()=>time;w.requestAnimationFrame=fn=>{frames.set(++next,fn);return next;};w.cancelAnimationFrame=id=>frames.delete(id);pad.getBoundingClientRect=()=>({left:0,top:0,width:300,height:160});pad.addEventListener('pointermove',()=>delivered++);
+  const context={clearRect(){},setTransform(){},beginPath(){},moveTo(){},lineTo(){},stroke(){strokes.push({width:this.lineWidth,colour:this.strokeStyle});},ellipse(x,y,rx,ry){tips.push({rx,ry});},fill(){}};w.HTMLCanvasElement.prototype.getContext=()=>context;
+  w.eval(fs.readFileSync(path.join(__dirname,'../public/touch-trail.js'),'utf8'));await new Promise(setImmediate);t.after(()=>w.close());
+  const pointer=(type,x,{id=1,width=20,height=20,pressure=.4}={})=>{const e=new w.Event(type,{bubbles:true,cancelable:true});Object.assign(e,{pointerId:id,pointerType:'touch',buttons:1,clientX:x,clientY:40,width,height,pressure});pad.dispatchEvent(e);return e;};
+  return{w,pad,frames,strokes,tips,delivered:()=>delivered,pointer,tick:ms=>{time+=ms;const pending=[...frames.values()];frames.clear();for(const fn of pending)fn(time);}};
+}
+test('the trail uses contact/pressure, passes input through and fades until no animation frame remains',async t=>{
+  const f=await fixture(t);assert.equal(f.frames.size,0);f.pointer('pointerdown',10,{width:12,height:10,pressure:.1});const move=f.pointer('pointermove',25,{width:12,height:10,pressure:.1});assert.equal(move.defaultPrevented,false);f.tick(16);const narrow=f.strokes.at(-1).width,firstAlpha=parseFloat(f.strokes.at(-1).colour.split(',').at(-1));f.tick(200);assert.ok(parseFloat(f.strokes.at(-1).colour.split(',').at(-1))<firstAlpha);f.pointer('pointerdown',50,{id:2,width:48,height:40,pressure:.9});f.pointer('pointermove',70,{id:2,width:48,height:40,pressure:.9});f.tick(16);assert.ok(f.strokes.at(-1).width>narrow*2);assert.equal(f.delivered(),2);f.tick(500);assert.equal(f.frames.size,0);
+});
+test('turning it off, Lightweight appearance and leaving Remote Screen stop drawing and release the canvas',async t=>{
+  const f=await fixture(t);f.pointer('pointerdown',10);f.tick(16);f.w.PCRTouchTrail.set(false);assert.equal(f.frames.size,0);assert.equal(f.pad.querySelector('canvas').width,1);f.w.PCRTouchTrail.set(true);f.w.PCRAppearance.light=true;f.w.dispatchEvent(new f.w.Event('pcr:appearance'));f.pointer('pointerdown',20);assert.equal(f.frames.size,0);assert.equal(f.w.document.querySelector('[data-touch-trail]').disabled,true);f.w.PCRAppearance.light=false;f.w.dispatchEvent(new f.w.Event('pcr:appearance'));f.pointer('pointerdown',30);assert.equal(f.frames.size,1);f.w.dispatchEvent(new f.w.CustomEvent('pcr:page',{detail:{id:'home'}}));assert.equal(f.frames.size,0);
+});
+test('high-rate input stays bounded and reduced-motion defaults can be explicitly enabled in Settings',async t=>{
+  const f=await fixture(t,{reduced:true});assert.equal(f.w.PCRTouchTrail.enabled,false);f.pointer('pointerdown',10);assert.equal(f.frames.size,0);f.w.PCRTouchTrail.set(true);for(let n=0;n<500;n++)f.pointer('pointermove',n%300,{width:500,height:500,pressure:1});f.tick(16);assert.ok(f.strokes.length<=96);assert.ok(f.strokes.every(row=>row.width<=80));assert.equal(f.w.localStorage.getItem('pcr_touch_trail'),'true');
+});

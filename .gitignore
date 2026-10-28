@@ -3,6 +3,7 @@ RemoteAgent/bin/
 RemoteAgent/obj/
 RemoteAgent/.vs/
 config.json
+config.json.tmp
 .remembered-sessions.json*
 .google-accounts.json*
 test/FrameEncoderChecks/bin/

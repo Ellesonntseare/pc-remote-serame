@@ -5,6 +5,9 @@
 - [x] Android remote full screen keeps the interactive WebView visible and uses native immersive bars, with direct touch mode. Media custom views also keep the renderer visible. Back/closing Remote Screen restores the system bars.
 - [x] Removed the visible Trackpad header, inner pad/scroll labels and latency readout/polling. Kept the scroll line/arrows and accessibility descriptions. Enter is deep blue and Backspace red.
 - [x] 33 focused typing, floating-window and input-transport checks passed; the served full-screen touch/label/colour check passed. The Windows helper compiles with stable field identity/bounds and does not read PC text values.
+- [x] Settings → Appearance has a fading finger trail, sized from contact area and pressure where the phone reports them. Drawing stops after fading and while hidden; Lightweight appearance pauses it.
+- [x] Settings → Connection → Connected devices supports inline renaming of the PC host and app devices. Names survive reconnect/restart and remain editable with settings/clipboard sync disabled.
+- [x] 23 focused settings, discovery, naming and keyboard checks passed. Real mobile Chromium verified retained typing, full-screen taps, saved device names and trail rendering/fading with no page errors.
 - [ ] Complete final CI, publish the signed 2.1.2 APK/installer and update the running personal host.
 - [ ] Physical Android Home gesture, IME and immersive-view checks still need the phone.
 
