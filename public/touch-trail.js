@@ -2,15 +2,16 @@
 (()=>{
   function mount(){
     const pad=document.getElementById('remoteSwipePad'),screen=document.getElementById('rs');if(!pad||!screen)return;
+    const surface=pad.closest('.remoteSwipeSurfaces')||pad;
     const key='pcr_touch_trail',reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)');
     const read=()=>{try{const value=localStorage.getItem(key);return value===null?!reduced?.matches:value==='true';}catch{return !reduced?.matches;}};
     let enabled=read(),frame=0,width=0,height=0,dpr=1;
-    const traces=new Map(),duration=450,canvas=document.createElement('canvas');canvas.className='remoteTouchTrail';canvas.setAttribute('aria-hidden','true');canvas.width=canvas.height=1;pad.append(canvas);
+    const traces=new Map(),duration=450,canvas=document.createElement('canvas');canvas.className='remoteTouchTrail';canvas.setAttribute('aria-hidden','true');canvas.width=canvas.height=1;surface.append(canvas);
     const context=canvas.getContext('2d',{alpha:true,desynchronized:true});if(!context){canvas.remove();return;}
     const light=()=>window.PCRAppearance?.light||document.documentElement.dataset.appearance==='light';
     const allowed=()=>enabled&&!light()&&!document.hidden&&!screen.classList.contains('hide')&&!screen.classList.contains('screenClean')&&!document.body.classList.contains('pcrMiniWindow')&&(typeof rs==='undefined'||!!rs.on);
     function stop(){if(frame)cancelAnimationFrame(frame);frame=0;traces.clear();context.clearRect(0,0,width,height);canvas.width=canvas.height=1;width=height=0;}
-    function size(){const rect=pad.getBoundingClientRect();if(rect.width<=0||rect.height<=0)return null;const ratio=Math.min(2,window.devicePixelRatio||1);if(rect.width!==width||rect.height!==height||ratio!==dpr){width=rect.width;height=rect.height;dpr=ratio;canvas.width=Math.ceil(width*dpr);canvas.height=Math.ceil(height*dpr);context.setTransform(dpr,0,0,dpr,0,0);}return rect;}
+    function size(){const rect=surface.getBoundingClientRect();if(rect.width<=0||rect.height<=0)return null;const ratio=Math.min(2,window.devicePixelRatio||1);if(rect.width!==width||rect.height!==height||ratio!==dpr){width=rect.width;height=rect.height;dpr=ratio;canvas.width=Math.ceil(width*dpr);canvas.height=Math.ceil(height*dpr);context.setTransform(dpr,0,0,dpr,0,0);}return rect;}
     function pump(){if(!frame)frame=requestAnimationFrame(draw);}
     function draw(time){
       frame=0;if(!allowed()){stop();return;}context.clearRect(0,0,width,height);context.lineCap='round';context.lineJoin='round';
@@ -33,8 +34,8 @@
       points.push({x:Math.max(0,Math.min(width,event.clientX-bounds.left)),y:Math.max(0,Math.min(height,event.clientY-bounds.top)),w,h,size:Math.sqrt(w*h),at:performance.now()});if(points.length>96)points.shift();pump();
     }
     // Passive decoration: pointer capture, gestures and PC input remain owned by the pad.
-    for(const name of ['pointerdown','pointermove'])pad.addEventListener(name,event=>sample(event),{passive:true});
-    if(!('PointerEvent'in window))for(const name of ['touchstart','touchmove'])pad.addEventListener(name,event=>{for(const touch of event.touches)sample({clientX:touch.clientX,clientY:touch.clientY,width:(touch.radiusX||16)*2,height:(touch.radiusY||16)*2,pressure:touch.force||.4},touch.identifier);},{passive:true});
+    for(const name of ['pointerdown','pointermove'])surface.addEventListener(name,event=>sample(event),{passive:true});
+    if(!('PointerEvent'in window))for(const name of ['touchstart','touchmove'])surface.addEventListener(name,event=>{for(const touch of event.touches)sample({clientX:touch.clientX,clientY:touch.clientY,width:(touch.radiusX||16)*2,height:(touch.radiusY||16)*2,pressure:touch.force||.4},touch.identifier);},{passive:true});
     const row=document.createElement('label');row.className='devicePreference touchTrailSetting';row.innerHTML='<span><strong>Finger trail</strong><small></small></span><input type="checkbox" data-touch-trail aria-label="Fading finger trail on the touchpad">';
     (document.querySelector('.appearanceSettings')||document.getElementById('workspaceSettingsPreferences'))?.append(row);const toggle=row.querySelector('input'),hint=row.querySelector('small');
     function update(){toggle.checked=enabled;toggle.disabled=!!light();hint.textContent=light()?'Paused in Lightweight appearance.':'Fades behind your finger. Uses contact size and pressure when available.';if(!allowed())stop();}

@@ -33,3 +33,12 @@
 .remoteSwipeDockHeader:empty,.remoteSwipeDockHeader:not(:has(> :not([hidden]))){display:none}
 #rs #remoteSwipeDock .dockQuickKeys>[data-remote-key="13"]{background:#073da1;border-color:#376dc7;color:#fff}
 #rs #remoteSwipeDock .dockQuickKeys>[data-remote-key="8"]{background:#a32132;border-color:#ce4b5d;color:#fff}
+
+/* One continuous touch surface; the right-hand scroll guide stays inside it. */
+#remoteSwipeDock .remoteSwipeSurfaces{position:relative;gap:0;border:1px solid #3c6c7b;border-radius:20px;background:radial-gradient(ellipse at 45% 0,#123a484d,transparent 75%),#061d29;overflow:hidden;isolation:isolate}
+#remoteSwipeDock .remoteSwipePad,#remoteSwipeDock .remoteScrollRail{border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
+#remoteSwipeDock .remoteScrollRail{z-index:2;padding-left:3px;padding-right:3px;color:#71d4d2}
+#remoteSwipeDock .remoteScrollRail.active{background:#68e2d00c}
+#remoteSwipeDock .remoteSwipeSurfaces:has(:focus-visible){outline:2px solid #8cd9ce;outline-offset:-2px}
+#remoteSwipeDock .remoteSwipePad:focus-visible,#remoteSwipeDock .remoteScrollRail:focus-visible{outline:0}
+#remoteSwipeDock .remoteSwipePad.dragging{box-shadow:none}
