@@ -84,6 +84,7 @@ object DeviceCompanion {
     fun foreground(context: Context, active: Boolean) {
         initialize(context); focused = active
         if (active && link != null && socket == null) openSocket(link!!)
+        else if(active&&ready)socket?.send(JSONObject().put("type","clipboard-resume").put("after",revision).toString())
     }
     fun context(pageId: String, pcInput: Boolean) {
         page = pageId.take(40)
@@ -207,7 +208,7 @@ object DeviceCompanion {
             }.getOrNull()
             main.post {
                 if (link !== current || revision != expectedRevision || lastCopyTime != localCopyAtStart) return@post
-                if (file == null) notifyState("Picture could not sync · copy it again to retry") else {
+                if (file == null) { revision=0;notifyState("Picture waiting for the PC · reconnect to retry") } else {
                     val uri = FileProvider.getUriForFile(app, "${app.packageName}.clipfiles", file)
                     applyClip(current, value, ClipData.newUri(app.contentResolver, "PC Remote picture", uri))
                 }
@@ -224,9 +225,9 @@ object DeviceCompanion {
     }
     private fun applyClip(current: Link, value: JSONObject, clip: ClipData) {
         if (link !== current || !sharedEnabled) return
-        appliedId = value.optString("id"); appliedHash = value.optString("hash"); lastLocalHash = appliedHash
         suppressedClip = clip
-        runCatching { clipboard.setPrimaryClip(clip) }.onFailure { notifyState("Android paused clipboard access · open PC Remote") }
+        runCatching { clipboard.setPrimaryClip(clip) }.onSuccess {appliedId = value.optString("id"); appliedHash = value.optString("hash"); lastLocalHash = appliedHash}
+            .onFailure {revision=0;notifyState("Android paused clipboard access · open PC Remote")}
     }
     fun captureClipboard() {
         if (!::app.isInitialized || link == null || !sharedEnabled || (!focused && !defaultKeyboard())) return
