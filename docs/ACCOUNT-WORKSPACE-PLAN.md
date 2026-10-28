@@ -16,14 +16,14 @@ This is the active implementation plan after personal 2.1.3. The current persona
 - [x] Implement a native catalogue for known folders, OneDrive, pinned/frequent folders and ready drives, including drive capacity. Filter archive shell items out of filesystem folders.
 - [x] Connect the catalogue to an asynchronous, cached file-location provider. Keep filesystem fallback and configured locations. Avoid recursive watchers on drive roots.
 - [x] Compile the Windows helper and verify the real folder catalogue. Seven focused provider/workspace checks passed.
-- [ ] Rebuild the Files workspace structure against the screenshots, with responsive inner scrolling and working existing actions.
+- [x] Rebuild the Files workspace structure against the screenshots, with responsive inner scrolling and working existing actions.
 - [x] Add persistent per-account workspace/history storage. SQLite keeps full event text and indexed history; list responses use previews and pagination. Restart, deduplication and account-isolation checks passed. The Windows installer already bundles Node 22; source now requires Node 22.13 or newer.
 - [x] Link main Google owner and local-owner identity; isolate other accounts' account data. Integration checks verify shared preferences/history across both sign-in methods and across host restart. Online account counts also combine those methods.
 - [x] Scope existing settings/clipboard/shared-content sync to accounts and migrate the main owner's existing data. The main owner retains the original sync file; other account stores are separate. Integration checks verify isolated settings, inventories and deliveries.
-- [ ] Record server-side actions, transfers and clipboard events; update completed/paused/resumed/cancelled records without duplicates.
-- [ ] Sync favourites, file view, folder tabs/bookmarks, supported preferences and saved workspace state without replaying remote input or duplicating transfers.
-- [ ] Provide a full account History page and synchronise it across active devices, with search/filtering and retained clipboard text.
-- [ ] Check reconnects, server restart, Google/local owner linking, other-account isolation and cross-device updates.
+- [x] Record server-side actions, transfers and clipboard events; update completed/paused/resumed/cancelled records without duplicates.
+- [x] Sync favourites, file view, folder tabs/bookmarks, supported preferences and saved workspace state without replaying remote input or duplicating transfers.
+- [x] Provide a full account History page and synchronise it across active devices, with search/filtering and retained clipboard text.
+- [x] Check reconnects, server restart, Google/local owner linking, other-account isolation and cross-device updates.
 - [ ] Run appropriate full checks, responsive/live Windows checks, native builds and Android signing checks as required; publish and update the personal host.
 
 ## Current implementation state
@@ -44,3 +44,13 @@ The native helper identified the six known folders, OneDrive, the custom sidebar
 - Keep device-bound permissions, Android content-tree URIs and native device identifiers on their own devices. Sync the account-level definitions/capabilities without applying another phone's local URI or permissions.
 - Maintain bounded polling, coalesced writes, pagination and incremental revisions. Retain all recorded events without rendering or transferring the entire history on each refresh.
 - Never stage the user's untracked `start-at-login.bat`, private config/account/session stores or runtime output.
+
+## Implemented after the foundation
+
+- Explorer now has working folder tabs, native sidebar icons, matched date/size columns and usable compact actions. Two real Chromium contexts verified matching folder/tab changes, history search and full text. Layouts at 1024, 844, 390 and 320 pixels had no page errors or document overflow. Full Windows copy/cut/paste and Recycle Bin remain follow-up file operations rather than placeholder controls.
+- History UI supports search, activity/device filtering, older pages and full-text detail; pinned text and old snippets migrate to the account. Open entries survive history refreshes.
+- A hidden Windows clipboard listener uses change notifications and shuts down with the host. Native readiness and an existing clipboard event were verified without printing or modifying clipboard contents. Clipboard text is retained; file/image events retain metadata.
+- Upload completion, HTTP delivery/interruption, folder/file operations, shared content, settings/device rename and supported screen/audio/camera/presentation/recording/page/native transfer events enter account history. Stable transfer IDs and client event IDs deduplicate retries. HTTP delivery alone is not proof that an OS has saved a file; native completion is a separate report.
+- Shared file workspace, compose drafts, transfer progress and folder-sync metadata now use account state. Native permissions/URIs, pending file handles and remote input remain local. Defaults are distinguished from explicit edits; key revisions prevent stale workspace updates from silently replacing other keys.
+- Two-client tests verify folder selection/scroll state, history delivery, disconnected draft recovery and no native/input replay. API tests verify restart durability, canonical owner linking, other-account isolation, batch validation, migration and revision conflicts.
+- The first complete Windows test run had 343/344 pass; its guest-action audit regression was fixed, then all 17 related account/guest/file checks passed. Final CI/release checks are required before publishing.

@@ -81,6 +81,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view v2.1.3-preview || gh release create v2.1.3-preview --draft --prerelease --target "$GITHUB_SHA" --title "PC Remote 2.1.3 Personal Preview" --notes "Personal preview: persistent typing, Home-button floating view and fullscreen touch controls."
-          cp android/build/outputs/apk/debug/android-debug.apk PC-Remote-Android-2.1.3.apk
-          gh release upload v2.1.3-preview PC-Remote-Android-2.1.3.apk --clobber
+          gh release view v2.1.4-preview || gh release create v2.1.4-preview --draft --prerelease --target "$GITHUB_SHA" --title "PC Remote 2.1.4 Personal Preview" --notes "Personal preview: Windows Explorer workspace and shared account activity, preferences, folders and drafts."
+          cp android/build/outputs/apk/debug/android-debug.apk PC-Remote-Android-2.1.4.apk
+          gh release upload v2.1.4-preview PC-Remote-Android-2.1.4.apk --clobber

@@ -14,6 +14,7 @@ const {createSyncHub}=require('./sync-hub');
 const {createAccountWorkspace}=require('./account-workspace');
 const {createAccountAPI}=require('./account-api');
 const {accountScope}=require('./account-scope');
+const {createClipboardWatch}=require('./clipboard-watch');
 const {saveDeviceName}=require('./host-settings');
 const {createNetworkDevices}=require('./network-devices');
 const nativeClipboard=require('./native-clipboard');
@@ -62,7 +63,7 @@ const PWA_ASSETS = new Map([
   ...['mission-control','camera-sharing','local-connection'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/media-recording.js',['media-recording.js','text/javascript; charset=utf-8']],
   ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
-  ...['workspace-settings','device-links','device-input','typing-controls','home-panels','native-window','window-presentation','touch-trail','explorer-workspace'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
+  ...['workspace-settings','device-links','device-input','typing-controls','home-panels','native-window','window-presentation','touch-trail','explorer-workspace','account-workspace'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/screen-packets.js', ['screen-packets.js', 'text/javascript; charset=utf-8']],
   ['/hold-repeat.js', ['hold-repeat.js', 'text/javascript; charset=utf-8']],
   ['/privacy-mode.js', ['privacy-mode.js', 'text/javascript; charset=utf-8']],
@@ -199,6 +200,7 @@ function createApp(options={}) {
   const sessions = new Map(), strikes = new Map(), activity=[];
   const accountData=options.accountWorkspace||createAccountWorkspace({file:options.workspaceFile||':memory:'}),accountAPI=createAccountAPI({store:accountData});
   const workspaceScope=token=>accountScope(sessions.get(token),identity=>google.isOwner(identity));
+  let clipboardObserver=null,clipboardEcho=null;
   const nativeFeatures=options.nativeFeatures||createNativeFeatures({root:ROOT});
   const displayPrivacy=options.displayPrivacy||createDisplayPrivacy({root:ROOT});
   const audioSockets=new Set();
@@ -209,8 +211,8 @@ function createApp(options={}) {
   const smart=createSmartQuality();
   const hostIdentity=os.hostname()+'|'+os.homedir();
   const locationProvider=options.useWindowsLocations&&nativeFeatures.fileLocations?createLocationProvider({native:()=>nativeFeatures.fileLocations(),fallback:options.fileLocationsProvider||(()=>options.fileLocations||[])}):options.fileLocationsProvider;
-  const fileTransfers=createFileTransfers({directory:options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers'),maxBytes:options.maxFileBytes,watch:options.discovery===true,locations:pcLocations(options.fileLocations),locationsProvider:locationProvider,thumbnailProvider:options.thumbnailProvider||(!options.disableAgent&&nativeFeatures.fileThumbnail?file=>nativeFeatures.fileThumbnail(file):undefined)});
-  const syncHub=createSyncHub({identity:hostIdentity,onActivity:(scope,event)=>{try{accountData.record(scope,event);}catch{console.error('Account activity could not be saved.');}},onRegister:(scope,token,device)=>{const session=sessions.get(token);if(session&&(session.clientId!==device.id||session.deviceName!==device.name)){session.clientId=device.id;session.deviceName=device.name;saveSessions();}},file:options.syncFile,stageFiles:fileTransfers.stageFromPC,getFileRevision:()=>fileTransfers.revision,getHostName:()=>hostname,setHostName:async name=>{try{await options.setDeviceName?.(name);}catch{throw Object.assign(Error('The PC name could not be saved. Check the host configuration file.'),{status:500});}hostname=name;discovery?.rename(name);},clipboard:options.clipboardProvider||{get:()=>nativeClipboard(ROOT,'get'),set:text=>nativeClipboard(ROOT,'set',text)}});
+  const fileTransfers=createFileTransfers({onActivity:(actor,event)=>{if(actor?.accountKey)accountData.record(actor.accountKey,{...event,device:actor.device||'PC Remote'});},directory:options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers'),maxBytes:options.maxFileBytes,watch:options.discovery===true,locations:pcLocations(options.fileLocations),locationsProvider:locationProvider,thumbnailProvider:options.thumbnailProvider||(!options.disableAgent&&nativeFeatures.fileThumbnail?file=>nativeFeatures.fileThumbnail(file):undefined)});
+  const syncHub=createSyncHub({identity:hostIdentity,onActivity:(scope,event)=>{if(event.action==='clipboard.sent')clipboardEcho={text:event.text,at:Date.now()};try{accountData.record(scope,event);}catch{console.error('Account activity could not be saved.');}},onRegister:(scope,token,device)=>{const session=sessions.get(token);if(session&&(session.clientId!==device.id||session.deviceName!==device.name)){session.clientId=device.id;session.deviceName=device.name;saveSessions();}},file:options.syncFile,stageFiles:fileTransfers.stageFromPC,getFileRevision:()=>fileTransfers.revision,getHostName:()=>hostname,setHostName:async name=>{try{await options.setDeviceName?.(name);}catch{throw Object.assign(Error('The PC name could not be saved. Check the host configuration file.'),{status:500});}hostname=name;discovery?.rename(name);},clipboard:options.clipboardProvider||{get:()=>nativeClipboard(ROOT,'get'),set:text=>nativeClipboard(ROOT,'set',text)}});
   const networkDevices=createNetworkDevices({enabled:options.discovery===true&&allowLan});
   const sessionKey=token=>crypto.createHash('sha256').update(token).digest('hex');
   if(options.sessionFile)try{
@@ -233,7 +235,7 @@ function createApp(options={}) {
     pendingInput.clear();
   }
   let agent=null, agentPreset=null, agentMeta=null, agentBuffer=new ScreenPacketReader(MAX_PACKET), agentReady=false;
-  const record=(ip,text,preview,token)=>{activity.unshift({t:Date.now(),ip,text,...typeof preview==='string'&&{preview:preview.slice(0,2000)}});activity.length=Math.min(20,activity.length);const scope=token?workspaceScope(token):'owner';if(scope)try{accountData.record(scope,{label:text,device:sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC host',type:/Copied text/i.test(text)?'clipboard':/screen/i.test(text)?'screen':/privacy/i.test(text)?'privacy':/signed|paired|session/i.test(text)?'session':'activity',action:/Copied text/i.test(text)?'clipboard.copied':'activity.recorded',...typeof preview==='string'&&{text:preview}});}catch{console.error('Account activity could not be saved.');}};
+  const record=(ip,text,preview,token)=>{if(text==='Copied text to PC'&&typeof preview==='string')clipboardEcho={text:preview,at:Date.now()};activity.unshift({t:Date.now(),ip,text,...typeof preview==='string'&&{preview:preview.slice(0,2000)}});activity.length=Math.min(20,activity.length);const scope=token?(workspaceScope(token)||(sessions.get(token)?.role==='guest'?'owner':null)):'owner';if(scope)try{accountData.record(scope,{label:text,device:sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC host',type:/Copied text/i.test(text)?'clipboard':/screen/i.test(text)?'screen':/privacy/i.test(text)?'privacy':/signed|paired|session/i.test(text)?'session':'activity',action:/Copied text/i.test(text)?'clipboard.copied':'activity.recorded',...typeof preview==='string'&&{text:preview}});}catch{console.error('Account activity could not be saved.');}};
   const cookie=(req,name=COOKIE_NAME)=>{
     const raw=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='));
     return raw?raw.slice(name.length+1):'';
@@ -609,7 +611,7 @@ function createApp(options={}) {
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
         return respond(res,200,{ok:true,account:sessions.get(token).account||null,paired:sessions.get(token).role!=='account'});
       }
-      if(await accountAPI.handle(req,res,{pathname,scope:workspaceScope(token),device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC Remote',readJson:jsonBody,respond}))return;
+      if(await accountAPI.handle(req,res,{pathname,scope:workspaceScope(token),valid:()=>!!sessions.get(token)&&sessions.get(token).until>Date.now(),device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC Remote',readJson:jsonBody,respond}))return;
       if(sessions.get(token).role==='account'&&!['/api/unpair','/api/session','/api/presence'].includes(pathname))return respond(res,403,{error:'Your Google account is signed in. Pair this PC before accessing its controls or files.',needsPairing:true});
       if(await syncHub.handle(req,res,{pathname,token,accountKey:workspaceScope(token)||'owner',role:sessions.get(token)?.role,readJson:jsonBody,respond}))return;
       if(pathname==='/api/host/send'&&req.method==='POST'||pathname==='/api/host/targets'&&req.method==='GET'){
@@ -755,7 +757,7 @@ function createApp(options={}) {
         const permission=pathname.startsWith('/api/files/uploads')||pathname==='/api/files/mkdir'?'upload':'download';
         if(!permits(token,permission))return respond(res,403,{error:(permission==='upload'?'Sending files':'PC file access')+' was not approved.'});
       }
-      if(await fileTransfers.handle(req,res,{pathname,token,allowLocations:sessions.get(token)?.role==='owner',chunkBytes:viaTunnel?1024*1024:options.localChunkBytes||8*1024*1024,accountContext:sessions.get(token)?.role==='guest'?undefined:accountContext,readJson:jsonBody,respond:(response,status,data,headers)=>respond(response,status,sessions.get(token)?.role==='guest'&&data.folder?{...data,folder:'Shared transfer folder'}:data,headers)}))return;
+      if(await fileTransfers.handle(req,res,{pathname,token,activityContext:{accountKey:workspaceScope(token)||'owner',device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC Remote'},allowLocations:sessions.get(token)?.role==='owner',chunkBytes:viaTunnel?1024*1024:options.localChunkBytes||8*1024*1024,accountContext:sessions.get(token)?.role==='guest'?undefined:accountContext,readJson:jsonBody,respond:(response,status,data,headers)=>respond(response,status,sessions.get(token)?.role==='guest'&&data.folder?{...data,folder:'Shared transfer folder'}:data,headers)}))return;
       if(req.method==='GET'&&pathname==='/api/status'){
         const guest=sessions.get(token).role==='guest';
         return respond(res,200,{ok:true,name:guest?'Shared PC':hostname,...accessInfo(token),...(permits(token,'status')?{uptime:Math.round(os.uptime()),cpu,mem:Math.round(100*(1-os.freemem()/os.totalmem())),system:systemMetrics.get()}:{}),log:guest?[]:accountData.list(workspaceScope(token)||'owner',{limit:6}).events.map(event=>({t:event.time,text:event.label,...event.preview&&{preview:event.preview}})),screen:enabled&&process.platform==='win32'&&permits(token,'screen')});
@@ -925,10 +927,21 @@ function createApp(options={}) {
       });
     });
   });
-  function stop(){stopping=true;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();}
+  function stop(){stopping=true;accountAPI.close();clipboardObserver?.close();clipboardObserver=null;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();}
   server.on('close',()=>{sessionAdmin.close();google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();nativeVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   if(options.discovery===true)discovery=require('./local-discovery').advertise(server,{name:hostname,identity:hostIdentity,enabled:allowLan});
-  server.once('close',()=>{networkDevices.close();void syncHub.close();accountData.close();});
+  server.once('close',()=>{networkDevices.close();clipboardObserver?.close();clipboardObserver=null;void syncHub.close();accountData.close();});
+  function clipboardPreferences(){
+    const enabled=!stopping&&options.observeClipboard===true&&!options.disableAgent&&accountData.getValue('owner','history.preferences')?.clipboardCapture!==false;
+    if(!enabled){clipboardObserver?.close();clipboardObserver=null;return;}if(clipboardObserver)return;
+    clipboardObserver=createClipboardWatch({root:ROOT,...options.clipboardWatchDependencies,onChange:value=>{
+      if(value.kind==='text'&&clipboardEcho?.text===value.text&&Date.now()-clipboardEcho.at<1500){clipboardEcho=null;return;}
+      const files=(value.files||[]).slice();while(files.length&&Buffer.byteLength(JSON.stringify(files))>24000)files.pop();
+      accountData.record('owner',{id:'pc-clipboard:'+value.id,type:'clipboard',action:'clipboard.captured',label:value.initial?'PC clipboard at host start':value.kind==='text'?'Copied text on PC':value.kind==='files'?'Copied files on PC':value.kind==='image'?'Copied an image on PC':'PC clipboard changed',device:hostname,text:value.kind==='text'?value.text:'',payload:{kind:value.kind,initial:!!value.initial,...files.length&&{files,total:value.files.length}}});
+    }});
+  }
+  clipboardPreferences();const stopClipboardPreferences=accountData.subscribe(scope=>{if(scope==='owner')clipboardPreferences();});
+  server.once('close',()=>{stopClipboardPreferences();clipboardObserver?.close();clipboardObserver=null;});
   return {server,pin,port,addresses:interfaces,stop};
 }
 if(require.main===module){
@@ -938,7 +951,7 @@ if(require.main===module){
   catch(e) { if(e.code!=='ENOENT'){console.error('Cannot load config.json:',e.message);process.exit(1);} }
   const allowLan=config.allowLan!==false;
   if(typeof config.password!=='string'||!config.password||['serame','admin'].includes(config.password)){console.error('Set your owner password in local config.json, or use the Windows host setup. The old default sign-ins are disabled.');process.exit(1);}
-  const app=createApp({workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
+  const app=createApp({workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),observeClipboard:true,useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
   app.server.listen(app.port,allowLan?'0.0.0.0':'127.0.0.1',()=>{
     const actual=app.server.address().port;
     const ip=app.addresses.find(a=>a.startsWith('192.168.'))||app.addresses[0]||'127.0.0.1';

@@ -23,3 +23,24 @@ test('settings, device inventories and shared deliveries follow the account rath
   await f.call(local,'/api/sync/send',{text:'https://example.test/shared',target:'*'});assert.equal((await f.call(google,'/api/sync/state')).json.inbox.length,1);assert.equal((await f.call(other,'/api/sync/state')).json.inbox.length,0);
   const event={id:'phone-event-1',action:'camera.started',label:'Phone camera started',payload:{source:'phone'}};await f.call(local,'/api/history/events',{events:[event]});await f.call(google,'/api/history/events',{events:[event]});assert.equal((await f.call(local,'/api/history?type=camera')).json.events.length,1);
 });
+
+test('workspace conflicts are explicit and incremental waiting wakes only for the same account',async t=>{
+  const f=await fixture(t),local=await f.local(),google=await f.google('owner@example.test'),other=await f.google('other@example.test');
+  const first=(await f.call(local,'/api/workspace',{changes:{'files.view':'details'},expected:{'files.view':0}})).json;
+  assert.equal(first.values['files.view'].revision,1);
+  const historyAfter=(await f.call(local,'/api/workspace')).json.historyRevision;const waiting=f.call(google,'/api/workspace?after=1&historyAfter='+historyAfter+'&wait=1500');
+  await f.call(other,'/api/workspace',{changes:{'files.view':'icons'}});
+  await f.call(local,'/api/workspace',{changes:{'files.view':'icons'},expected:{'files.view':1}});
+  const result=await waiting;assert.equal(result.status,200);assert.equal(result.json.values['files.view'].value,'icons');
+  const conflict=await f.call(google,'/api/workspace',{changes:{'files.view':'details','files.favourites':['@downloads']},expected:{'files.view':1,'files.favourites':0}});
+  assert.equal(conflict.status,409);assert.equal(conflict.json.conflicts['files.view'].value,'icons');assert.equal((await f.call(local,'/api/workspace')).json.values['files.favourites'],undefined);
+});
+
+test('saved text migration retains original time and is idempotent, and event batches reject invalid records atomically',async t=>{
+  const f=await fixture(t),local=await f.local(),time=1700000000000,items=[{text:'An older pinned snippet',source:'Phone',time}];
+  const first=await f.call(local,'/api/history/import',{items}),second=await f.call(local,'/api/history/import',{items});assert.deepEqual(first.json.accepted,second.json.accepted);
+  const entry=(await f.call(local,'/api/history/'+encodeURIComponent(first.json.accepted[0].id))).json.event;assert.equal(entry.time,time);assert.equal(entry.text,items[0].text);
+  const before=(await f.call(local,'/api/history')).json.eventCount;
+  const result=await f.call(local,'/api/history/events',{events:[{id:'valid-first',action:'audio.started',label:'Audio'},{id:'invalid-last',action:'input.replay',label:'Must not run'}]});
+  assert.equal(result.status,400);assert.equal((await f.call(local,'/api/history')).json.eventCount,before);
+});

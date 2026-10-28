@@ -1,3 +1,19 @@
+# Personal app 2.1.4 account workspace and Explorer — 28 October 2026
+
+- [x] Discovered actual Windows folders, Shell Home entries, OneDrive and drives without moving files. Explorer layout, folder tabs, native icons, grouping, capacity and real existing file actions are connected.
+- [x] Linked the main Google/local owner identity and isolated other accounts. Added durable indexed history, full copied text, search/filter/pagination, pins and legacy-snippet migration.
+- [x] Added native event-driven clipboard observation, transfer/file/shared/settings/feature activity and stable retry IDs.
+- [x] Synced supported preferences, favourites, file view/sort/tabs/selection/scroll, compose drafts, live transfer progress and folder-sync metadata. Device permissions and input are never replayed.
+- [x] Verified two independent browsers, cross-device tab/folder/history changes, offline draft recovery and canonical account/restart isolation. Responsive reviews at 320/390/844/1024 px had no page errors or outer overflow. Native clipboard readiness/read and clean shutdown passed without printing clipboard contents.
+- [x] Windows helper compiles without warnings. The initial full suite had one audit regression; it was corrected and all related checks passed.
+- [ ] Final Windows/portable CI, native checks, APK unit/signing checks and installer/runtime verification.
+- [ ] Publish signed personal 2.1.4 assets and deploy the host.
+- [ ] Physical Android regression pass remains required on the phone.
+
+Usage and boundaries: [USING-2.1.4.md](docs/USING-2.1.4.md). Details: [account workspace plan](docs/ACCOUNT-WORKSPACE-PLAN.md).
+
+---
+
 # Personal app 2.1.3 fullscreen and Files — 28 October 2026
 
 - [x] Added one-finger PC scrolling at the right edge of fullscreen, a Fit action and a visible exit control. Fullscreen fits portrait/landscape and returns to Fit after closing typing.

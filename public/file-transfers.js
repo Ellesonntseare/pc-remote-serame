@@ -56,7 +56,7 @@
     }
   }
   function rememberText(text,source){
-    if(!text||text.length>250000)return;const previous=history.find(item=>item.text===text);history=history.filter(item=>item.text!==text);
+    if(!text||text.length>250000)return;window.PCRAccountWorkspace?.set('drafts.compose',text);if(source==='Copied on this device')window.PCRAccountWorkspace?.record('clipboard.local',source,{source},undefined,text);const previous=history.find(item=>item.text===text);history=history.filter(item=>item.text!==text);
     history.unshift({text,source,time:Date.now(),pinned:previous?.pinned===true});saveHistory();renderHistory();
   }
   saveHistory();renderHistory();el('clipboardSearch').addEventListener('input',renderHistory);el('clipboardClear').addEventListener('click',()=>{history=history.filter(item=>item.pinned);saveHistory();renderHistory();status('Unpinned clipboard history cleared on this device.');});
@@ -215,8 +215,8 @@
     try{if(!navigator.clipboard?.writeText)throw Error();await navigator.clipboard.writeText(text);rememberText(text,'Copied on this device');status('Copied. Paste it into any app on this device.');}
     catch{if(!dialog.open)return;el('filesNote').select();try{if(!document.execCommand('copy'))throw Error();rememberText(text,'Copied on this device');status('Copied to this device.');}catch{status('Text selected. Use Copy from your browser or phone menu.');}}
   });
-  el('clipboardPaste').addEventListener('click',async()=>{const epoch=authEpoch;try{const text=await navigator.clipboard.readText();if(epoch!==authEpoch||!dialog.open)return;el('filesNote').value=text;status('Text pasted. Send it to the PC when ready.');}catch{if(epoch===authEpoch&&dialog.open)status('Long-press this text field and choose Paste, or press Ctrl+V.');}});
+  el('clipboardPaste').addEventListener('click',async()=>{const epoch=authEpoch;try{const text=await navigator.clipboard.readText();if(epoch!==authEpoch||!dialog.open)return;el('filesNote').value=text;window.PCRAccountWorkspace?.set('drafts.compose',text);status('Text pasted. Send it to the PC when ready.');}catch{if(epoch===authEpoch&&dialog.open)status('Long-press this text field and choose Paste, or press Ctrl+V.');}});
   let authEpoch=0,account='';
-  function accountChanged(){const next=window.PCRAuth?.signedIn?(window.PCRAuth.role==='owner'?'owner':'guest:'+window.PCRAuth.guestId):'';if(next===account)return;account=next;authEpoch++;pausedBatch=null;el('filesProgress').hidden=true;transferRows=[];publishTransfer(-1,{},true);if(batch){batch.cancelled=true;batch.xhr?.abort();}history=[];pending=[];files=[];folders=[];batchList.replaceChildren();batchList.hidden=true;fileCache.clear();el('filesNote').value='';el('filesSearch').value='';el('clipboardSearch').value='';el('filesFolderPath').textContent='';el('filesStatus').textContent='';if(next==='owner'){loadHistory();loadPending();}historySection.hidden=next!=='owner';renderHistory();renderPending();render();close();window.PCRGuestAccess?.applyPermissions();}
+  function accountChanged(){const next=window.PCRAuth?.signedIn?(window.PCRAuth.role==='owner'?'owner':'guest:'+window.PCRAuth.guestId):'';if(next===account)return;account=next;authEpoch++;pausedBatch=null;el('filesProgress').hidden=true;transferRows=[];publishTransfer(-1,{},true);if(batch){batch.cancelled=true;batch.xhr?.abort();}history=[];pending=[];files=[];folders=[];batchList.replaceChildren();batchList.hidden=true;fileCache.clear();el('filesNote').value='';el('filesSearch').value='';el('clipboardSearch').value='';el('filesFolderPath').textContent='';el('filesStatus').textContent='';if(next==='owner'){loadHistory();loadPending();}historySection.hidden=!!window.PCRAccountHistory||next!=='owner';renderHistory();renderPending();render();close();window.PCRGuestAccess?.applyPermissions();}
   window.addEventListener('pcr:auth',accountChanged);accountChanged();
 })();

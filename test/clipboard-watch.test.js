@@ -1,0 +1,10 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),{EventEmitter}=require('node:events'),{PassThrough}=require('node:stream');
+const {createClipboardWatch}=require('../clipboard-watch');
+function fixture(t,onChange){const child=new EventEmitter();child.stdout=new PassThrough();child.stderr=new PassThrough();child.stdin=new PassThrough();child.exitCode=null;child.kill=()=>{child.exitCode=0;child.emit('close');};child.stdin.on('finish',()=>{child.exitCode=0;child.emit('close');});const events=[],states=[],calls=[];const watcher=createClipboardWatch({root:process.cwd(),platform:'win32',exists:()=>true,spawnImpl:(file,args,options)=>{calls.push({file,args,options});return child;},onChange:value=>{events.push(value);onChange?.(value);},onState:state=>states.push(state)});t.after(()=>watcher.close());return{watcher,child,events,states,calls};}
+test('clipboard observation is event driven, decodes fragmented lines and closes its hidden native helper',t=>{
+  const f=fixture(t);assert.deepEqual(f.calls[0].args,['--clipboard-watch']);assert.equal(f.calls[0].options.windowsHide,true);f.child.stdout.write('{"type":"rea');f.child.stdout.write('dy"}\n');assert.equal(f.watcher.active,true);f.child.stdout.write(JSON.stringify({type:'clipboard',kind:'text',id:'native-1',text:'Meeting notes 😀'})+'\n');assert.equal(f.events.length,1);assert.equal(f.events[0].text,'Meeting notes 😀');f.child.stdout.write('{"type":"clipboard","kind":"text","id":"bad/id","text":"skip"}\n');assert.equal(f.events.length,1);f.watcher.close();assert.equal(f.watcher.active,false);assert.equal(f.child.stdin.writableEnded,true);
+});
+test('a storage error cannot crash the clipboard reader and a later successful event recovers',t=>{
+  let fail=true;const f=fixture(t,()=>{if(fail)throw Error('Storage unavailable');});f.child.stdout.write('{"type":"ready"}\n');assert.doesNotThrow(()=>f.child.stdout.write('{"type":"clipboard","kind":"text","id":"one","text":"first"}\n'));assert.equal(f.watcher.active,false);fail=false;f.child.stdout.write('{"type":"clipboard","kind":"text","id":"two","text":"second"}\n');assert.equal(f.watcher.active,true);
+});

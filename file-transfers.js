@@ -28,7 +28,7 @@ function byteRange(header,size){
   else{start=Number(m[1]);end=m[2]?Number(m[2]):size-1;if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=size||start>end)throw problem(416,'Requested range is unavailable.');end=Math.min(end,size-1);}
   return {start,end};
 }
-function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],watch=false,locationsProvider,thumbnailProvider}={}){
+function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],watch=false,locationsProvider,thumbnailProvider,onActivity}={}){
   const root=path.resolve(directory),uploads=new Map(),thumbnails=require('./file-thumbnails').createThumbnails(thumbnailProvider);let diskReady;
   let mutation=Promise.resolve();function commit(change){const next=mutation.then(change);mutation=next.catch(()=>{});return next;}
   let revision=Date.now();const watched=new Map();
@@ -48,9 +48,11 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
     }
     return target(name);
   }
+  function activity(actor,event){if(!actor||!onActivity)return;try{onActivity(actor,event);}catch{console.error('File activity could not be saved.');}}
+  function completed(u){if(!u.complete||!u.file)return;activity(u.activityContext,{id:'upload:'+u.id+':complete',type:'transfer',action:'transfer.uploaded',label:'Uploaded '+u.name,payload:{direction:'upload',name:u.file.name,label:u.name,size:u.file.size,status:'complete',transferId:u.id}});}
   const partial=id=>path.join(root,'.pcr-upload-'+id+'.part'),metadata=id=>path.join(root,'.pcr-upload-'+id+'.json');
   async function availableLocations(allowed){const available=[{id:'',label:'Transfers'}];if(allowed)for(const item of roots.values()){try{const stat=await fsp.lstat(item.directory);if(stat.isDirectory()&&!stat.isSymbolicLink())available.push({id:item.id,label:item.label,...item.kind&&{kind:item.kind},...item.capacity&&{capacity:item.capacity}});}catch{}}return available;}
-  const record=u=>({version:1,...u.syncETag&&{syncETag:u.syncETag},id:u.id,token:u.token,account:u.account,secretHash:u.secretHash,name:u.name,...u.relativePath&&{relativePath:u.relativePath},size:u.size,received:u.received,until:u.until,complete:!!u.complete,...u.publishName&&{publishName:u.publishName},...u.file&&{file:u.file}});
+  const record=u=>({version:1,...u.activityContext&&{activityContext:u.activityContext},...u.syncETag&&{syncETag:u.syncETag},id:u.id,token:u.token,account:u.account,secretHash:u.secretHash,name:u.name,...u.relativePath&&{relativePath:u.relativePath},size:u.size,received:u.received,until:u.until,complete:!!u.complete,...u.publishName&&{publishName:u.publishName},...u.file&&{file:u.file}});
   async function persist(u){const file=metadata(u.id),temp=file+'.tmp';await fsp.unlink(temp).catch(e=>{if(e.code!=='ENOENT')throw e;});const handle=await fsp.open(temp,'wx',0o600);try{await handle.writeFile(JSON.stringify(record(u)));await handle.sync();}finally{await handle.close();}await fsp.rename(temp,file);}
   async function removeDisk(u){for(const file of [partial(u.id),metadata(u.id),metadata(u.id)+'.tmp'])await fsp.unlink(file).catch(e=>{if(e.code!=='ENOENT')throw e;});}
   async function ensure(){
@@ -70,7 +72,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
             // A request can die after writing bytes but before committing its offset.
             await fsp.truncate(partial(id),u.received);
           }
-          u.temp=partial(id);u.busy=false;uploads.set(id,u);
+          u.temp=partial(id);u.busy=false;uploads.set(id,u);completed(u);
         }catch{await removeDisk({id}).catch(()=>{});}
       }
       for(const entry of entries){const match=/^\.pcr-upload-([a-f0-9]{32})\.(?:part|json\.tmp)$/.exec(entry.name);if(match&&!uploads.has(match[1]))await fsp.unlink(path.join(root,entry.name)).catch(()=>{});}
@@ -87,13 +89,13 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
       else{try{await fsp.lstat(out);throw problem(409,'Another device created this file. Keep both copies.');}catch(error){if(error.code!=='ENOENT')throw error;}}
       // A sibling temporary file allows atomic replacement on the target volume.
       if(before)await fsp.rename(temp,out);else{await fsp.copyFile(temp,out,fs.constants.COPYFILE_EXCL);await fsp.unlink(temp);}
-      const stat=await fsp.lstat(out);u.complete=true;u.file={name,size:stat.size,modified:stat.mtimeMs,etag:fileETag(name,stat)};await persist(u);await fsp.unlink(u.temp);return u.file;
+      const stat=await fsp.lstat(out);u.complete=true;u.file={name,size:stat.size,modified:stat.mtimeMs,etag:fileETag(name,stat)};await persist(u);await fsp.unlink(u.temp);completed(u);return u.file;
     }finally{await fsp.unlink(temp).catch(()=>{});}
   }
   async function finish(u){
-    if(u.complete)return u.file;
+    if(u.complete){completed(u);return u.file;}
     if(u.syncETag)return commit(()=>finishSync(u));
-    async function complete(name){u.complete=true;u.file={name,size:u.size,modified:Date.now()};try{await persist(u);}catch(e){u.complete=false;throw e;}await fsp.unlink(u.temp).catch(e=>{if(e.code!=='ENOENT')throw e;});return u.file;}
+    async function complete(name){u.complete=true;u.file={name,size:u.size,modified:Date.now()};try{await persist(u);}catch(e){u.complete=false;throw e;}await fsp.unlink(u.temp).catch(e=>{if(e.code!=='ENOENT')throw e;});completed(u);return u.file;}
     // A stop between publishing the link and saving completion must not produce a duplicate.
     if(u.publishName){try{const [source,stored]=await Promise.all([fsp.stat(u.temp),safeTarget(u.publishName).then(file=>fsp.lstat(file))]);if(stored.isFile()&&!stored.isSymbolicLink()&&source.ino!==0&&source.ino===stored.ino&&source.dev===stored.dev)return await complete(u.publishName);}catch(e){if(e.code!=='ENOENT')throw e;}}
     const destination=u.relativePath||u.name,folder=destination.includes('/')?destination.slice(0,destination.lastIndexOf('/')+1):'',parsed=path.parse(u.name);
@@ -151,7 +153,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
     const centralOffset=offset;for(const bytes of central){await write(bytes);offset+=bytes.length;}
     const end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(entries.length,8);end.writeUInt16LE(entries.length,10);end.writeUInt32LE(offset-centralOffset,12);end.writeUInt32LE(centralOffset,16);await write(end);res.end();
   }
-  async function handle(req,res,{pathname,token,accountContext,readJson,respond,chunkBytes=CHUNK_BYTES,allowLocations=false}){
+  async function handle(req,res,{pathname,token,accountContext,readJson,respond,chunkBytes=CHUNK_BYTES,allowLocations=false,activityContext}){
     if(pathname!=='/api/files'&&!pathname.startsWith('/api/files/'))return false;
     const chunkLimit=Number.isSafeInteger(chunkBytes)?Math.max(CHUNK_BYTES,Math.min(8*CHUNK_BYTES,chunkBytes)):CHUNK_BYTES;
     try{
@@ -161,6 +163,11 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
       for(const key of ['name','path'])allowedName(url.searchParams.get(key));
       if(req.method!=='GET'&&req.method!=='HEAD'&&req.headers['x-pcr']!=='1')throw problem(403,'Request header missing');
       await ensure();
+      if(req.method==='GET'&&['/api/files/download','/api/files/folder'].includes(pathname)&&activityContext){
+        const name=url.searchParams.get('name')||'',hint=req.headers['x-pcr-transfer']||url.searchParams.get('transfer'),id=typeof hint==='string'&&/^[a-zA-Z0-9-]{16,80}$/.test(hint)?hint:crypto.randomUUID();let sent=false;
+        const event=status=>({id:'download:'+id+':'+status,type:'transfer',action:status==='sent'?'transfer.downloaded':'transfer.interrupted',label:(status==='sent'?'Downloaded ':'Download interrupted: ')+name.split('/').at(-1)+(pathname.endsWith('/folder')?'.zip':''),payload:{direction:'download',name,label:name.split('/').at(-1),status,transferId:id,size:Number(res.getHeader('Content-Length'))||0}});
+        res.once('finish',()=>{sent=true;if(res.statusCode>=200&&res.statusCode<300)activity(activityContext,event('sent'));});res.once('close',()=>{if(!sent&&res.headersSent&&res.statusCode>=200&&res.statusCode<300)activity(activityContext,event('interrupted'));});
+      }
       if(req.method==='GET'&&pathname==='/api/files/locations'){
         respond(res,200,{ok:true,locations:await availableLocations(allowLocations)});return true;
       }
@@ -202,12 +209,12 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
         const destination=body.destination||'';if(destination)relativePath(destination);const destDir=destination?await safeTarget(destination):root;if(!(await fsp.lstat(destDir)).isDirectory())throw problem(400,'Choose a destination folder.');
         const plans=[];for(const name of names){if(roots.has(name))throw problem(400,'PC locations cannot be renamed or moved.');const source=await safeTarget(name),stat=await fsp.lstat(source);if(stat.isSymbolicLink())throw problem(400,'Folder links cannot be moved.');const label=body.action==='rename'?filename(body.name):name.split('/').at(-1),parent=body.action==='rename'?name.split('/').slice(0,-1).join('/'):destination,next=(parent?parent+'/':'')+label;if(next===name)continue;if(next.startsWith(name+'/'))throw problem(400,'A folder cannot be moved inside itself.');if(names.some(other=>other!==name&&name.startsWith(other+'/')))throw problem(400,'Select the parent folder without its children.');const out=await safeTarget(next);try{await fsp.lstat(out);throw problem(409,'An item named '+label+' already exists. Choose another name or folder.');}catch(error){if(error.code!=='ENOENT')throw error;}plans.push({source,out,next,stat});}
         const moved=[];for(const plan of plans){try{if(plan.stat.isFile()){try{await fsp.link(plan.source,plan.out);}catch(error){if(!['EXDEV','EPERM','ENOTSUP'].includes(error.code))throw error;await fsp.copyFile(plan.source,plan.out,fs.constants.COPYFILE_EXCL);}await fsp.unlink(plan.source);}else await fsp.rename(plan.source,plan.out);moved.push(plan.next);}catch(error){throw problem(error.code==='EEXIST'?409:400,'Moved '+moved.length+' item(s). '+(error.code==='EXDEV'?'Folders must be moved within the same drive.':'This item changed or could not be moved. Refresh the folder.'));}}
-        respond(res,200,{ok:true,names:moved});return true;
+        activity(activityContext,{type:'files',action:body.action==='rename'?'files.renamed':'files.moved',label:(body.action==='rename'?'Renamed ':'Moved ')+moved.length+' item(s)',payload:{names:moved.slice(0,20),count:moved.length}});respond(res,200,{ok:true,names:moved});return true;
       }
       if(req.method==='POST'&&pathname==='/api/files/mkdir'){
         const body=await readJson(req,4096),name=relativePath(allowedName(body.path)),directory=await safeTarget(name,true);
         try{await fsp.mkdir(directory);}catch(e){if(e.code!=='EEXIST')throw e;const stat=await fsp.lstat(directory);if(!stat.isDirectory()||stat.isSymbolicLink())throw problem(409,'A file already uses that name.');}
-        respond(res,200,{ok:true,path:name});return true;
+        activity(activityContext,{type:'files',action:'files.folder-created',label:'Created folder '+name.split('/').at(-1),payload:{name}});respond(res,200,{ok:true,path:name});return true;
       }
       if(req.method==='GET'&&pathname==='/api/files'){
         const {files:list,truncated}=await listFiles(),groups=new Map();
@@ -235,7 +242,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
         const id=crypto.randomBytes(16).toString('hex'),secret=crypto.randomBytes(32).toString('hex'),temp=partial(id);
         const handle=await fsp.open(temp,'wx',0o600);await handle.close();
         const syncETag=body.replaceETag;if(syncETag!==undefined&&(!allowLocations||typeof syncETag!=='string'||!/^new$|^\"[a-f0-9]{64}\"$/.test(syncETag)))throw problem(400,'Refresh the sync folder before replacing a file.');
-        const u={id,token,...syncETag&&{syncETag},account:typeof accountContext==='string'&&accountContext?digest(accountContext):null,secretHash:digest(secret),temp,name,relativePath:destination,size,received:0,busy:false,until:Date.now()+RETENTION_MS};
+        const u={id,token,...activityContext&&{activityContext},...syncETag&&{syncETag},account:typeof accountContext==='string'&&accountContext?digest(accountContext):null,secretHash:digest(secret),temp,name,relativePath:destination,size,received:0,busy:false,until:Date.now()+RETENTION_MS};
         try{await persist(u);}catch(e){await removeDisk(u).catch(()=>{});throw e;}uploads.set(id,u);
         let file;try{if(size===0)file=await finish(u);}catch(error){await discard(u);throw error;}
         respond(res,200,{ok:true,id,resumeSecret:secret,received:0,chunkBytes:chunkLimit,complete:size===0,expires:u.until,...file&&{file}});return true;

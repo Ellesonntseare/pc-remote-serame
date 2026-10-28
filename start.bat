@@ -2,7 +2,9 @@
 setlocal
 cd /d "%~dp0"
 title PC Remote - Visible Windows Host
-where node.exe >nul 2>nul || (echo Node.js is missing. Install Node.js 20 or newer from https://nodejs.org & pause & exit /b 1)
+where node.exe >nul 2>nul || (echo Node.js is missing. Install Node.js 22.13 or newer from https://nodejs.org & pause & exit /b 1)
+node -e "const [a,b]=process.versions.node.split('.').map(Number);if(a<22||(a===22&&b<13)){console.error('Node.js 22.13 or newer is required for account history.');process.exit(1)}"
+if errorlevel 1 exit /b 1
 rem Reuse the active host before rebuilding its running desktop agent.
 node -e "const http=require('node:http');let done=false;function finish(code){if(!done){done=true;process.exit(code)}}const req=http.get({host:'127.0.0.1',port:Number(process.env.PORT||7666),path:'/api/ping',headers:{'X-PCR':'1'}},res=>{let data='';res.on('data',chunk=>{data+=chunk;if(data.length>4096)finish(11)});res.on('end',()=>{try{const value=JSON.parse(data);finish(res.statusCode===200&&value.ok===true&&(typeof value.requirePassword==='boolean'||typeof value.requirePin==='boolean')?10:11)}catch{finish(11)}})});req.setTimeout(2000,()=>{req.destroy();finish(11)});req.on('error',error=>finish(error.code==='ECONNREFUSED'?0:11));"
 if "%errorlevel%"=="10" (echo PC Remote is already running. Reusing the existing host. & exit /b 0)

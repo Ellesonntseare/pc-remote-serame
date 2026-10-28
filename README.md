@@ -1,5 +1,7 @@
 # PC Remote — Serame's personal remote app
 
+Personal 2.1.4 adds the Windows Explorer file workspace and shared account history, folders, drafts and supported preferences. See [the 2.1.4 guide](docs/USING-2.1.4.md) for use and platform limits.
+
 Version 2.0 adds one shared navigation bar, one Audio page, direct Windows H.264 video, completed-file actions, signed-in device management and an online indicator. See [direct video](docs/native-video.md) for engine details.
 
 Version 1.9 added background Android transfers, Share → PC Remote, a folder-based file manager, integrated remote video with fallback, efficient audio, the WebView microphone permission fix, a personal Windows installer, Lightweight appearance and simpler navigation. Air Mouse is removed. See [version 1.9](docs/version-1.9.md) for use and validation limits.
@@ -15,7 +17,7 @@ Installed project: `C:\Users\elles\Downloads\pc-remote-redesigned\PC-Remote-Sera
 3. Wait for dependencies and the Windows desktop agent to build. Keep the host and Cloudflare connector running.
 4. Reload the site on your phone and sign in with your configured Google administrator account or your private PC owner password.
 
-Node.js 20+ and the .NET 8 SDK are required. Initial setup needs internet access. Updates in the installed folder retain private configuration, remembered logins and transferred files. A source ZIP excludes those private files, dependencies and compiled output; the launcher rebuilds the required components.
+Node.js 22.13+ and the .NET 8 SDK are required. Initial setup needs internet access. Updates in the installed folder retain private configuration, remembered logins and transferred files. A source ZIP excludes those private files, dependencies and compiled output; the launcher rebuilds the required components.
 
 ## Login and guest approval
 

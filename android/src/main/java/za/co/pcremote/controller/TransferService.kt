@@ -116,7 +116,7 @@ class TransferService : Service() {
     private fun check(row:JSONObject) { synchronized(lock){if(row.optString("state") !in listOf("running","saving"))throw IOException("Transfer paused")} }
     private fun request(row:JSONObject,path:String):Request.Builder {
         if(!path.startsWith("/api/files/"))throw IllegalArgumentException("Invalid transfer action")
-        return Request.Builder().url(row.getString("origin")+path).header("Cookie",cookies[row.getString("origin")].orEmpty()).header("X-PCR","1")
+        return Request.Builder().url(row.getString("origin")+path).header("Cookie",cookies[row.getString("origin")].orEmpty()).header("X-PCR","1").header("X-PCR-Transfer",row.getString("id"))
     }
     private fun execute(row:JSONObject,builder:Request.Builder):Response {check(row);val call=client.newCall(builder.build());activeCall=call;return call.execute().also{if(it.code==401||it.code==403){it.close();throw IllegalStateException("Sign in again, then resume this transfer.")}}}
     private fun json(row:JSONObject,path:String,body:JSONObject?=null):JSONObject {
