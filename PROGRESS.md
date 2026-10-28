@@ -6,8 +6,9 @@
 - [x] Synced supported preferences, favourites, file view/sort/tabs/selection/scroll, compose drafts, live transfer progress and folder-sync metadata. Device permissions and input are never replayed.
 - [x] Verified two independent browsers, cross-device tab/folder/history changes, offline draft recovery and canonical account/restart isolation. Responsive reviews at 320/390/844/1024 px had no page errors or outer overflow. Native clipboard readiness/read and clean shutdown passed without printing clipboard contents.
 - [x] Windows helper compiles without warnings. The initial full suite had one audit regression; it was corrected and all related checks passed.
-- [ ] Final Windows/portable CI, native checks, APK unit/signing checks and installer/runtime verification.
-- [ ] Publish signed personal 2.1.4 assets and deploy the host.
+- [x] Full feature source fc2ae44 passed 347 Windows tests and 331 portable tests, native builds and encoder/audio checks. The final one-line sign-in progress-timer correction at 689bc74 passed focused regression and two-browser progress/folder/history checks. APK unit/version/signature checks passed on unchanged Android source; the final installer at 689bc74 passed bundled runtime/UI checks.
+- [x] Published [personal 2.1.4](https://github.com/Ellesonntseare/pc-remote-serame/releases/tag/v2.1.4-preview), tagged at 689bc74, with signed APK, installer and SHA256SUMS. APK SHA256: 4fec12d82a348c3041bd811edac3c7f5f3ccb1373ff39d80bd4f5a81a3b14467. Installer SHA256: 16c510e2e3b2815207ef178d05926302ab6a7fedcc7e554c29a1f07cb619b0ca.
+- [x] Updated the live Windows helper and Node host (PID 15480). Local/public HTTPS UI hashes match, and authenticated account history, native locations and C: capacity checks passed. The verification session was signed out. The signed APK is in the project root and PC Transfers.
 - [ ] Physical Android regression pass remains required on the phone.
 
 Usage and boundaries: [USING-2.1.4.md](docs/USING-2.1.4.md). Details: [account workspace plan](docs/ACCOUNT-WORKSPACE-PLAN.md).

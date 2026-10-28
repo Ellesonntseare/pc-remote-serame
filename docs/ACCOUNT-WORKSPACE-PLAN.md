@@ -24,7 +24,7 @@ This is the active implementation plan after personal 2.1.3. The current persona
 - [x] Sync favourites, file view, folder tabs/bookmarks, supported preferences and saved workspace state without replaying remote input or duplicating transfers.
 - [x] Provide a full account History page and synchronise it across active devices, with search/filtering and retained clipboard text.
 - [x] Check reconnects, server restart, Google/local owner linking, other-account isolation and cross-device updates.
-- [ ] Run appropriate full checks, responsive/live Windows checks, native builds and Android signing checks as required; publish and update the personal host.
+- [x] Run appropriate full checks, responsive/live Windows checks, native builds and Android signing checks as required; publish and update the personal host.
 
 ## Current implementation state
 
@@ -56,3 +56,5 @@ The native helper identified the six known folders, OneDrive, the custom sidebar
 - The first complete Windows test run had 343/344 pass; its guest-action audit regression was fixed, then all 17 related account/guest/file checks passed. Final CI/release checks are required before publishing.
 
 Final review also added retained chat/notes, voice/whiteboard activity and image/OCR/screenshot/recording preparation hooks. A stale-tab account header prevents a tab from writing the previous account’s cached state after its browser cookie changes accounts. Last-moment drafts flush synchronously on page exit. New focused tests cover those cases. The 51b13df base passed all 344 Windows and 328 portable checks plus native builds/codec checks; final hooks require the next complete run.
+
+Released personal 2.1.4 at 689bc74. Full source checks passed at fc2ae44 (347 Windows/331 portable); the final timer-handle correction passed focused and real two-browser checks. Final installer/runtime checks passed at 689bc74. APK source is unchanged from its signed 758af77 build. Local/public host verification passed and the verification session was revoked. Native Clipboard capture is enabled on the production host; QA fixtures use their own clipboard.

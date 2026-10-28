@@ -27,3 +27,7 @@ Use official documentation for current Android foreground-service/clipboard and 
 Use in-memory clipboard providers in every integration/browser fixture. An earlier Explorer browser test accidentally used the real native clipboard and replaced it with fixture text; the user was told. The fixture is now isolated. Never print or change the user's clipboard during QA. Native observation readiness may be tested read-only, printing only state/kind, not contents.
 
 No physical Android device is attached. Distinguish CI/native/browser checks from real Android IME, permission, background and Home/PiP testing.
+
+## Serame Keyboard approval
+
+The user identified Serame Keyboard, said it is not currently active but they can switch to it, and approved all six integration ideas: automatic shared clipboard, a synced/pinned clipboard strip, PC typing mode, Ctrl/Alt/Tab/Esc and shortcuts, voice dictation into the PC, and connection/transfer status above the keys. Target repository is Ellesonntseare/my-keyboard (README identifies Serame Keyboard). Do not use the separate Mathapelo keyboard or its private defaults. Embedding the Serame IME in PC Remote is a practical single-app approach; preserve normal phone typing and make PC mode explicit. No default keyboard has been changed on the phone.
