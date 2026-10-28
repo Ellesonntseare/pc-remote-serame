@@ -81,7 +81,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view v2.1.5-preview || gh release create v2.1.5-preview --draft --prerelease --target "$GITHUB_SHA" --title "PC Remote 2.1.5 Personal Preview" --notes "Personal preview: direct PC typing, integrated Serame Keyboard, shared text and picture clipboard, and redesigned Windows sharing."
-          test "$(gh release view v2.1.5-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
-          cp android/build/outputs/apk/debug/android-debug.apk PC-Remote-Android-2.1.5.apk
-          gh release upload v2.1.5-preview PC-Remote-Android-2.1.5.apk --clobber
+          gh release view v2.1.6-preview || gh release create v2.1.6-preview --draft --prerelease --target "$GITHUB_SHA" --title "PC Remote 2.1.6 Personal Preview" --notes "Android keyboard fix: preserve Back, Home and Recents while typing; keep Serame Keyboard clear of the navigation area in portrait and landscape. Install over PC Remote 2.1.5; the existing host remains compatible."
+          test "$(gh release view v2.1.6-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
+          cp android/build/outputs/apk/debug/android-debug.apk PC-Remote-Android-2.1.6.apk
+          gh release upload v2.1.6-preview PC-Remote-Android-2.1.6.apk --clobber

@@ -32,11 +32,15 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import java.io.File
 import java.security.MessageDigest
 import za.co.pcremote.controller.DeviceCompanion
+import za.co.pcremote.controller.KeyboardNavigation
 import android.Manifest
 import android.content.pm.PackageManager
 import android.speech.RecognitionListener
@@ -150,6 +154,13 @@ class SerameKeyboardService : InputMethodService() {
     override fun onCreateInputView(): View {
         outer = FrameLayout(this)
         outer.setBackgroundColor(C.BG)
+        // The IME framework normally fits its own navigation region. Some
+        // edge-to-edge/OEM windows leave an overlap, so reserve only that part.
+        outer.viewTreeObserver.addOnGlobalLayoutListener { fitNavigationSpace() }
+        ViewCompat.setOnApplyWindowInsetsListener(outer) { view, insets ->
+            view.post { fitNavigationSpace() }
+            insets
+        }
 
         root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
@@ -182,11 +193,41 @@ class SerameKeyboardService : InputMethodService() {
         outer.addView(bubbleView, FrameLayout.LayoutParams(dp(48), dp(52)))
 
         render()
+        outer.post { fitNavigationSpace() }
         return outer
+    }
+
+    override fun onWindowShown() {
+        super.onWindowShown()
+        showNavigationBar()
+        if (::outer.isInitialized) outer.post { fitNavigationSpace() }
+    }
+
+    private fun showNavigationBar() {
+        val imeWindow = window?.window ?: return
+        WindowCompat.getInsetsController(imeWindow, imeWindow.decorView).apply {
+            isAppearanceLightNavigationBars = false
+            show(WindowInsetsCompat.Type.navigationBars())
+        }
+    }
+
+    private fun fitNavigationSpace() {
+        if (!::outer.isInitialized || !outer.isAttachedToWindow) return
+        val decor = window?.window?.decorView ?: return
+        val insets = ViewCompat.getRootWindowInsets(decor) ?: return
+        val bars = insets.getInsets(WindowInsetsCompat.Type.navigationBars() or
+            WindowInsetsCompat.Type.captionBar() or WindowInsetsCompat.Type.displayCutout())
+        val position = IntArray(2)
+        outer.getLocationInWindow(position)
+        val padding = KeyboardNavigation.overlap(position[0], position[1], outer.width, outer.height,
+            decor.width, decor.height, KeyboardNavigation.Space(bars.left, bars.right, bars.bottom))
+        if (outer.paddingLeft != padding.left || outer.paddingRight != padding.right || outer.paddingBottom != padding.bottom)
+            outer.setPadding(padding.left, 0, padding.right, padding.bottom)
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        showNavigationBar()
         val t = info?.inputType ?: 0
         val cls = t and InputType.TYPE_MASK_CLASS
         val v = t and InputType.TYPE_MASK_VARIATION

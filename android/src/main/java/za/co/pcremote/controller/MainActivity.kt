@@ -41,6 +41,8 @@ import java.net.HttpURLConnection
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import androidx.webkit.JavaScriptReplyProxy
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import org.json.JSONObject
 import java.net.URI
 
@@ -71,6 +73,8 @@ class MainActivity : Activity() {
     private var pendingShortcut=""
     private var pendingSyncFolder:JSONObject?=null
     private var keyboardGeneration=0
+    private var phoneKeyboardRequested=false
+    private var phoneKeyboardVisible=false
     private var homeMiniReady=false
     private var homeMiniWidth=16
     private var homeMiniHeight=9
@@ -95,6 +99,14 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
         connectScreen = findViewById(R.id.connectScreen)
         web = findViewById(R.id.web)
+        window.decorView.viewTreeObserver.addOnGlobalLayoutListener {
+            val visible=ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime())==true
+            if(visible!=phoneKeyboardVisible){
+                if(!visible&&phoneKeyboardVisible){phoneKeyboardRequested=false;keyboardGeneration++}
+                phoneKeyboardVisible=visible
+                applySystemBars()
+            }
+        }
         error = findViewById(R.id.error)
         FolderSync.events={runOnUiThread{folderSyncEvent()}}
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).addPrimaryClipChangedListener(clipboardListener)
@@ -187,7 +199,7 @@ class MainActivity : Activity() {
                 fullscreenView=view;fullscreenCallback=callback
                 (findViewById<View>(android.R.id.content) as ViewGroup).addView(view,ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
                 // Keep canvas/WebCodecs streams alive under the full-screen surface.
-                web.visibility=View.VISIBLE;window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                web.visibility=View.VISIBLE;applySystemBars()
             }
             override fun onHideCustomView(){hideFullscreen()}
             override fun onPermissionRequestCanceled(request: PermissionRequest) { if(microphoneRequest===request)microphoneRequest=null }
@@ -464,11 +476,15 @@ class MainActivity : Activity() {
 
     private fun hidePhoneKeyboard(){
         keyboardGeneration++
+        phoneKeyboardRequested=false
+        applySystemBars()
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(web.windowToken,0)
     }
 
     private fun showPhoneKeyboard(){
         val generation=++keyboardGeneration
+        phoneKeyboardRequested=true
+        applySystemBars()
         web.requestFocus()
         var attempts=0
         fun show(){
@@ -508,9 +524,22 @@ class MainActivity : Activity() {
     override fun startActivity(intent:Intent,options:Bundle?){externalActivity=true;updateHomeMini(false);super.startActivity(intent,options)}
     private fun setRemoteFullscreen(enabled:Boolean){
         remoteFullscreenActive=enabled
-        if(Build.VERSION.SDK_INT>=30){if(enabled){window.insetsController?.hide(android.view.WindowInsets.Type.systemBars());window.insetsController?.systemBarsBehavior=android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE}else window.insetsController?.show(android.view.WindowInsets.Type.systemBars())}
-        else{@Suppress("DEPRECATION") window.decorView.systemUiVisibility=if(enabled)View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY else View.SYSTEM_UI_FLAG_VISIBLE}
-        if(enabled)window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)else window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        applySystemBars()
+    }
+    private fun applySystemBars(){
+        // Keep Back/Home/Recents available for both our IME and other keyboards.
+        // Restore immersive viewing only after the keyboard has actually closed.
+        val immersive=KeyboardNavigation.immersive(remoteFullscreenActive||fullscreenView!=null,phoneKeyboardRequested,phoneKeyboardVisible)
+        if(Build.VERSION.SDK_INT>=30){
+            window.insetsController?.let { controller ->
+                controller.systemBarsBehavior=if(immersive)android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else android.view.WindowInsetsController.BEHAVIOR_DEFAULT
+                if(immersive)controller.hide(android.view.WindowInsets.Type.systemBars())else controller.show(android.view.WindowInsets.Type.systemBars())
+            }
+        }else{
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility=if(immersive)View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY else View.SYSTEM_UI_FLAG_VISIBLE
+        }
+        if(immersive)window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)else window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
     }
     private fun minimisePc(width:Int,height:Int,notifyFailure:Boolean=true){
         if(!isAllowed(web.url?:""))return
@@ -711,7 +740,7 @@ class MainActivity : Activity() {
     private fun hideFullscreen(){
         fullscreenView?.let{(it.parent as? ViewGroup)?.removeView(it)};fullscreenView=null
         val callback=fullscreenCallback;fullscreenCallback=null;callback?.onCustomViewHidden()
-        window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        applySystemBars()
         if(selectedOrigin!=null)web.visibility=View.VISIBLE
     }
 
