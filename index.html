@@ -289,7 +289,7 @@ async function poll(){
     $('t-mem').textContent=Number.isFinite(d.mem)?d.mem+'%':'—';$('b-mem').style.width=(Number.isFinite(d.mem)?Math.min(100,d.mem):0)+'%';$('t-up').textContent=Number.isFinite(d.uptime)?fmtUp(d.uptime):'—';
     window.PCRDashboard?.updateStats(d);
     window.dispatchEvent(new CustomEvent('pcr:status',{detail:{...d,responseTime:Math.round(performance.now()-requestStarted)}}));
-    const logs=d.log||[];$('activityCount').textContent=logs.length+' event'+(logs.length===1?'':'s');
+    const logs=d.log||[],count=d.historyCount??logs.length;$('activityCount').textContent=count+' event'+(count===1?'':'s');
     const nextLogKey=generation+':'+JSON.stringify(logs);
     if(nextLogKey!==activityLogKey){
       activityLogKey=nextLogKey;

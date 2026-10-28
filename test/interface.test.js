@@ -1,10 +1,11 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),{JSDOM,CookieJar,VirtualConsole}=require('jsdom'),{createApp}=require('../server');
 // Served pages parse the complete style/script set; allow loaded CI runners to
-// finish real async UI work without changing the state assertions below.
+// finish real async UI work without changing the state assertions below. The
+// complete served bundle is slower to parse in JSDOM on shared Windows CI.
 // Check state after a delayed timer resumes, before declaring timeout. Keep
 // synchronous DOM reads in the same turn as the deadline check.
-async function until(predicate,timeout=10000){const end=Date.now()+timeout;for(;;){const result=predicate();if(result&&typeof result.then==='function'?await result:result)return;if(Date.now()>=end)throw Error('Interface did not reach the expected state');await new Promise(r=>setTimeout(r,15));}}
+async function until(predicate,timeout=20000){const end=Date.now()+timeout;for(;;){const result=predicate();if(result&&typeof result.then==='function'?await result:result)return;if(Date.now()>=end)throw Error('Interface did not reach the expected state');await new Promise(r=>setTimeout(r,15));}}
 async function fixture(t,appOptions={}){const dir=await fs.mkdtemp(path.join(__dirname,'.transfer-check-')),errors=[],windows=[];const app=createApp({password:'serame',disableAgent:true,disableActions:true,transferDirectory:dir,...appOptions});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
   async function page(options={}){const jar=new CookieJar(),console=new VirtualConsole();console.on('jsdomError',error=>{if(!error.message.includes('Could not parse CSS stylesheet'))errors.push(error.detail?.stack||error.message);});const dom=await JSDOM.fromURL(base,{runScripts:'dangerously',resources:'usable',pretendToBeVisual:true,cookieJar:jar,virtualConsole:console,beforeParse(window){
     if(options.android)window.PCRAndroid={postMessage:value=>options.android.push(JSON.parse(value))};
