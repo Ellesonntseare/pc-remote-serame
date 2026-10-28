@@ -34,7 +34,7 @@ function createScopeHub({file,clipboard,stageFiles,getFileRevision=()=>0,getHost
       return reply(404,{error:'Sync action not found.'});
     }catch(error){return reply(error.status||400,{error:error.status?error.message:'Sync could not finish. Reconnect to the PC and try again.'});}
   }
-  return {handle,enqueue,device:token=>deviceFor(token),devices:async()=>{await load();return devices();},revoke:token=>clients.delete(token),close:()=>saving};
+  return {handle,enqueue,pending:async token=>{await load();const device=deviceFor(token);return device?state.inbox.filter(item=>item.kind==='file'&&(item.target==='*'||item.target===device.id)&&item.source!==device.id&&!item.delivered.includes(device.id)).map(({delivered,...item})=>item):[];},device:token=>deviceFor(token),devices:async()=>{await load();return devices();},revoke:token=>clients.delete(token),close:()=>saving};
 }
 function createSyncHub(options={}){
   const scopes=new Map();
@@ -43,6 +43,6 @@ function createSyncHub(options={}){
     if(!scopes.has(key)){const file=key==='owner'?options.file:options.file?options.file.replace(/\.json$/,'')+'.'+crypto.createHash('sha256').update(key).digest('hex').slice(0,24)+'.json':undefined;scopes.set(key,createScopeHub({...options,file,onActivity:event=>options.onActivity?.(key,event),onRegister:(token,device)=>options.onRegister?.(key,token,device)}));}
     return scopes.get(key);
   }
-  return{handle:(req,res,context)=>scoped(context.accountKey||'owner').handle(req,res,context),enqueue:({accountKey='owner',...value})=>scoped(accountKey).enqueue(value),devices:(accountKey='owner')=>scoped(accountKey).devices(),device:(token,accountKey='owner')=>scoped(accountKey).device(token),revoke:token=>{for(const scope of scopes.values())scope.revoke(token);},close:()=>Promise.all([...scopes.values()].map(scope=>scope.close()))};
+  return{pending:(token,accountKey='owner')=>scoped(accountKey).pending(token),handle:(req,res,context)=>scoped(context.accountKey||'owner').handle(req,res,context),enqueue:({accountKey='owner',...value})=>scoped(accountKey).enqueue(value),devices:(accountKey='owner')=>scoped(accountKey).devices(),device:(token,accountKey='owner')=>scoped(accountKey).device(token),revoke:token=>{for(const scope of scopes.values())scope.revoke(token);},close:()=>Promise.all([...scopes.values()].map(scope=>scope.close()))};
 }
 module.exports={createSyncHub,SETTINGS};

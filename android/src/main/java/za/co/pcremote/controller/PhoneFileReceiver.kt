@@ -40,7 +40,7 @@ internal object PhoneFileReceiver {
         remember(context,"complete",id)
     }
     fun collect(context:Context,origin:String,cookie:String){worker.execute{runCatching{
-        client.newCall(Request.Builder().url(origin+"/api/sync/state").header("Cookie",cookie).header("X-PCR","1").build()).execute().use{response->
+        client.newCall(Request.Builder().url(origin+"/api/phone/inbox").header("Cookie",cookie).header("X-PCR","1").build()).execute().use{response->
             if(!response.isSuccessful)return@use
             val bytes=response.body?.byteStream()?.use{readBounded(it,1024*1024)}?:return@use
             val items=JSONObject(bytes.toString(Charsets.UTF_8)).optJSONArray("inbox")?:return@use
@@ -63,7 +63,7 @@ internal object PhoneFileReceiver {
         val destination=if(folder.isNotEmpty()){
             val tree=Uri.parse(folder);val document=DocumentsContract.buildDocumentUriUsingTree(tree,DocumentsContract.getTreeDocumentId(tree))
             val children=DocumentsContract.buildChildDocumentsUriUsingTree(tree,DocumentsContract.getDocumentId(document))
-            val duplicate=resolver.query(children,arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),null,null,null)?.use{cursor->var found=false;while(cursor.moveToNext()){if(cursor.getString(0)==name){found=true;break}};found}?:false
+            val duplicate=resolver.query(children,arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),null,null,null)?.use{cursor->var found=false;while(cursor.moveToNext()){if(cursor.getString(0).equals(name,ignoreCase=true)){found=true;break}};found}?:false
             require(!duplicate){"$name already exists in the receiving folder. Choose another folder; the original name is preserved."}
             DocumentsContract.createDocument(resolver,document,mime,name)?:error("Choose a writable receiving folder.")
         }else if(Build.VERSION.SDK_INT>=29){
@@ -77,6 +77,6 @@ internal object PhoneFileReceiver {
             val row=JSONObject().put("direction","download").put("name",name).put("uri",destination.toString()).put("path",path).put("inboxId",id).put("mediaStorePending",pending)
             val intent=Intent(context,TransferService::class.java).setAction(TransferService.ADD).putExtra("origin",origin).putExtra("cookie",cookie).putExtra("items",JSONArray().put(row).toString())
             (PhoneControlService.instance?:context).startForegroundService(intent);remember(context,"accepted",id)
-        }catch(error:Exception){runCatching{resolver.delete(destination,null,null)};throw error}
+        }catch(error:Exception){if(pending)runCatching{resolver.delete(destination,null,null)};throw error}
     }
 }

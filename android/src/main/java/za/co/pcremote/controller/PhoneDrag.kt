@@ -16,7 +16,7 @@ internal class PhoneDrag(private val service: AccessibilityService) {
     fun release(){
         main.removeCallbacks(watchdog)
         if(busy){lifting=true;return}
-        val old=stroke?:return;stroke=null;lifting=false
+        val old=stroke;if(old==null){lifting=false;return};stroke=null;lifting=false
         val path=Path().apply{moveTo(x,y)}
         runCatching{service.dispatchGesture(GestureDescription.Builder().addStroke(old.continueStroke(path,0,16,false)).build(),null,main)}
     }

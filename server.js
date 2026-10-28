@@ -626,6 +626,10 @@ function createApp(options={}) {
         const match=/^\/api\/companion\/devices\/([-a-zA-Z0-9]{12,80})\/command$/.exec(pathname);if(req.method==='POST'&&match){try{const body=await jsonBody(req,128*1024),result=await companions.request(scope,match[1],body.action,body.payload||{},body.action==='file-hash'?60000:15000);if(['ring','stop-ring'].includes(body.action))accountData.record(scope,{type:'devices',action:'devices.'+body.action,label:body.action==='ring'?'Find my phone started':'Find my phone stopped',device:sessions.get(token)?.deviceName||'PC Remote'});return respond(res,200,{ok:true,result});}catch(error){return respond(res,error.status||503,{error:error.status?error.message:'The phone could not complete that action.'});}}
         return respond(res,405,{error:'Device action unavailable.'});
       }
+      if(pathname==='/api/phone/inbox'&&req.method==='GET'){
+        if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Sign in as the owner to receive phone files.'});
+        return respond(res,200,{ok:true,inbox:await syncHub.pending(token,workspaceScope(token)||'owner')});
+      }
       if(pathname==='/api/phone/files'&&req.method==='POST'){
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Sign in as the owner to send files to a phone.'});
         try{

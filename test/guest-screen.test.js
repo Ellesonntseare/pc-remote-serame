@@ -120,6 +120,7 @@ test('phone file drop delivers original names to only the selected registered ow
   const body={target,names:[upload.json.file.name],group:'a'.repeat(32)};
   const delivered=await f.call('/api/phone/files',{method:'POST',cookie:f.owner,body});assert.equal(delivered.status,200);assert.equal(delivered.json.receiving,true);
   const offer=(await next(phone,v=>v.type==='file-offer')).offers[0];assert.equal(offer.name,name);assert.equal(offer.size,0);assert.match(offer.path,/^\/api\/files\/download\?name=/);
+  const inbox=await f.call('/api/phone/inbox',{cookie:f.owner});assert.equal(inbox.status,200);assert.equal(inbox.json.inbox[0].id,offer.id);assert.equal(inbox.json.clipboard,undefined,'file receiving does not fetch clipboard contents');
   assert.equal((await f.call('/api/phone/files',{method:'POST',cookie:f.owner,body:{...body,names:['../outside.txt']}})).status,400);
   const guest=await f.guest();assert.equal((await f.call('/api/phone/files',{method:'POST',cookie:guest.cookie,body})).status,403);
 });
