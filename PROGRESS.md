@@ -8,7 +8,9 @@
 - [x] Settings → Appearance has a fading finger trail, sized from contact area and pressure where the phone reports them. Drawing stops after fading and while hidden; Lightweight appearance pauses it.
 - [x] Settings → Connection → Connected devices supports inline renaming of the PC host and app devices. Names survive reconnect/restart and remain editable with settings/clipboard sync disabled.
 - [x] 23 focused settings, discovery, naming and keyboard checks passed. Real mobile Chromium verified retained typing, full-screen taps, saved device names and trail rendering/fading with no page errors.
-- [ ] Complete final CI, publish the signed 2.1.2 APK/installer and update the running personal host.
+- [x] Final CI passed: 323 Windows tests, 307 portable checks, native builds, codec checks and installer/runtime verification. The full local suite also passed all 323 tests. Android build/unit/signing checks passed; its native source is unchanged from the successful signed build at cea234a.
+- [x] Published the signed APK, matching Windows installer and SHA256SUMS in [the 2.1.2 preview release](https://github.com/Ellesonntseare/pc-remote-serame/releases/tag/v2.1.2-preview). Release tag and main contain verified functional source 87cd48b. The downloaded APK matches GitHub's SHA-256 digest.
+- [x] Updated the running Windows helper and personal Node host. Local and public HTTPS health/new-asset checks passed. The APK is also in PC Transfers and the project folder.
 - [ ] Physical Android Home gesture, IME and immersive-view checks still need the phone.
 
 ---
