@@ -235,7 +235,7 @@ function createApp(options={}) {
     pendingInput.clear();
   }
   let agent=null, agentPreset=null, agentMeta=null, agentBuffer=new ScreenPacketReader(MAX_PACKET), agentReady=false;
-  const record=(ip,text,preview,token)=>{if(text==='Copied text to PC'&&typeof preview==='string')clipboardEcho={text:preview,at:Date.now()};activity.unshift({t:Date.now(),ip,text,...typeof preview==='string'&&{preview:preview.slice(0,2000)}});activity.length=Math.min(20,activity.length);const scope=token?(workspaceScope(token)||(sessions.get(token)?.role==='guest'?'owner':null)):'owner';if(scope)try{accountData.record(scope,{label:text,device:sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC host',type:/Copied text/i.test(text)?'clipboard':/screen/i.test(text)?'screen':/privacy/i.test(text)?'privacy':/signed|paired|session/i.test(text)?'session':'activity',action:/Copied text/i.test(text)?'clipboard.copied':'activity.recorded',...typeof preview==='string'&&{text:preview}});}catch{console.error('Account activity could not be saved.');}};
+  const record=(ip,text,preview,token)=>{if(text==='Copied text to PC'&&typeof preview==='string')clipboardEcho={text:preview,at:Date.now()};activity.unshift({t:Date.now(),ip,text,...typeof preview==='string'&&{preview:preview.slice(0,2000)}});activity.length=Math.min(20,activity.length);const scope=token?(workspaceScope(token)||(sessions.get(token)?.role==='guest'?'owner':null)):'owner';if(scope)try{accountData.record(scope,{label:text,device:sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC host',type:/Copied text|clipboard/i.test(text)?'clipboard':/screen/i.test(text)?'screen':/privacy/i.test(text)?'privacy':/signed|paired|session/i.test(text)?'session':'activity',action:/Copied text/i.test(text)?'clipboard.copied':'activity.recorded',...typeof preview==='string'&&{text:preview}});}catch{console.error('Account activity could not be saved.');}};
   const cookie=(req,name=COOKIE_NAME)=>{
     const raw=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='));
     return raw?raw.slice(name.length+1):'';
@@ -644,7 +644,7 @@ function createApp(options={}) {
       if(pathname==='/api/ocr'||pathname==='/api/clipboard/image'){
         const ocr=pathname==='/api/ocr';if(!requiresHeader(req)||!permits(token,ocr?'screen':'clipboard'))return respond(res,403,{error:'This feature was not approved.'});
         if(ocr&&req.method!=='POST'||!['POST','GET'].includes(req.method))return respond(res,405,{error:'Action unavailable.'});
-        try{let data='';if(req.method==='POST'){const body=await jsonBody(req,12*1024*1024);png(body.data);data=body.data;}const mode=ocr?'ocr':req.method==='GET'?'clipboard-image-read':'clipboard-image-write';const result=options.imageTools?await options.imageTools(mode,data):await imageTool(ROOT,mode,data);return respond(res,200,result);}catch(e){return respond(res,400,{error:e.message});}
+        try{let data='';if(req.method==='POST'){const body=await jsonBody(req,12*1024*1024);png(body.data);data=body.data;}const mode=ocr?'ocr':req.method==='GET'?'clipboard-image-read':'clipboard-image-write';const result=options.imageTools?await options.imageTools(mode,data):await imageTool(ROOT,mode,data);if(result.ok)record(ip,ocr?'Read text from the PC screen':req.method==='GET'?'Read PC image clipboard':'Copied image to PC clipboard',ocr?String(result.text||'').slice(0,250000):undefined,token);return respond(res,200,result);}catch(e){return respond(res,400,{error:e.message});}
       }
       if(pathname.startsWith('/api/handoff')){
         if(sessions.get(token).role==='guest'||!requiresHeader(req))return respond(res,403,{error:'Sign into your owner account on both devices.'});
@@ -813,7 +813,7 @@ function createApp(options={}) {
   const cameraChannels=new Map(['pc','phone'].map(room=>[room,createWebRtcVideo({sessions,auth,sessionExpiry})]));
   const phoneAudio=createPhoneAudio({sessions,auth,sessionExpiry,openOutput:settings=>nativeFeatures.openAudioOutput(settings)});
   function cameraRevoke(token){phoneAudio.revoke(token);for(const channel of cameraChannels.values())channel.revoke(token);}
-  const collaboration=createCollaboration({sessions,auth,sessionExpiry});
+  const collaboration=createCollaboration({sessions,auth,sessionExpiry,accountKey:workspaceScope,onActivity:(scope,event)=>accountData.record(scope,event)});
   function rejectUpgrade(socket,status,message) {
     socket.on('error',()=>{});
     const body=JSON.stringify({error:message});

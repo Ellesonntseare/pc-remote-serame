@@ -2,13 +2,14 @@
 const crypto=require('node:crypto');
 const {SETTINGS}=require('./sync-hub');
 const allowedKey=key=>key.startsWith('setting:')?SETTINGS.has(key.slice(8)):/^(?:files\.(?:favourites|view|location|sorting|tabs|selection|columns)|workspace\.(?:recent|resume)|drafts\.compose|media\.preferences|controls\.shortcuts|history\.preferences|(?:transfers|folders)\.device:[a-zA-Z0-9-]{12,80})$/.test(key);
-const clientActions=new Set(['screen.opened','screen.closed','typing.started','typing.closed','audio.started','audio.stopped','audio.paused','camera.started','camera.stopped','recording.started','recording.saved','recording.stopped','screenshot.saved','presentation.started','presentation.stopped','page.opened','transfer.paused','transfer.resumed','transfer.cancelled','transfer.saved','files.selected','shared.opened','clipboard.local']);
+const clientActions=new Set(['screen.opened','screen.closed','typing.started','typing.closed','audio.started','audio.stopped','audio.paused','camera.started','camera.stopped','recording.started','recording.saved','recording.stopped','screenshot.saved','screenshot.prepared','recording.prepared','presentation.started','presentation.stopped','page.opened','transfer.paused','transfer.resumed','transfer.cancelled','transfer.saved','files.selected','shared.opened','clipboard.local']);
 function createAccountAPI({store}={}){
   const waiting=new Set();
   async function handle(req,res,{pathname,scope,device='PC Remote',valid=()=>true,readJson,respond}){
     if(pathname!=='/api/workspace'&&pathname!=='/api/history'&&!pathname.startsWith('/api/history/'))return false;
     const reply=(code,body)=>{respond(res,code,body);return true;};
     if(!scope)return reply(403,{error:'Sign in to your account to view its workspace.'});
+    if(req.headers['x-pcr-account']&&req.headers['x-pcr-account']!==scope)return reply(409,{error:'The signed-in account changed. Reloading your workspace.',accountChanged:true});
     if(req.headers['x-pcr']!=='1')return reply(403,{error:'Request header missing.'});
     try{
       const url=new URL(req.url,'http://localhost');

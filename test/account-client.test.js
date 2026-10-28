@@ -21,5 +21,6 @@ test('two device clients share saved state and history without replay, and pendi
   await until(async()=> (await call('/api/history?type=audio')).events.length===1);b.w.PCRAccountHistory.open('audio');await until(()=>b.w.document.querySelectorAll('.accountHistoryEntry').length===1);assert.match(b.w.document.querySelector('.accountHistoryEntry').textContent,/Phone microphone started/);
   b.workspace.location.positions['@downloads']=470;
   a.offline(true);a.w.PCRAccountWorkspace.set('drafts.compose','Text kept while disconnected');await sleep(200);assert.match(a.w.localStorage.getItem('pcr_account_workspace_v1:'+base+':owner'),/Text kept while disconnected/);a.offline(false);a.w.dispatchEvent(new a.w.Event('online'));await until(()=>b.w.document.getElementById('filesNote').value==='Text kept while disconnected');assert.equal(a.replayed+b.replayed,0);assert.equal(b.workspace.location.positions['@downloads'],470,'unrelated activity must not reset the working scroll position');
+  a.w.PCRAccountWorkspace.set('drafts.compose','Last edit before leaving');a.w.dispatchEvent(new a.w.Event('pagehide'));assert.match(a.w.localStorage.getItem('pcr_account_workspace_v1:'+base+':owner'),/Last edit before leaving/);
   const localEvents=(await call('/api/history?type=audio')).events;assert.equal(localEvents.length,1);
 });
