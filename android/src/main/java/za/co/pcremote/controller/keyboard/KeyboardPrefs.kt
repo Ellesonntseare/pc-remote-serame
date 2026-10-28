@@ -37,6 +37,16 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("autoCap", true)
         set(v) { sp.edit().putBoolean("autoCap", v).apply() }
 
+    var suggestions: Boolean
+        get() = sp.getBoolean("suggestions", true)
+        set(v) { sp.edit().putBoolean("suggestions", v).apply() }
+    var learnWords: Boolean
+        get() = sp.getBoolean("learnWords", true)
+        set(v) { sp.edit().putBoolean("learnWords", v).apply() }
+    var learnedWords: String
+        get() = sp.getString("learnedWords", "").orEmpty()
+        set(v) { sp.edit().putString("learnedWords", v).apply() }
+
     var showNumberRow: Boolean
         get() = sp.getBoolean("showNumberRow", true)
         set(v) { sp.edit().putBoolean("showNumberRow", v).apply() }

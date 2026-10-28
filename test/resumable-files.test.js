@@ -18,7 +18,7 @@ async function fixture(t){
 const create=(f,name,size)=>f.request('/api/files/uploads',{method:'POST',body:{name,size}});
 const put=(f,id,offset,body,token='owner')=>f.request('/api/files/uploads/'+id+'?offset='+offset,{method:'PUT',body,raw:true,token});
 const resume=(f,u,token='replacement',resumeSecret=u.resumeSecret)=>f.request('/api/files/uploads/'+u.id+'/resume',{method:'POST',token,body:{resumeSecret}});
-async function upload(f,name,body){const u=(await create(f,name,body.length)).json;if(body.length)return (await put(f,u.id,0,body)).json.file;return u.file;}
+async function upload(f,name,body,conflict){const u=(await f.request('/api/files/uploads',{method:'POST',body:{name,size:body.length,...conflict&&{conflict}}})).json;if(body.length)return (await put(f,u.id,0,body)).json.file;return u.file;}
 
 test('interrupted transfer resumes across a host restart and rotated login without restarting bytes',async t=>{
   const f=await fixture(t),content=crypto.randomBytes(1024*1024+67),created=await create(f,'music.mp3',content.length),u=created.json;
@@ -83,7 +83,7 @@ test('only allowlisted safe MIME families preview; HTML, SVG and unknown types a
 });
 
 test('duplicate names preserve every completed file and logout discards only that token’s interrupted transfers',async t=>{
-  const f=await fixture(t);const first=await upload(f,'same.txt',Buffer.from('first')),second=await upload(f,'same.txt',Buffer.from('second'));
+  const f=await fixture(t);const first=await upload(f,'same.txt',Buffer.from('first')),second=await upload(f,'same.txt',Buffer.from('second'),'rename');
   assert.equal(first.name,'same.txt');assert.equal(second.name,'same (1).txt');assert.equal((await f.request('/api/files/download?name=same.txt')).bytes.toString(),'first');
   const owner=(await create(f,'pending.zip',10)).json,other=(await f.request('/api/files/uploads',{method:'POST',token:'replacement',body:{name:'other.zip',size:10}})).json;await f.revoke('owner');assert.equal((await resume(f,owner)).status,404);assert.equal((await resume(f,other)).status,200);assert.equal((await f.request('/api/files')).json.total,2);
 });

@@ -61,6 +61,12 @@ class KeyboardSettingsActivity : Activity() {
         })
 
         text("Settings", 20f, C.TEXT, 28)
+        toggle("Show word suggestions", prefs.suggestions) { prefs.suggestions = it }
+        toggle("Learn my frequently typed words", prefs.learnWords) { prefs.learnWords = it }
+        button("Clear learned words") {
+            prefs.learnedWords = ""
+            Toast.makeText(this, "Learned words cleared", Toast.LENGTH_SHORT).show()
+        }
 
         val heightLabel = text("Key height: ${prefs.keyHeight}", 15f, C.TEXT, 12)
         seek(26, prefs.keyHeight - 38) {

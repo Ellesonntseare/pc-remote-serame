@@ -101,6 +101,9 @@ class SerameKeyboardService : InputMethodService() {
     private lateinit var root: LinearLayout
     private lateinit var topBar: LinearLayout
     private lateinit var body: LinearLayout
+    private lateinit var suggestionBar: LinearLayout
+    private var words=WordSuggestions()
+    private var typedWord=""
     private lateinit var bubbleView: TextView
 
     private val letterKeys = mutableListOf<Pair<TextView, Char>>()
@@ -137,7 +140,7 @@ class SerameKeyboardService : InputMethodService() {
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         clipboard.addPrimaryClipChangedListener(clipListener)
         DeviceCompanion.initialize(this)
-        companionObserver = DeviceCompanion.observe { if (::companionBar.isInitialized) buildCompanionBar() }
+        companionObserver = DeviceCompanion.observe { if (::companionBar.isInitialized) { buildCompanionBar();updateSuggestions() } }
     }
 
     override fun onDestroy() {
@@ -180,6 +183,12 @@ class SerameKeyboardService : InputMethodService() {
         root.addView(topBar)
         companionBar=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
         root.addView(companionBar)
+        suggestionBar=LinearLayout(this).apply {
+            orientation=LinearLayout.HORIZONTAL
+            layoutParams=LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(38))
+            setBackgroundColor(C.BAR)
+        }
+        root.addView(suggestionBar)
         root.addView(body)
         outer.addView(root)
 
@@ -228,6 +237,8 @@ class SerameKeyboardService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         showNavigationBar()
+        words=WordSuggestions(prefs.learnedWords)
+        typedWord=""
         val t = info?.inputType ?: 0
         val cls = t and InputType.TYPE_MASK_CLASS
         val v = t and InputType.TYPE_MASK_VARIATION
@@ -253,6 +264,58 @@ class SerameKeyboardService : InputMethodService() {
         shift = OFF
         if (::outer.isInitialized) render()
         autoCapitalize()
+    }
+
+    override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
+        super.onUpdateSelection(oldSelStart,oldSelEnd,newSelStart,newSelEnd,candidatesStart,candidatesEnd)
+        updateSuggestions()
+    }
+
+    private fun suggestionsAllowed(): Boolean {
+        val info=currentInputEditorInfo
+        return prefs.suggestions&&!isPassword&&fieldMode==MODE_TEXT&&!DeviceCompanion.typingToPC&&
+            ((info?.inputType?:0) and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS==0||info?.packageName==packageName)&&
+            (info?.imeOptions?:0) and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING==0
+    }
+
+    private fun updateSuggestions() {
+        if(!::suggestionBar.isInitialized)return
+        suggestionBar.removeAllViews()
+        suggestionBar.visibility=if(suggestionsAllowed()&&page==PAGE_LETTERS)View.VISIBLE else View.GONE
+        if(suggestionBar.visibility!=View.VISIBLE)return
+        val ic=currentInputConnection?:return
+        if(!ic.getSelectedText(0).isNullOrEmpty())return
+        val prefix=WordSuggestions.prefix(ic.getTextBeforeCursor(48,0)?.toString().orEmpty())
+        for(word in words.suggest(prefix,prefs.learnWords)) {
+            val candidate=TextView(this).apply {
+                text=word;contentDescription="Insert $word";gravity=Gravity.CENTER
+                setTextColor(C.TEXT);setTextSize(TypedValue.COMPLEX_UNIT_SP,16f)
+                layoutParams=LinearLayout.LayoutParams(0,dp(38),1f)
+                setOnClickListener {
+                    val connection=currentInputConnection?:return@setOnClickListener
+                    if(!suggestionsAllowed()||!connection.getSelectedText(0).isNullOrEmpty())return@setOnClickListener
+                    val actual=WordSuggestions.prefix(connection.getTextBeforeCursor(48,0)?.toString().orEmpty())
+                    if(actual!=prefix){updateSuggestions();return@setOnClickListener}
+                    val tail=connection.getTextAfterCursor(48,0)?.toString().orEmpty().takeWhile { it.isLetter()||it=='\''||it=='’' }
+                    connection.beginBatchEdit()
+                    try {
+                        if(prefix.isNotEmpty()||tail.isNotEmpty())connection.deleteSurroundingText(prefix.length,tail.length)
+                        connection.commitText(word+" ",1)
+                    }finally{connection.endBatchEdit()}
+                    if(prefs.learnWords){words.learn(word);prefs.learnedWords=words.saved()}
+                    typedWord="";autoCapitalize();updateSuggestions()
+                }
+            }
+            suggestionBar.addView(candidate)
+        }
+    }
+
+    private fun learnTypedWord() {
+        if(suggestionsAllowed()&&prefs.learnWords&&typedWord.isNotEmpty()) {
+            val actual=WordSuggestions.prefix(currentInputConnection?.getTextBeforeCursor(48,0)?.toString().orEmpty())
+            if(actual==typedWord){words.learn(actual);prefs.learnedWords=words.saved()}
+        }
+        typedWord=""
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
@@ -511,6 +574,7 @@ class SerameKeyboardService : InputMethodService() {
             PAGE_NUMPAD -> renderNumpad()
         }
         refreshLetters()
+        updateSuggestions()
     }
 
     private fun applyOneHanded() {
@@ -822,21 +886,27 @@ class SerameKeyboardService : InputMethodService() {
         if(DeviceCompanion.typingToPC){DeviceCompanion.type(text);return}
         currentInputConnection?.commitText(text, 1)
         autoCapitalize()
+        typedWord=""
+        updateSuggestions()
     }
 
     private fun typeLetter(c: Char) {
         val out = if (shift != OFF) c.uppercaseChar() else c
         if(ctrl||alt){val codes=mutableListOf<Int>();if(ctrl)codes.add(17);if(alt)codes.add(18);codes.add(c.uppercaseChar().code);DeviceCompanion.shortcut(*codes.toIntArray());ctrl=false;alt=false;buildCompanionBar()}
         else if(DeviceCompanion.typingToPC)DeviceCompanion.type(out.toString())else currentInputConnection?.commitText(out.toString(), 1)
+        typedWord=if(suggestionsAllowed())WordSuggestions.prefix(currentInputConnection?.getTextBeforeCursor(48,0)?.toString().orEmpty())else ""
         if (shift == ONCE) shift = OFF
         autoCapitalize()
         refreshLetters()
+        updateSuggestions()
     }
 
     private fun typeChar(s: String) {
         val separator = s.length == 1 && s[0] in " .,!?;:"
+        if(separator)learnTypedWord()
         if (separator && expandShortcut(s)) {
             autoCapitalize()
+            updateSuggestions()
             return
         }
         commit(s)
@@ -854,6 +924,8 @@ class SerameKeyboardService : InputMethodService() {
             }
         }
         autoCapitalize()
+        typedWord=WordSuggestions.prefix(ic.getTextBeforeCursor(48,0)?.toString().orEmpty())
+        updateSuggestions()
     }
 
     private fun enterAction(): Int {
@@ -863,6 +935,7 @@ class SerameKeyboardService : InputMethodService() {
     }
 
     private fun pressEnter() {
+        learnTypedWord()
         if(DeviceCompanion.typingToPC){DeviceCompanion.key(13);return}
         val action = enterAction()
         if (action in actionSet) {

@@ -34,7 +34,7 @@ class TransferService : Service() {
             val source=live?.synchronizedSnapshot() ?: runCatching { JSONArray(File(context.filesDir,"transfer-queue.json").readText()) }.getOrDefault(JSONArray())
             val rows=JSONArray()
             for(i in 0 until source.length()) { val row=source.getJSONObject(i);if(row.optString("origin")==origin) {
-                rows.put(JSONObject().put("id",row.optString("id")).put("name",row.optString("name")).put("direction",row.optString("direction")).put("state",if(live==null&&row.optString("state") in listOf("queued","running","saving"))"paused" else row.optString("state")).put("received",row.optLong("transferred",row.optLong("received"))).put("size",row.optLong("size")).put("message",row.optString("message")).put("pcName",row.optString("pcName")))
+                rows.put(JSONObject().put("id",row.optString("id")).put("name",row.optString("name")).put("direction",row.optString("direction")).put("state",if(live==null&&row.optString("state") in listOf("queued","running","saving"))"paused" else row.optString("state")).put("received",row.optLong("transferred",row.optLong("received"))).put("size",row.optLong("size")).put("message",row.optString("message")).put("pcName",row.optString("pcName")).put("conflictingETag",row.optString("conflictingETag")))
             }}
             return JSONObject().put("origin",origin).put("tasks",rows)
         }
@@ -85,6 +85,15 @@ class TransferService : Service() {
                     if(row.optString("state") !in listOf("complete","cancelled"))when(action) {
                         "pause"->{row.put("state","paused");if(id==activeId)activeCall?.cancel()}
                         "resume"->{val target=row.optString("origin");val current=android.webkit.CookieManager.getInstance().getCookie(target).orEmpty();if(current.contains("pc_remote_session="))cookies[target]=current;if(cookies.containsKey(target)){if(id==activeId)row.put("resumeRequested",true)else row.put("state","queued")}else row.put("message","Open PC Remote and sign in before resuming.")}
+                        "replace"->{
+                            val etag=row.optString("conflictingETag")
+                            if(row.optString("direction")=="upload"&&row.optString("state")=="paused"&&etag.matches(Regex("\"[a-f0-9]{64}\""))){
+                                if(cookies.containsKey(savedOrigin)){
+                                    row.put("replaceETag",etag);row.remove("conflictingETag")
+                                    if(id==activeId)row.put("resumeRequested",true)else row.put("state","queued")
+                                }else row.put("message","Open PC Remote and sign in before replacing this file.")
+                            }
+                        }
                         "cancel"->{row.put("state","cancelled");if(id==activeId)activeCall?.cancel();cleanup(row)}
                     }
                 }
@@ -121,24 +130,36 @@ class TransferService : Service() {
     private fun execute(row:JSONObject,builder:Request.Builder):Response {check(row);val call=client.newCall(builder.build());activeCall=call;return call.execute().also{if(it.code==401||it.code==403){it.close();throw IllegalStateException("Sign in again, then resume this transfer.")}}}
     private fun json(row:JSONObject,path:String,body:JSONObject?=null):JSONObject {
         val builder=request(row,path);if(body!=null)builder.post(body.toString().toRequestBody("application/json".toMediaType()))
-        execute(row,builder).use { response ->
-            // Read only bounded JSON metadata.
-            val source=response.body?.source()?:throw IOException("No host response")
-            if(response.body!!.contentLength()>65536)throw IOException("Invalid host response")
-            val buffer=okio.Buffer();while(!source.exhausted()){if(buffer.size>65536)throw IOException("Invalid host response");source.read(buffer,4096)}
-            val value=JSONObject(buffer.readUtf8());if(!response.isSuccessful||!value.optBoolean("ok"))throw IllegalStateException(value.optString("error","The host rejected this transfer."));return value
+        execute(row,builder).use { response -> return metadata(row,response) }
+    }
+    private fun metadata(row:JSONObject,response:Response):JSONObject {
+        // Read only bounded JSON metadata, including a final-chunk conflict.
+        val source=response.body?.source()?:throw IOException("No host response")
+        if(response.body!!.contentLength()>65536)throw IOException("Invalid host response")
+        val buffer=okio.Buffer();while(!source.exhausted()){if(buffer.size>65536)throw IOException("Invalid host response");source.read(buffer,4096)}
+        if(buffer.size>65536)throw IOException("Invalid host response")
+        val value=JSONObject(buffer.readUtf8())
+        if(!response.isSuccessful||!value.optBoolean("ok")){
+            val etag=value.optJSONObject("existing")?.optString("etag").orEmpty()
+            synchronized(lock){
+                row.remove("conflictingETag")
+                if(response.code==409&&value.optString("code")=="filename_conflict"&&etag.matches(Regex("\"[a-f0-9]{64}\"")))row.put("conflictingETag",etag)
+            }
+            throw IllegalStateException(value.optString("error","The host rejected this transfer."))
         }
+        synchronized(lock){row.remove("conflictingETag");row.remove("replaceETag")}
+        return value
     }
     private fun upload(row:JSONObject) {
-        val uri=Uri.parse(row.getString("uri"));var name=row.optString("name");var size=row.optLong("size",-1)
-        contentResolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME,OpenableColumns.SIZE),null,null,null)?.use { c -> if(c.moveToFirst()){if(name.isBlank())name=c.getString(0);if(size<0&&!c.isNull(1))size=c.getLong(1)} }
+        val uri=Uri.parse(row.getString("uri"));var displayName:String?=null;var size=row.optLong("size",-1)
+        contentResolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME,OpenableColumns.SIZE),null,null,null)?.use { c -> if(c.moveToFirst()){if(!c.isNull(0))displayName=c.getString(0);if(size<0&&!c.isNull(1))size=c.getLong(1)} }
         if(size<0)throw IllegalStateException("This provider cannot report file size. Save the file on your phone, then choose it again.")
-        if(name.isBlank())name="Shared-file";name=name.replace(Regex("[<>:\"/\\\\|?*\\x00-\\x1f]"),"_").trim().trimEnd('.').take(170)
-        if(name.isBlank()||name.startsWith('.'))name="Shared-file-"+System.currentTimeMillis()
+        val name=TransferFileNames.upload(displayName,row.optString("name"),row.has("uploadId"))
         row.put("name",name).put("size",size)
-        var state=if(row.has("uploadId"))json(row,"/api/files/uploads/"+row.getString("uploadId")+"/resume",JSONObject().put("resumeSecret",row.getString("resumeSecret")))else{
+        val replaceETag=synchronized(lock){row.optString("replaceETag").takeIf{it.matches(Regex("\"[a-f0-9]{64}\""))}}
+        var state=if(row.has("uploadId"))json(row,"/api/files/uploads/"+row.getString("uploadId")+"/resume",JSONObject().put("resumeSecret",row.getString("resumeSecret")).apply{if(replaceETag!=null)put("replaceETag",replaceETag)})else{
             val destination=row.optString("destination").trim('/')
-            json(row,"/api/files/uploads",JSONObject().put("name",name).put("size",size).put("relativePath",if(destination.isBlank())name else "$destination/$name")).also{row.put("uploadId",it.getString("id")).put("resumeSecret",it.getString("resumeSecret"))}
+            json(row,"/api/files/uploads",JSONObject().put("name",name).put("size",size).put("relativePath",if(destination.isBlank())name else "$destination/$name").apply{if(replaceETag!=null)put("replaceETag",replaceETag)}).also{row.put("uploadId",it.getString("id")).put("resumeSecret",it.getString("resumeSecret"))}
         }
         var offset=state.getLong("received");val chunk=state.optInt("chunkBytes",1048576).coerceIn(1,8388608)
         synchronized(lock){row.put("received",offset);persist()}
@@ -149,8 +170,7 @@ class TransferService : Service() {
                 check(row);val length=minOf(chunk.toLong(),size-offset);val start=offset
                 val body=object:RequestBody(){override fun contentType()="application/octet-stream".toMediaType();override fun contentLength()=length;override fun writeTo(sink:BufferedSink){val buffer=ByteArray(65536);var left=length;while(left>0){check(row);val n=input.read(buffer,0,minOf(buffer.size.toLong(),left).toInt());if(n<0)throw IOException("The source file changed");sink.write(buffer,0,n);left-=n;progress(row,start+length-left,false)}}}
                 execute(row,request(row,"/api/files/uploads/"+row.getString("uploadId")+"?offset=$offset").put(body)).use { response ->
-                    if(!response.isSuccessful)throw IOException("Upload interrupted")
-                    val text=response.body?.string().orEmpty();if(text.length>65536)throw IOException("Invalid host response");state=JSONObject(text)
+                    state=metadata(row,response)
                     val next=state.getLong("received");if(next!=offset+length)throw IOException("Upload position changed");offset=next;progress(row,offset,true)
                 }
             }
@@ -161,18 +181,29 @@ class TransferService : Service() {
     private fun validDownload(path:String)=runCatching{val u=java.net.URI(path);!u.isAbsolute&&u.rawAuthority==null&&u.path in listOf("/api/files/download","/api/files/folder")&&!path.contains('#')}.getOrDefault(false)
     private fun download(row:JSONObject) {
         val path=row.getString("path");if(!validDownload(path))throw IllegalArgumentException("Invalid download")
+        val destination=Uri.parse(row.getString("uri"))
+        fun verifyDestination(){
+            val actual=contentResolver.query(destination,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use { c -> if(c.moveToFirst()&&!c.isNull(0))c.getString(0)else null }
+            TransferFileNames.destination(row.getString("name"),actual)
+        }
+        // ACTION_CREATE_DOCUMENT can silently suffix duplicate names or append a
+        // MIME-based extension. Do not write to that renamed document unnoticed.
+        verifyDestination()
         val part=File(filesDir,"transfer-"+row.getString("id")+".part");var offset=if(part.exists())part.length()else 0L
         val builder=request(row,path);if(offset>0&&row.has("etag"))builder.header("Range","bytes=$offset-").header("If-Range",row.getString("etag"))else offset=0
         execute(row,builder).use { response ->
             if(response.code !in listOf(200,206))throw IOException("Download interrupted")
             if(response.code==200)offset=0
             if(response.code==206&&!response.header("Content-Range").orEmpty().startsWith("bytes $offset-"))throw IOException("Download position changed")
+            row.put("name",DownloadNames.resolve(row.getString("origin")+path,response.header("Content-Disposition"),row.optString("name")))
+            verifyDestination()
             val length=response.body?.contentLength()?:-1;row.put("size",if(length>=0)offset+length else -1);response.header("ETag")?.let{row.put("etag",it)}
             java.io.FileOutputStream(part,offset>0).use { out -> response.body!!.byteStream().use { input -> val bytes=ByteArray(65536);while(true){check(row);val n=input.read(bytes);if(n<0)break;out.write(bytes,0,n);offset+=n;progress(row,offset,false)} };out.fd.sync() }
         }
         if(row.optLong("size",-1)>=0&&offset!=row.getLong("size"))throw IOException("Download incomplete")
         row.put("state","saving");progress(row,offset,true)
-        contentResolver.openOutputStream(Uri.parse(row.getString("uri")),"wt")?.use { out -> part.inputStream().use { input -> val bytes=ByteArray(65536);while(true){check(row);val n=input.read(bytes);if(n<0)break;out.write(bytes,0,n)} } }?:throw IOException("Could not save to that folder")
+        verifyDestination()
+        contentResolver.openOutputStream(destination,"wt")?.use { out -> part.inputStream().use { input -> val bytes=ByteArray(65536);while(true){check(row);val n=input.read(bytes);if(n<0)break;out.write(bytes,0,n)} } }?:throw IOException("Could not save to that folder")
         part.delete()
     }
     private fun progress(row:JSONObject,bytes:Long,durable:Boolean) {

@@ -26,6 +26,17 @@ test('the primary upload target is a real tappable input instead of a hidden syn
   const f=await fixture(t),input=f.d.getElementById('filesInput');assert.equal(input.hidden,false);assert.ok(input.parentElement.classList.contains('filesPickerSlot'));assert.equal(input.getAttribute('aria-label'),'Choose files to send to your PC');assert.equal(input.multiple,true);assert.equal(f.d.getElementById('filesChoose').getAttribute('aria-hidden'),'true');
 });
 
+test('an existing name pauses until Replace is chosen and keeps the original filename',async t=>{
+  const f=await fixture(t),name='Original + résumé.txt';await fs.writeFile(path.join(f.root,name),'old');
+  f.choose([new f.w.File(['replacement'],name,{lastModified:9})]);
+  await until(()=>!f.d.getElementById('filesReplaceExisting').hidden);
+  assert.equal(await fs.readFile(path.join(f.root,name),'utf8'),'old');
+  f.d.getElementById('filesReplaceExisting').click();
+  await until(()=>f.d.getElementById('filesStatus').textContent==='1 file sent to your PC.');
+  assert.equal(await fs.readFile(path.join(f.root,name),'utf8'),'replacement');
+  assert.deepEqual((await fs.readdir(f.root)).filter(n=>!n.startsWith('.pcr-')),[name]);
+});
+
 test('completed uploads expose the saved PC file action and reject destinations outside the transfer folder',async t=>{
   const f=await fixture(t);f.choose([new f.w.File(['complete'],'finished.txt')]);await until(()=>f.d.getElementById('filesStatus').textContent==='1 file sent to your PC.');const button=f.d.querySelector('#filesBatchList .filesSmallButton');assert.equal(button.textContent,'Show in PC folder');button.click();await until(()=>f.d.getElementById('filesStatus').textContent.includes('directly on your Windows PC'));assert.equal(await fs.readFile(path.join(f.root,'finished.txt'),'utf8'),'complete');
   const rejected=await f.w.api('/api/files/reveal',{method:'POST',body:JSON.stringify({name:'../outside.txt'})});assert.equal(rejected.status,400);

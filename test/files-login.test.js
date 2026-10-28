@@ -58,12 +58,41 @@ test('arbitrary binary files, multi-chunk audio, empty PDFs and Unicode text rou
   const list=await f.request('/api/files',{cookie});assert.equal(list.json.total,4);assert.equal(list.json.maxBytes,6*1024*1024);assert.ok(list.json.files.every(file=>!file.name.startsWith('.')));
 });
 test('duplicate filenames preserve previous files instead of overwriting them',async t=>{
-  const f=await fixture(t),cookie=await f.login();const a=await upload(f,cookie,'note.txt',Buffer.from('first')),b=await upload(f,cookie,'note.txt',Buffer.from('second'));
-  assert.equal(a.name,'note.txt');assert.equal(b.name,'note (1).txt');assert.equal((await f.request('/api/files/download?name=note.txt',{cookie})).bytes.toString(),'first');
+  const f=await fixture(t),cookie=await f.login();const a=await upload(f,cookie,'note.txt',Buffer.from('first'));
+  const b=await f.request('/api/files/uploads',{method:'POST',cookie,body:{name:'note.txt',size:6}});assert.equal(b.status,409);assert.equal(b.json.code,'filename_conflict');assert.equal(a.name,'note.txt');assert.equal((await f.request('/api/files/download?name=note.txt',{cookie})).bytes.toString(),'first');assert.equal((await f.request('/api/files',{cookie})).json.total,1);
+});
+
+test('transfers retain full original Unicode, spaces, plus signs, dotfiles and compound extensions',async t=>{
+  const f=await fixture(t),cookie=await f.login(),bytes=Buffer.from('original contents\n');
+  for(const name of ['  Résumé + 世界 😀.tar.gz','.notes.txt','x'.repeat(220)+'.pdf',"O'Brien (final) 100%.txt"]){
+    const file=await upload(f,cookie,name,bytes);assert.equal(file.name,name);
+    const response=await f.request('/api/files/download?name='+encodeURIComponent(name),{cookie});
+    assert.equal(response.status,200);assert.deepEqual(response.bytes,bytes);
+    assert.equal(decodeURIComponent(response.headers['content-disposition'].split("filename*=UTF-8''")[1]),name);
+  }
+  const listing=(await f.request('/api/files',{cookie})).json.files;
+  assert.ok(listing.some(item=>item.name==='.notes.txt'));assert.equal(listing.length,4);
+});
+
+test('a final filename conflict preserves uploaded bytes for explicit replacement or a new folder',async t=>{
+  const f=await fixture(t),cookie=await f.login();
+  for(const replace of [false,true]){
+    const name=replace?'replace.txt':'move.txt';
+    const created=await f.request('/api/files/uploads',{method:'POST',cookie,body:{name,size:6}});
+    await fs.writeFile(path.join(f.root,'files',name),'first');
+    const put=await f.request('/api/files/uploads/'+created.json.id+'?offset=0',{method:'PUT',cookie,body:Buffer.from('second'),raw:true});
+    assert.equal(put.status,409);assert.equal(put.json.code,'filename_conflict');
+    assert.equal(await fs.readFile(path.join(f.root,'files',name),'utf8'),'first');
+    const resumed=await f.request('/api/files/uploads/'+created.json.id+'/resume',{method:'POST',cookie,body:{resumeSecret:created.json.resumeSecret,...replace?{replaceETag:put.json.existing.etag}:{relativePath:'Another folder/'+name}}});
+    assert.equal(resumed.status,200);assert.equal(resumed.json.complete,true);
+    assert.equal(resumed.json.file.name,replace?name:'Another folder/'+name);
+    assert.equal((await f.request('/api/files/download?name='+encodeURIComponent(resumed.json.file.name),{cookie})).bytes.toString(),'second');
+    if(!replace)assert.equal(await fs.readFile(path.join(f.root,'files',name),'utf8'),'first');
+  }
 });
 test('file paths, chunk positions, ownership and limits are enforced',async t=>{
   const f=await fixture(t),cookie=await f.login(),other=await f.login();
-  for(const name of ['../escape.txt','..\\escape.txt','CON.txt','NUL','.secret','bad:name.txt','trailing.'])assert.equal((await f.request('/api/files/uploads',{method:'POST',cookie,body:{name,size:1}})).status,400,name);
+  for(const name of ['../escape.txt','..\\escape.txt','CON.txt','NUL','.pcr-secret','bad:name.txt','trailing.'])assert.equal((await f.request('/api/files/uploads',{method:'POST',cookie,body:{name,size:1}})).status,400,name);
   assert.equal((await f.request('/api/files/uploads',{method:'POST',cookie,body:{name:'large.zip',size:7*1024*1024}})).status,413);
   const start=await f.request('/api/files/uploads',{method:'POST',cookie,body:{name:'unfinished.mp3',size:10}}),id=start.json.id;
   assert.equal((await f.request('/api/files/uploads/'+id,{cookie:other})).status,404);
