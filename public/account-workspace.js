@@ -25,7 +25,7 @@
         const draft=document.getElementById('filesNote');if(draft&&Object.hasOwn(current,'drafts.compose')&&document.activeElement!==draft)draft.value=String(current['drafts.compose']||'');
         card.querySelector('[data-pc-clipboard]').checked=current['history.preferences']?.clipboardCapture!==false;
         const sharedTransfers=Object.entries(current).filter(([name])=>name.startsWith('transfers.device:')).map(([name,value])=>({...value,id:name.slice(17)}));window.dispatchEvent(new CustomEvent('pcr:account-transfers',{detail:sharedTransfers}));
-        const folderRows=Object.entries(current).filter(([name])=>name.startsWith('folders.device:'));const list=card.querySelector('[data-account-folders]');if(list){list.replaceChildren();for(const [,value]of folderRows)for(const pair of value.pairs||[]){const row=document.createElement('p');row.textContent=(value.device||'Device')+' / '+pair.name+' → PC / '+pair.destination+' · '+(pair.enabled?'Sync enabled':'Paused');list.append(row);}} 
+        const folderRows=Object.entries(current).filter(([name])=>name.startsWith('folders.device:'));const list=card.querySelector('[data-account-folders]');if(list){list.replaceChildren();for(const [,value]of folderRows)for(const pair of value.pairs||[]){const row=document.createElement('p');row.textContent=(value.device||'Device')+' / '+pair.name+' → PC / '+pair.destination+' · '+(pair.enabled?'Sync enabled':'Paused');list.append(row);}}
       }finally{applying=false;}
       persist();
     }
