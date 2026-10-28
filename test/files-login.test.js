@@ -53,7 +53,7 @@ test('remembered login survives a host restart, stores only a token hash, and lo
 test('arbitrary binary files, multi-chunk audio, empty PDFs and Unicode text round-trip byte for byte',async t=>{
   const f=await fixture(t),cookie=await f.login();
   for(const [name,bytes] of [['audio.mp3',crypto.randomBytes(2*1024*1024+139)],['empty.pdf',Buffer.alloc(0)],['Notes 世界.txt',Buffer.from('Hello\n😀\nمرحبا','utf8')],['arbitrary.custom-extension',crypto.randomBytes(371)]]){
-    const file=await upload(f,cookie,name,bytes);assert.equal(file.name,name);const download=await f.request('/api/files/download?name='+encodeURIComponent(file.name),{cookie});assert.equal(download.status,200);assert.deepEqual(download.bytes,bytes);assert.match(download.headers['content-disposition'],/^attachment;/);assert.equal(download.headers['content-type'],'application/octet-stream');
+    const file=await upload(f,cookie,name,bytes);assert.equal(file.name,name);const download=await f.request('/api/files/download?name='+encodeURIComponent(file.name),{cookie});assert.equal(download.status,200);assert.deepEqual(download.bytes,bytes);assert.match(download.headers['content-disposition'],/^attachment;/);assert.equal(download.headers['content-type'],name.endsWith('.mp3')?'audio/mpeg':name.endsWith('.pdf')?'application/pdf':name.endsWith('.txt')?'text/plain':'application/octet-stream');
   }
   const list=await f.request('/api/files',{cookie});assert.equal(list.json.total,4);assert.equal(list.json.maxBytes,6*1024*1024);assert.ok(list.json.files.every(file=>!file.name.startsWith('.')));
 });
