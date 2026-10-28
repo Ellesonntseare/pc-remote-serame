@@ -43,6 +43,7 @@ internal static class Program
             catch(Exception ex){Console.WriteLine(JsonSerializer.Serialize(new {ok=false,error="Could not open link. "+ex.Message}));Environment.ExitCode=1;}
             return;
         }
+        if(args.Length==1&&args[0]=="--file-locations"){FileLocations.Run();return;}
         if(args.Length==1&&args[0]=="--file-thumbnail"){FileThumbnail.Run();return;}
         if(args.Length==1&&args[0]=="--media"){MediaKeys.Run();return;}
         if(args.Length==1&&args[0] is "--ocr" or "--clipboard-image-read" or "--clipboard-image-write"){ImageTools.Run(args[0]);return;}

@@ -33,9 +33,10 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
   let mutation=Promise.resolve();function commit(change){const next=mutation.then(change);mutation=next.catch(()=>{});return next;}
   let revision=Date.now();const watched=new Map();
   function watchFolder(directory){if(!watch||watched.has(directory)||!fs.existsSync(directory))return;try{const watcher=fs.watch(directory,{recursive:true,persistent:false},(event,name)=>{if(name&&String(name).split(/[\\/]/).some(part=>part.startsWith('.')))return;revision=Date.now();});watcher.on('error',()=>{watcher.close();watched.delete(directory);});watched.set(directory,watcher);}catch{}}
-  const roots=new Map();for(const item of locations){if(!item||!/^@[a-z][a-z0-9-]{0,40}$/.test(item.id)||typeof item.directory!=='string'||!path.isAbsolute(item.directory))continue;roots.set(item.id,{id:item.id,label:String(item.label||item.id.slice(1)).slice(0,80),directory:path.resolve(item.directory)});}
-  let locationsAt=0;function reloadLocations(){if(!locationsProvider||Date.now()-locationsAt<2000)return;locationsAt=Date.now();try{const next=locationsProvider();if(!Array.isArray(next))return;roots.clear();for(const item of next.slice(0,20))if(item&&/^@[a-z][a-z0-9-]{0,40}$/.test(item.id)&&typeof item.directory==='string'&&path.isAbsolute(item.directory)){roots.set(item.id,{id:item.id,label:String(item.label||item.id.slice(1)).slice(0,80),directory:path.resolve(item.directory)});watchFolder(item.directory);}}catch{}}
-  for(const item of roots.values())watchFolder(item.directory);watchFolder(root);
+  function locationRecord(item){if(!item||!/^@[a-z][a-z0-9-]{0,40}$/.test(item.id)||typeof item.directory!=='string'||!path.isAbsolute(item.directory))return null;const capacity=item.capacity;return{id:item.id,label:String(item.label||item.id.slice(1)).slice(0,80),directory:path.resolve(item.directory),...['known','pinned','cloud','drive','share'].includes(item.kind)&&{kind:item.kind},...capacity&&Number.isSafeInteger(capacity.total)&&capacity.total>=0&&Number.isSafeInteger(capacity.free)&&capacity.free>=0&&capacity.free<=capacity.total&&{capacity:{total:capacity.total,free:capacity.free}}};}
+  const roots=new Map();for(const item of locations){const record=locationRecord(item);if(record)roots.set(record.id,record);}
+  let locationsAt=0,locationsPending=null;async function reloadLocations(){if(!locationsProvider)return;if(locationsPending)return locationsPending;if(Date.now()-locationsAt<2000)return;locationsAt=Date.now();locationsPending=(async()=>{try{const next=await locationsProvider();if(!Array.isArray(next))return;const records=next.slice(0,40).map(locationRecord).filter(Boolean);roots.clear();for(const item of records){roots.set(item.id,item);if(item.kind!=='drive')watchFolder(item.directory);}}catch{}finally{locationsPending=null;}})();return locationsPending;}
+  for(const item of roots.values())if(item.kind!=='drive')watchFolder(item.directory);watchFolder(root);
   function locate(name){const parts=relativePath(name).split('/'),chosen=roots.get(parts[0]);if(parts[0].startsWith('@')&&!chosen)throw problem(404,'This PC location is unavailable.');return {base:chosen?.directory||root,parts:chosen?parts.slice(1):parts};}
   if(!Number.isSafeInteger(maxBytes)||maxBytes<1)throw Error('maxFileBytes must be a positive integer');
   const target=name=>{const {base,parts}=locate(name),file=path.resolve(base,...parts);if(file!==base&&!file.startsWith(base+path.sep))throw problem(400,'Invalid filename');return file;};
@@ -48,7 +49,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
     return target(name);
   }
   const partial=id=>path.join(root,'.pcr-upload-'+id+'.part'),metadata=id=>path.join(root,'.pcr-upload-'+id+'.json');
-  async function availableLocations(allowed){const available=[{id:'',label:'Transfers'}];if(allowed)for(const item of roots.values()){try{const stat=await fsp.lstat(item.directory);if(stat.isDirectory()&&!stat.isSymbolicLink())available.push({id:item.id,label:item.label});}catch{}}return available;}
+  async function availableLocations(allowed){const available=[{id:'',label:'Transfers'}];if(allowed)for(const item of roots.values()){try{const stat=await fsp.lstat(item.directory);if(stat.isDirectory()&&!stat.isSymbolicLink())available.push({id:item.id,label:item.label,...item.kind&&{kind:item.kind},...item.capacity&&{capacity:item.capacity}});}catch{}}return available;}
   const record=u=>({version:1,...u.syncETag&&{syncETag:u.syncETag},id:u.id,token:u.token,account:u.account,secretHash:u.secretHash,name:u.name,...u.relativePath&&{relativePath:u.relativePath},size:u.size,received:u.received,until:u.until,complete:!!u.complete,...u.publishName&&{publishName:u.publishName},...u.file&&{file:u.file}});
   async function persist(u){const file=metadata(u.id),temp=file+'.tmp';await fsp.unlink(temp).catch(e=>{if(e.code!=='ENOENT')throw e;});const handle=await fsp.open(temp,'wx',0o600);try{await handle.writeFile(JSON.stringify(record(u)));await handle.sync();}finally{await handle.close();}await fsp.rename(temp,file);}
   async function removeDisk(u){for(const file of [partial(u.id),metadata(u.id),metadata(u.id)+'.tmp'])await fsp.unlink(file).catch(e=>{if(e.code!=='ENOENT')throw e;});}
@@ -155,7 +156,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
     const chunkLimit=Number.isSafeInteger(chunkBytes)?Math.max(CHUNK_BYTES,Math.min(8*CHUNK_BYTES,chunkBytes)):CHUNK_BYTES;
     try{
       const url=new URL(req.url,'http://localhost');
-      reloadLocations();
+      await reloadLocations();
       const allowedName=value=>{if(typeof value==='string'&&value.startsWith('@')&&!allowLocations)throw problem(403,'This folder is available to the PC owner.');return value;};
       for(const key of ['name','path'])allowedName(url.searchParams.get(key));
       if(req.method!=='GET'&&req.method!=='HEAD'&&req.headers['x-pcr']!=='1')throw problem(403,'Request header missing');

@@ -113,6 +113,6 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
   }
   let currentAppPending=null,currentAppValue=null,currentAppAt=0;
   async function currentApp(){if(currentAppValue&&now()-currentAppAt<1500)return currentAppValue;if(currentAppPending)return currentAppPending;currentAppPending=request('--app-current').then(value=>{currentAppValue=value;currentAppAt=now();return value;}).finally(()=>currentAppPending=null);return currentAppPending;}
-  return {fileThumbnail:file=>request('--file-thumbnail',{path:file}),listApps,currentApp,focusApp,presentationApp,sendMedia,openLink,openAudio,openAudioOutput,audioDevices:()=>request('--audio-devices'),close};
+  return {fileLocations:()=>request('--file-locations'),fileThumbnail:file=>request('--file-thumbnail',{path:file}),listApps,currentApp,focusApp,presentationApp,sendMedia,openLink,openAudio,openAudioOutput,audioDevices:()=>request('--audio-devices'),close};
 }
 module.exports={createNativeFeatures,AudioPacketReader,validFormat};
