@@ -6,6 +6,14 @@ function packet(type,data){if(!Buffer.isBuffer(data))data=Buffer.from(JSON.strin
 function fakeChild(){const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.stderr=new PassThrough();child.killed=false;child.kill=()=>{child.killed=true;queueMicrotask(()=>child.emit('close',0));};return child;}
 function fixture(){const calls=[];let current=1000;const service=createNativeFeatures({root:process.cwd(),platform:'win32',fsImpl:{existsSync:()=>true},now:()=>current,spawnImpl:(file,args,options)=>{const child=fakeChild();calls.push({file,args,options,child});return child;}});return {service,calls,advance(ms){current+=ms;}};}
 
+test('screen-edge helper starts with validated geometry, accepts bounded events and releases on stop',()=>{
+  const f=fixture(),events=[];assert.throws(()=>f.service.openPhoneInput({side:'unknown',width:1080,height:2400}),/arrangement/);assert.equal(f.calls.length,0);
+  const session=f.service.openPhoneInput({side:'left',width:1080,height:2400,sensitivity:1.2,onEvent:event=>events.push(event)}),call=f.calls[0];
+  assert.deepEqual(call.args,['--phone-handoff']);assert.equal(call.options.windowsHide,true);assert.equal(call.options.shell,undefined);
+  call.child.stdout.write('{"kind":"state","state":"armed"}\n{"kind":"text","text":"fixture"}\n');assert.equal(events.length,2);
+  session.update({side:'top',width:2400,height:1080,sensitivity:.8});session.release();session.stop();call.child.emit('close',0);f.service.close();
+});
+
 test('phone audio output waits for native readiness, frames exact PCM/control bytes and stops with the service',async()=>{
   const f=fixture();let ready=0,closed=0;const output=f.service.openAudioOutput({sampleRate:48000,channels:1,volume:.4,onReady:()=>ready++,onClose:()=>closed++}),child=f.calls[0].child;assert.deepEqual(f.calls[0].args,['--audio-playback']);assert.equal(output.sendPcm(Buffer.from([1,2])),false);child.stdout.write('{"type":"sta');child.stdout.write('rted"}\n');assert.equal(ready,1);const pcm=Buffer.from([0,0,255,127]);output.sendPcm(pcm);output.setVolume(.25);output.stop();const chunks=[];for await(const chunk of child.stdin)chunks.push(chunk);const all=Buffer.concat(chunks),line=all.indexOf(10);assert.deepEqual(JSON.parse(all.subarray(0,line)),{sampleRate:48000,channels:1,volume:.4});let at=line+1;assert.equal(all[at],0);assert.deepEqual(all.subarray(at+5,at+5+all.readUInt32BE(at+1)),pcm);at+=5+pcm.length;assert.equal(all[at],1);const length=all.readUInt32BE(at+1);assert.deepEqual(JSON.parse(all.subarray(at+5,at+5+length)),{volume:.25});at+=5+length;assert.equal(all[at],2);child.emit('close',0);assert.equal(closed,1);f.service.close();
 });

@@ -204,6 +204,8 @@ class TransferService : Service() {
         row.put("state","saving");progress(row,offset,true)
         verifyDestination()
         contentResolver.openOutputStream(destination,"wt")?.use { out -> part.inputStream().use { input -> val bytes=ByteArray(65536);while(true){check(row);val n=input.read(bytes);if(n<0)break;out.write(bytes,0,n)} } }?:throw IOException("Could not save to that folder")
+        PhoneFileReceiver.completed(this,row)
+        if(row.optString("inboxId").isNotEmpty())runCatching{json(row,"/api/sync/inbox/ack",JSONObject().put("id",row.getString("inboxId")))}
         part.delete()
     }
     private fun progress(row:JSONObject,bytes:Long,durable:Boolean) {

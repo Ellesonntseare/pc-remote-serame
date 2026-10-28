@@ -8,8 +8,13 @@
   const controls=document.createElement('section');controls.className='phoneControlTools';controls.hidden=true;
   controls.innerHTML='<div class="phoneControlHead"><button type="button" data-request-control>Request phone control</button><span data-control-status role="status">View only</span></div><div data-phone-actions hidden><div class="phoneNavigation"><button type="button" data-phone-key="back">← Back</button><button type="button" data-phone-key="home">⌂ Home</button><button type="button" data-phone-key="recents">▣ Recent apps</button></div><div class="phoneText"><input type="text" maxlength="2000" placeholder="Text for the selected phone field" aria-label="Text for the selected phone field" autocomplete="off"><button type="button" data-phone-text>Set text</button></div><small>Tap or drag the live screen. Right-click for a long press. Set text replaces the selected field.</small></div><button type="button" data-phone-stop hidden>Stop control</button>';
   q('.guestScreenTools').after(controls);
+  const receiveFolder=document.createElement('button');receiveFolder.type='button';receiveFolder.className='phoneReceiveFolder';receiveFolder.textContent='Choose incoming-files folder';receiveFolder.hidden=typeof window.PCRAndroid?.postMessage!=='function';receiveFolder.onclick=()=>window.PCRAndroid?.postMessage(JSON.stringify({type:'phone-receive-folder'}));q('.guestScreenHint').after(receiveFolder);
   const controlTool=document.createElement('button');controlTool.type='button';controlTool.dataset.tool='control';controlTool.setAttribute('aria-pressed','false');controlTool.textContent='↖ Control';controlTool.hidden=true;q('.guestDrawTools').prepend(controlTool);
-  let control={state:'off',supported:false,canControl:false},capture=null,displayedGeneration=0,controlSeq=0,controlPending=null,controlTimeout=null,controlTouch=null,mouse=null;
+  let control={state:'off',supported:false,canControl:false},capture=null,displayedGeneration=0,controlSeq=0,controlPending=null,controlTimeout=null,controlTouch=null,mouse=null,input=null,preferredShare='',resumeAttempted='',reconnectTimer=null,reconnectAttempt=0;
+  const resumeProofs=new Map();let clientKey='';try{clientKey=sessionStorage.getItem('pcr_phone_client')||'';}catch{}
+  if(!/^[a-f0-9]{32}$/.test(clientKey)){clientKey=Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');try{sessionStorage.setItem('pcr_phone_client',clientKey);}catch{}}
+  function requestControl(resume=false){const proof=resumeProofs.get(watching);send({type:'control-request',clientKey,...resume&&proof?.until>Date.now()&&{resumeProof:proof.value}});}
+  function maybeResume(){const proof=resumeProofs.get(watching);if(owner&&watching&&proof?.until>Date.now()&&resumeAttempted!==watching&&control.supported&&!control.canControl&&control.state!=='pending'&&capture?.generation===displayedGeneration){resumeAttempted=watching;requestControl(true);}}
   const mouseButton=document.createElement('button');mouseButton.type='button';mouseButton.dataset.pcMouse='';mouseButton.textContent='Use PC mouse';mouseButton.setAttribute('aria-pressed','false');q('.phoneNavigation').prepend(mouseButton);canvas.tabIndex=0;
   function controlUI(){
     controls.hidden=owner?!watching||!control.supported:!nativeSharing||control.state!=='active';
@@ -20,20 +25,22 @@
     for(const item of controls.querySelectorAll('[data-phone-key],[data-phone-text]'))item.disabled=!!controlPending;
     mouseButton.hidden=!owner||!control.canControl;mouseButton.title=control.mouseSupported?'Capture your mouse; press Escape to release':'Install the latest APK for mouse mode';
     mouse?.refresh();
+    input?.refresh();
     if(!control.canControl&&tool==='control'){tool='laser';for(const item of dialog.querySelectorAll('[data-tool]'))item.setAttribute('aria-pressed',String(item.dataset.tool==='laser'));}
   }
-  function resetControl(clearCapture=true){mouse?.release();clearTimeout(controlTimeout);controlTimeout=null;controlPending=null;controlTouch=null;control={state:'off',supported:false,canControl:false};if(clearCapture){capture=null;displayedGeneration=0;}controlUI();}
+  function resetControl(clearCapture=true){input?.stop();mouse?.release();clearTimeout(controlTimeout);controlTimeout=null;controlPending=null;controlTouch=null;control={state:'off',supported:false,canControl:false};if(clearCapture){capture=null;displayedGeneration=0;}controlUI();}
   function sendPointer(command){
     if(!owner||!watching||!control.canControl||!control.mouseSupported||!control.id||!capture||capture.generation!==displayedGeneration)return;
     send({type:'pointer',id:control.id,seq:++controlSeq,generation:capture.generation,command});
   }
-  function sendControl(command){if(window.PCRHoldControl&&!window.PCRHoldControl.can('phone'))return;
-    if(!owner||!watching||!control.canControl||!control.id||!capture||capture.generation!==displayedGeneration||controlPending)return;
+  function sendControl(command,desktop=false){if(!desktop&&window.PCRHoldControl&&!window.PCRHoldControl.can('phone'))return false;
+    if(!owner||!watching||!control.canControl||!control.id||!capture||capture.generation!==displayedGeneration||controlPending)return false;
     const seq=++controlSeq;controlPending=seq;send({type:'control',id:control.id,seq,generation:capture.generation,command});controlUI();
     controlTimeout=setTimeout(()=>{if(controlPending===seq){send({type:'control-stop'});resetControl(false);status.textContent='Phone action timed out. Request control again; actions are never replayed.';}},6500);
+    return true;
   }
   window.addEventListener('pcr:hold-release',event=>{if(event.detail.scope==='phone')controlTouch=null;});
-  q('[data-request-control]').addEventListener('click',()=>{if(control.canControl){send({type:'control-stop'});resetControl(false);}else{send({type:'control-request'});q('[data-control-status]').textContent='Sending control request…';}});
+  q('[data-request-control]').addEventListener('click',()=>{resumeProofs.delete(watching);if(control.canControl){send({type:'control-stop'});resetControl(false);}else{requestControl();q('[data-control-status]').textContent='Sending control request…';}});
   q('[data-phone-stop]').addEventListener('click',()=>{nativeSend({type:'control-stop'});resetControl();});
   for(const item of controls.querySelectorAll('[data-phone-key]'))item.addEventListener('click',()=>sendControl({action:item.dataset.phoneKey}));
   q('[data-phone-text]').addEventListener('click',()=>sendControl({action:'text',text:controls.querySelector('input').value}));
@@ -47,6 +54,8 @@
     if(value.type==='sharing'){nativePending=false;nativeSharing=true;starting=false;q('[data-share]').hidden=true;q('[data-stop]').hidden=false;status.textContent='Your entire phone screen is live.';}
     else if(value.type==='frame'&&nativeSharing&&typeof value.data==='string'&&value.data.length<=1400000&&/^[A-Za-z0-9+/]+=*$/.test(value.data)&&Number.isInteger(value.width)&&Number.isInteger(value.height)&&value.width>0&&value.height>0&&value.width<=1920&&value.height<=1920){dimensions={width:value.width,height:value.height};image.src='data:image/jpeg;base64,'+value.data;image.hidden=false;empty.hidden=true;draw();}
     else if(value.type==='mark'&&nativeSharing)applyMark(value);
+    else if(value.type==='reconnecting'&&nativeSharing)status.textContent=value.message;
+    else if(value.type==='file-transfer')status.textContent=value.message;
     else if(value.type==='control-state'&&nativeSharing){control={...value,canControl:false};controlUI();}
     else if(value.type==='stopped'){nativePending=false;nativeSharing=false;stop(value.message||'Phone screen sharing stopped.');}
   };
@@ -55,7 +64,7 @@
   function decodeFrame(){
     if(decoding||!pendingBlob||!owner||!watching)return;const blob=pendingBlob;pendingBlob=null;decoding=true;const generation=frameGeneration,current=socket,url=URL.createObjectURL(blob),decoded=new Image();
     const captureVersion=capture?.generation||0;
-    const done=()=>{decoding=false;decodeFrame();};decoded.onload=()=>{if(generation!==frameGeneration||socket!==current){URL.revokeObjectURL(url);done();return;}if(frameUrl)URL.revokeObjectURL(frameUrl);frameUrl=url;image.src=url;image.hidden=false;empty.hidden=true;dimensions={width:decoded.naturalWidth,height:decoded.naturalHeight};displayedGeneration=captureVersion;draw();controlUI();done();};decoded.onerror=()=>{URL.revokeObjectURL(url);done();};decoded.src=url;
+    const done=()=>{decoding=false;decodeFrame();};decoded.onload=()=>{if(generation!==frameGeneration||socket!==current){URL.revokeObjectURL(url);done();return;}if(frameUrl)URL.revokeObjectURL(frameUrl);frameUrl=url;image.src=url;image.hidden=false;empty.hidden=true;dimensions={width:decoded.naturalWidth,height:decoded.naturalHeight};displayedGeneration=captureVersion;draw();controlUI();maybeResume();done();};decoded.onerror=()=>{URL.revokeObjectURL(url);done();};decoded.src=url;
   }
   function stop(message='Screen sharing is off.'){
     if(owner&&control.canControl)send({type:'control-stop'});resetControl();
@@ -71,25 +80,28 @@
       if(event.data instanceof Blob){if(!owner||!watching)return;pendingBlob=event.data;decodeFrame();return;}
       let value;try{value=JSON.parse(event.data);}catch{return;}
       if(value.type==='shares'&&owner){shares=value.shares||[];renderShares();}
-      else if(value.type==='watching'){watching=value.id;capture=value.capture||null;marks=value.marks||[];laser=null;status.textContent='Live guest screen · request phone control or draw together.';draw();}
-      else if(value.type==='capture'){mouse?.release();capture=value;hideFrame();controlUI();}
-      else if(value.type==='control-state'){const activated=!control.canControl&&value.canControl;control=value;if(value.state!=='active'){mouse?.release();clearTimeout(controlTimeout);controlPending=null;}if(activated){controlSeq=0;tool='control';for(const item of dialog.querySelectorAll('[data-tool]'))item.setAttribute('aria-pressed',String(item.dataset.tool==='control'));}controlUI();if(value.message)status.textContent=value.message;}
-      else if(value.type==='control-result'&&value.seq===controlPending){clearTimeout(controlTimeout);controlPending=null;controlUI();status.textContent=value.ok?'Phone action completed.':value.message||'The phone could not perform that action.';}
-      else if(value.type==='stopped'){watching=null;resetControl();hideFrame();status.textContent='The guest stopped sharing.';}
+      else if(value.type==='watching'){watching=preferredShare=value.id;capture=value.capture||null;marks=value.marks||[];laser=null;status.textContent='Live phone screen · click a field and type with your PC keyboard.';draw();}
+      else if(value.type==='capture'){if(control.advancedInput)input?.rotate();else mouse?.release();capture=value;hideFrame();controlUI();}
+      else if(value.type==='control-state'){const activated=!control.canControl&&value.canControl;control=value;if(value.resumeProof&&watching)resumeProofs.set(watching,{value:value.resumeProof,until:Date.now()+(value.expiresIn||600000)});if(value.state!=='active'){input?.stop();mouse?.release();clearTimeout(controlTimeout);controlPending=null;}if(activated){controlSeq=0;tool='control';for(const item of dialog.querySelectorAll('[data-tool]'))item.setAttribute('aria-pressed',String(item.dataset.tool==='control'));}controlUI();if(value.message)status.textContent=value.message;}
+      else if(value.type==='control-result'&&value.seq===controlPending){clearTimeout(controlTimeout);controlPending=null;input?.result(value.ok);controlUI();if(!value.ok)status.textContent=value.message||'The phone could not perform that action.';}
+      else if(value.type==='desktop-state')input?.desktopState(value);
+      else if(value.type==='desktop-input')input?.native(value.event);
+      else if(value.type==='stopped'){if(!value.reconnect)resumeProofs.delete(watching);watching=null;resumeAttempted='';resetControl();hideFrame();status.textContent=value.reconnect?'Phone disconnected · waiting to reconnect…':'The phone stopped sharing.';}
       else if(value.type==='mark')applyMark(value);
     };
-    current.onclose=()=>{if(socket!==current)return;socket=null;resetControl();if(stream||starting)stop('Sharing disconnected. Start again to reconnect.');if(owner){shares=[];watching=null;renderShares();hideFrame();status.textContent='Connection closed. Reopen Guest screens to reconnect.';}};
+    current.addEventListener('open',()=>{reconnectAttempt=0;});
+    current.onclose=()=>{if(socket!==current)return;socket=null;resetControl();if(stream||starting)stop('Sharing disconnected. Start again to reconnect.');if(owner){shares=[];watching=null;resumeAttempted='';renderShares();hideFrame();status.textContent='Connection interrupted · reconnecting…';clearTimeout(reconnectTimer);const version=epoch;reconnectTimer=setTimeout(()=>{if(version===epoch&&owner&&dialog.open&&window.PCRAuth?.signedIn)void connect().then(renderShares).catch(()=>{});},Math.min(15000,500*2**Math.min(reconnectAttempt++,5)));}};
     return new Promise((resolve,reject)=>{current.addEventListener('open',resolve,{once:true});current.addEventListener('error',()=>reject(Error('Could not connect to screen sharing.')),{once:true});});
   }
   function renderShares(){
     select.replaceChildren();for(const [index,share]of shares.entries()){const option=document.createElement('option');option.value=share.id;option.textContent=share.device||'Shared device '+(index+1);select.append(option);}select.disabled=!shares.length;
     if(watching&&shares.some(share=>share.id===watching))select.value=watching;
-    else if(shares.length&&dialog.open){watching=shares[0].id;hideFrame();send({type:'watch',id:watching});}
+    else if(shares.length&&dialog.open){watching=(shares.find(share=>share.id===preferredShare)||shares[0]).id;hideFrame();send({type:'watch',id:watching});}
     else{watching=null;hideFrame();}
     button.textContent='Phone control'+(shares.length?' · '+shares.length:'');
     if(!shares.length&&owner)status.textContent='On your phone, open PC Remote and tap Use PC mouse. Approve screen sharing, then request control here.';
   }
-  select.addEventListener('change',()=>{resetControl();watching=select.value;hideFrame();send({type:'watch',id:watching});});
+  select.addEventListener('change',()=>{resumeProofs.delete(watching);resetControl();watching=preferredShare=select.value;resumeAttempted='';hideFrame();send({type:'watch',id:watching});});
   async function start(){
     if(starting||stream||nativeSharing||owner)return;const version=epoch;starting=true;q('[data-share]').disabled=true;
     if(nativeAvailable()){nativePending=true;q('[data-stop]').hidden=false;status.textContent='Approve sharing your entire phone screen in Android’s prompt. If asked, choose Entire screen.';nativeSend({type:'start'});return;}
@@ -119,16 +131,17 @@
   }
   function applyMark(mark){if(mark.tool==='clear')marks=[];else if(mark.tool==='pen'){marks.push(mark);marks=marks.slice(-160);}else laser={...mark,at:Date.now()};draw();}
   function point(event){const rect=bounds();if(!rect)return null;const box=canvas.getBoundingClientRect(),x=(event.clientX-box.left-rect.x)/rect.w,y=(event.clientY-box.top-rect.y)/rect.h;return x>=0&&x<=1&&y>=0&&y<=1?{x,y}:null;}
-  mouse=window.PCRPhoneMouse.create({canvas,button:mouseButton,ready:()=>owner&&tool==='control'&&control.canControl&&control.mouseSupported&&capture?.generation===displayedGeneration,point,sendPointer,sendGesture:sendControl,busy:()=>!!controlPending,status:message=>{status.textContent=message;},onRelease:()=>{controlTouch=null;}});
+  mouse=window.PCRPhoneMouse.create({canvas,button:mouseButton,ready:()=>owner&&tool==='control'&&control.canControl&&control.mouseSupported,point,sendPointer,sendGesture:sendControl,busy:()=>!!controlPending,status:message=>{status.textContent=message;},onRelease:()=>{controlTouch=null;}});
+  input=window.PCRPhoneInput.create({canvas,controls,mouse,ready:()=>owner&&tool==='control'&&control.canControl&&control.advancedInput&&capture?.generation===displayedGeneration,busy:()=>!!controlPending,send:sendControl,sendPointer,sendDesktop:send,state:()=>control,point:event=>mouse.point(event),status:message=>{status.textContent=message;},upload:async files=>{const target=shares.find(share=>share.id===watching)?.deviceId,version=epoch;try{await window.PCRPhoneDrop.send(files,target,{status:message=>{status.textContent=message;},active:()=>version===epoch&&window.PCRAuth?.signedIn&&owner});}catch(error){status.textContent=error.message;}}});
   function mark(event,force=false){const p=point(event);if(!p||!(owner?watching:stream||nativeSharing))return;const now=Date.now();if(!force&&now-lastSent<35)return;lastSent=now;const value={type:'mark',tool,points:tool==='pen'&&lastPoint?[lastPoint,p]:[p,p],color:owner?'#66e6bc':'#82b7ff'};lastPoint=p;applyMark(value);send(value);}
   canvas.addEventListener('pointerdown',event=>{
     if(tool==='control'&&window.PCRHoldControl&&!window.PCRHoldControl.can('phone')){event.preventDefault();event.stopImmediatePropagation();return;}
-    if(tool!=='control')return;event.preventDefault();event.stopImmediatePropagation();const p=mouse.point(event);if(!p||!control.canControl||controlPending||capture?.generation!==displayedGeneration)return;
+    if(tool!=='control'||control.advancedInput)return;event.preventDefault();event.stopImmediatePropagation();const p=mouse.point(event);if(!p||!control.canControl||controlPending||capture?.generation!==displayedGeneration)return;
     controlTouch={point:p,at:performance.now(),button:event.button,id:event.pointerId};if(!mouse.locked)canvas.setPointerCapture(event.pointerId);
   },true);
   canvas.addEventListener('pointermove',event=>{if(tool==='control'){event.preventDefault();event.stopImmediatePropagation();}},true);
   canvas.addEventListener('pointerup',event=>{
-    if(tool!=='control')return;event.preventDefault();event.stopImmediatePropagation();const start=controlTouch;controlTouch=null;const p=mouse.point(event);if(!start||start.id!==event.pointerId||!p)return;
+    if(tool!=='control'||control.advancedInput)return;event.preventDefault();event.stopImmediatePropagation();const start=controlTouch;controlTouch=null;const p=mouse.point(event);if(!start||start.id!==event.pointerId||!p)return;
     const elapsed=performance.now()-start.at;
     if(Math.hypot(p.x-start.point.x,p.y-start.point.y)>.015)sendControl({action:'swipe',points:[start.point,p],duration:Math.max(100,Math.min(1500,Math.round(elapsed)))});
     else sendControl({action:start.button===2||elapsed>500?'longpress':'tap',points:[p]});
@@ -138,12 +151,13 @@
   for(const item of dialog.querySelectorAll('[data-tool]'))item.addEventListener('click',()=>{mouse?.release();tool=item.dataset.tool;for(const other of dialog.querySelectorAll('[data-tool]'))other.setAttribute('aria-pressed',String(other===item));controlUI();});
   q('[data-clear]').addEventListener('click',()=>{const value={type:'mark',tool:'clear'};applyMark(value);send(value);});q('[data-share]').addEventListener('click',start);q('[data-stop]').addEventListener('click',()=>stop('You stopped screen sharing.'));q('[data-close]').addEventListener('click',()=>dialog.close());
   button.addEventListener('click',()=>{dialog.showModal();draw();if(owner)void connect().then(renderShares).catch(error=>{status.textContent=error.message;});else if(nativeAvailable()&&!nativeSharing)void start();});
-  dialog.addEventListener('close',()=>{window.PCRHoldControl?.release();if(!owner)stop();else{send({type:'watch',id:''});watching=null;resetControl();hideFrame();}});
+  dialog.addEventListener('close',()=>{clearTimeout(reconnectTimer);window.PCRHoldControl?.release();if(!owner)stop();else{resumeProofs.delete(watching);send({type:'watch',id:''});watching=null;resetControl();hideFrame();}});
   new ResizeObserver(draw).observe(stage);window.addEventListener('pagehide',()=>{stop();socket?.close();});
-  function authChanged(){const auth=window.PCRAuth||{},next=auth.signedIn?(auth.role==='owner'?'owner':'guest:'+auth.guestId):'';if(next===account)return;account=next;epoch++;stop();socket?.close();socket=null;dialog.close();shares=[];watching=null;owner=auth.role==='owner'&&!nativeAvailable();button.hidden=!auth.signedIn;
+  function authChanged(){const auth=window.PCRAuth||{},next=auth.signedIn?(auth.role==='owner'?'owner':'guest:'+auth.guestId):'';if(next===account)return;account=next;epoch++;clearTimeout(reconnectTimer);resumeProofs.clear();stop();socket?.close();socket=null;dialog.close();shares=[];watching=null;owner=auth.role==='owner'&&!nativeAvailable();button.hidden=!auth.signedIn;
     q('h2').textContent=owner?'Phone control':nativeAvailable()?'Use your PC mouse':'Share your screen';q('.guestScreenHint').textContent=owner?'Control your phone with the mouse. Right-click to long-press; use the wheel to scroll.':nativeAvailable()?'Approve sharing, then open Phone control on your PC. You can open other phone apps while control is active.':'Choose a screen or window to share.';q('.guestScreenSelect').hidden=!owner;q('[data-share]').hidden=owner;
     q('[data-share]').textContent=nativeAvailable()?'Share phone screen':'Share my screen';q('.guestEyebrow').textContent='YOUR DEVICES';
     button.textContent=owner?'Phone control':nativeAvailable()?'Use PC mouse':'Share my screen';if(owner&&auth.signedIn)void connect().catch(()=>{});
+    if(owner&&auth.signedIn&&new URLSearchParams(location.search).get('phone-control')==='1')button.click();
   }
   window.addEventListener('pcr:auth',authChanged);authChanged();
 })();

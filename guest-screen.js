@@ -9,14 +9,14 @@ function jpegSize(bytes){
   return null;
 }
 function validMark(value){return value&&['laser','pen','clear'].includes(value.tool)&&(value.tool==='clear'||Array.isArray(value.points)&&value.points.length>=1&&value.points.length<=64&&value.points.every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.x<=1&&p.y>=0&&p.y<=1));}
-function createGuestScreen({sessions,auth,sessionExpiry}){
+function createGuestScreen({sessions,auth,sessionExpiry,openHandoff}){
   const wss=new WebSocketServer({noServer:true,maxPayload:1024*1024,perMessageDeflate:false}),peers=new Set();
   const send=(peer,data)=>{if(peer.ws.readyState===WebSocket.OPEN&&peer.ws.bufferedAmount<512*1024)peer.ws.send(typeof data==='string'||Buffer.isBuffer(data)?data:JSON.stringify(data));};
   const sharing=id=>Array.from(peers).find(p=>p.id===id&&p.sharing);
-  const control=createPhoneControl({send,peers,sharing});
-  const shareList=()=>Array.from(peers).filter(p=>p.sharing).map(p=>({id:p.id,device:p.device}));
+  const control=createPhoneControl({send,peers,sharing,openHandoff});
+  const shareList=()=>Array.from(peers).filter(p=>p.sharing).map(p=>({id:p.id,device:p.device,deviceId:p.deviceId||''}));
   function announce(){const shares=shareList();for(const peer of peers)if(peer.owner&&!peer.publisher)send(peer,{type:'shares',shares});}
-  function stopShare(peer){control.end(peer);peer.frame=null;peer.capture=null;if(!peer.sharing)return;peer.sharing=false;peer.marks=[];for(const watcher of peers)if(watcher.owner&&watcher.watching===peer.id){watcher.watching=null;send(watcher,{type:'stopped'});}announce();}
+  function stopShare(peer,reconnect=false){control.end(peer,undefined,reconnect);peer.frame=null;peer.capture=null;if(!peer.sharing)return;peer.sharing=false;peer.marks=[];for(const watcher of peers)if(watcher.owner&&watcher.watching===peer.id){watcher.watching=null;send(watcher,{type:'stopped',id:peer.id,reconnect});}announce();}
   function upgrade(req,socket,head,token){
     wss.handleUpgrade(req,socket,head,ws=>{
       const session=sessions.get(token);if(!session){ws.close(1008,'Session ended');return;}
@@ -25,7 +25,7 @@ function createGuestScreen({sessions,auth,sessionExpiry}){
       peers.add(peer);const expiry=sessionExpiry(()=>session.until,()=>ws.close(1008,'Session expired'));
       send(peer,{type:'ready',role:peer.owner?'owner':'guest'});if(peer.owner)send(peer,{type:'shares',shares:shareList()});
       ws.on('error',()=>{});ws.on('pong',()=>{peer.alive=true;});
-      const heartbeat=setInterval(()=>{if(auth(req)!==token||!peer.alive){stopShare(peer);ws.terminate();return;}peer.alive=false;ws.ping();},15000);heartbeat.unref();
+      const heartbeat=setInterval(()=>{const authorized=auth(req)===token;if(!authorized||!peer.alive){control.detach(peer,authorized);stopShare(peer,authorized);ws.terminate();return;}peer.alive=false;ws.ping();},15000);heartbeat.unref();
       ws.on('message',(bytes,binary)=>{
         if(auth(req)!==token){stopShare(peer);ws.close(1008,'Session ended');return;}
         const now=Date.now();if(now-peer.rateAt>=1000){peer.rate=0;peer.rateAt=now;}if(++peer.rate>120){ws.close(1008,'Too many sharing messages');return;}
@@ -35,7 +35,12 @@ function createGuestScreen({sessions,auth,sessionExpiry}){
           for(const watcher of peers)if(watcher.owner&&watcher.watching===peer.id)send(watcher,bytes);return;
         }
         let body;try{if(bytes.length>16000)throw Error();body=JSON.parse(bytes.toString());if(!body||typeof body!=='object')throw Error();}catch{ws.close(1008,'Invalid sharing message');return;}
-        if(body.type==='start'){control.detach(peer);peer.publisher=true;peer.watching=null;peer.sharing=true;peer.controlSupported=body.controlSupported===true;peer.mouseSupported=peer.controlSupported&&body.mouseSupported===true;if(typeof body.device==='string'&&body.device.trim())peer.device=body.device.trim().replace(/[\u0000-\u001f]/g,'').slice(0,80);peer.capture=null;peer.marks=[];peer.frame=null;peer.lastFrame=0;announce();send(peer,{type:'sharing'});return;}
+        if(body.type==='start'){
+          control.detach(peer);if(peer.owner&&typeof body.shareKey==='string'&&/^[a-f0-9]{32}$/.test(body.shareKey))peer.id='phone-'+body.shareKey;
+          for(const old of peers)if(old!==peer&&old.sharing&&old.id===peer.id){stopShare(old,true);old.ws.close(1001,'Sharing moved to another connection');}
+          peer.publisher=true;peer.watching=null;peer.sharing=true;peer.controlSupported=body.controlSupported===true;peer.mouseSupported=peer.controlSupported&&body.mouseSupported===true;peer.advancedInput=peer.mouseSupported&&body.advancedInput===true;peer.deviceId=typeof body.deviceId==='string'&&/^[A-Za-z0-9-]{12,80}$/.test(body.deviceId)?body.deviceId:'';
+          if(typeof body.device==='string'&&body.device.trim())peer.device=body.device.trim().replace(/[\u0000-\u001f]/g,'').slice(0,80);peer.capture=null;peer.marks=[];peer.frame=null;peer.lastFrame=0;announce();send(peer,{type:'sharing'});return;
+        }
         if(body.type==='stop'&&peer.publisher){stopShare(peer);return;}
         if(body.type==='watch'&&peer.owner&&!peer.publisher){const target=sharing(body.id);if(peer.watching!==target?.id)control.detach(peer);peer.watching=target?.id||null;send(peer,target?{type:'watching',id:target.id,marks:target.marks,capture:target.capture}:{type:'stopped'});if(target){send(peer,control.state(target,peer));if(target.frame)send(peer,target.frame);}return;}
         if(control.handle(peer,body))return;
@@ -46,10 +51,11 @@ function createGuestScreen({sessions,auth,sessionExpiry}){
           for(const other of peers)if(other!==peer&&(other===target||other.owner&&other.watching===target.id))send(other,mark);
         }
       });
-      ws.on('close',()=>{control.detach(peer);stopShare(peer);peers.delete(peer);clearInterval(heartbeat);expiry();});
+      ws.on('close',code=>{const reconnect=!peer.revoked&&auth(req)===token&&![1000,1008].includes(code);control.detach(peer,reconnect);stopShare(peer,reconnect);peers.delete(peer);clearInterval(heartbeat);expiry();});
     });
   }
-  function revoke(token){for(const peer of peers)if(!token||peer.token===token){control.detach(peer);stopShare(peer);peer.ws.close(1001,'Session ended');const timer=setTimeout(()=>peer.ws.terminate(),300);timer.unref();}}
-  return {upgrade,revoke,close(){revoke();wss.close();}};
+  function revoke(token){for(const peer of peers)if(!token||peer.token===token){peer.revoked=true;control.detach(peer);stopShare(peer);peer.ws.close(1001,'Session ended');const timer=setTimeout(()=>peer.ws.terminate(),300);timer.unref();}}
+  function offerFiles(deviceId,offers,accept=()=>true){let sent=false;for(const peer of peers)if(peer.owner&&peer.sharing&&peer.deviceId===deviceId&&accept(peer.token)){for(const offer of offers)send(peer,{type:'file-offer',offers:[offer]});sent=true;}return sent;}
+  return {upgrade,revoke,offerFiles,close(){revoke();wss.close();}};
 }
 module.exports={createGuestScreen,jpegSize,validMark};

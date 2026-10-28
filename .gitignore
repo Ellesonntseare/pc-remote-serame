@@ -49,3 +49,6 @@ test/HostTrayChecks/bin/
 test/HostTrayChecks/obj/
 
 /--nologo*
+
+test/PhoneDeskChecks/bin/
+test/PhoneDeskChecks/obj/

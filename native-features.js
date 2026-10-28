@@ -22,7 +22,7 @@ class AudioPacketReader{
 function validFormat(value){return value&&value.type==='format'&&value.encoding==='f32le'&&value.source==='system-output'&&Number.isInteger(value.sampleRate)&&value.sampleRate>=8000&&value.sampleRate<=192000&&Number.isInteger(value.channels)&&value.channels>=1&&value.channels<=2;}
 function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fsImpl=fs,now=Date.now}={}){
   if(typeof root!=='string')throw TypeError('Native feature root is required.');
-  const appTokens=new Map(),audioSessions=new Set();let closed=false;
+  const appTokens=new Map(),audioSessions=new Set(),phoneSessions=new Set();let closed=false;
   function helper(argument){
     if(closed)throw Error('PC services are stopping.');
     if(platform!=='win32')throw Error('This feature requires the Windows host.');
@@ -100,7 +100,20 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     child.on('error',()=>fail(Error('The Windows output helper could not start.')));child.on('close',()=>{if(!stopped)fail(Error('The Windows output helper stopped.'));finish();});
     child.stdin.write(JSON.stringify({sampleRate,channels,volume,...outputDevice==='virtual-mic'&&{output:outputDevice},...encoding==='opus'&&{encoding}})+'\n');return session;
   }
-  function close(){closed=true;appTokens.clear();for(const session of audioSessions)session.stop();}
+  function openPhoneInput({side='right',width,height,sensitivity=1,onEvent=()=>{},onError=()=>{},onClose=()=>{}}={}){
+    function config(value){if(!['left','right','top','bottom'].includes(value.side)||!Number.isInteger(value.width)||!Number.isInteger(value.height)||value.width<2||value.height<2||value.width>16384||value.height>16384||!Number.isFinite(value.sensitivity)||value.sensitivity<.3||value.sensitivity>3)throw Error('Choose a valid phone arrangement.');return {side:value.side,width:value.width,height:value.height,sensitivity:value.sensitivity};}
+    const initial=config({side,width,height,sensitivity}),child=helper('--phone-handoff');let stopped=false,ended=false,pending='',killTimer;
+    function finish(){if(ended)return;ended=true;clearInterval(heartbeat);clearTimeout(killTimer);phoneSessions.delete(session);onClose();}
+    function write(value){if(stopped||!child.stdin.writable||child.stdin.writableLength>8192)return false;return child.stdin.write(JSON.stringify(value)+'\n');}
+    function stop(){if(stopped)return;stopped=true;clearInterval(heartbeat);try{child.stdin.end('{"type":"stop"}\n');}catch{}killTimer=setTimeout(()=>{try{child.kill();}catch{}finish();},1500);killTimer.unref?.();}
+    function fail(){if(stopped)return;try{onError(Error('Windows mouse handoff stopped. Your PC mouse has been released.'));}finally{stop();}}
+    const session={stop,release:()=>write({type:'release'}),update:value=>write({type:'config',...config(value)})};phoneSessions.add(session);
+    const heartbeat=setInterval(()=>{if(!write({type:'heartbeat'}))fail();},1000);heartbeat.unref?.();
+    child.stdin.on('error',fail);child.stderr.resume();child.stdout.setEncoding('utf8');
+    child.stdout.on('data',text=>{if(stopped)return;pending+=text;if(pending.length>16384){fail();return;}let newline;while((newline=pending.indexOf('\n'))>=0){const line=pending.slice(0,newline);pending=pending.slice(newline+1);try{const value=JSON.parse(line);if(!['state','pointer','drag','down','up','longpress','wheel','key','text'].includes(value.kind))throw Error();if(value.kind==='state'){if(!['armed','active'].includes(value.state))throw Error();}else if(value.kind==='text'){if(typeof value.text!=='string'||!value.text||value.text.length>256||value.text.includes('\0'))throw Error();}else if(value.kind==='key'){if(typeof value.key!=='string'||value.key.length>24||!Number.isInteger(value.modifiers)||value.modifiers<0||value.modifiers>7)throw Error();}else if(!Number.isFinite(value.x)||!Number.isFinite(value.y)||value.x<0||value.x>1||value.y<0||value.y>1)throw Error();onEvent(value);}catch{fail();return;}}});
+    child.on('error',fail);child.on('close',()=>{if(!stopped)fail();finish();});write(initial);return session;
+  }
+  function close(){closed=true;appTokens.clear();for(const session of audioSessions)session.stop();for(const session of phoneSessions)session.stop();}
   async function sendMedia(action){
     if(!['volup','voldown','mute','playpause','next','prev'].includes(action))throw Error('Invalid media command.');
     return request('--media',{action});
@@ -113,6 +126,6 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
   }
   let currentAppPending=null,currentAppValue=null,currentAppAt=0;
   async function currentApp(){if(currentAppValue&&now()-currentAppAt<1500)return currentAppValue;if(currentAppPending)return currentAppPending;currentAppPending=request('--app-current').then(value=>{currentAppValue=value;currentAppAt=now();return value;}).finally(()=>currentAppPending=null);return currentAppPending;}
-  return {fileLocations:()=>request('--file-locations'),fileThumbnail:file=>request('--file-thumbnail',{path:file}),listApps,currentApp,focusApp,presentationApp,sendMedia,openLink,openAudio,openAudioOutput,audioDevices:()=>request('--audio-devices'),close};
+  return {openPhoneInput,fileLocations:()=>request('--file-locations'),fileThumbnail:file=>request('--file-thumbnail',{path:file}),listApps,currentApp,focusApp,presentationApp,sendMedia,openLink,openAudio,openAudioOutput,audioDevices:()=>request('--audio-devices'),close};
 }
 module.exports={createNativeFeatures,AudioPacketReader,validFormat};

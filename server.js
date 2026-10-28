@@ -84,7 +84,7 @@ const PWA_ASSETS = new Map([
   ['/file-manager.css',['file-manager.css','text/css; charset=utf-8']],
   ['/brand.svg', ['brand.svg', 'image/svg+xml']],
   ['/app-refinements.css', ['app-refinements.css', 'text/css; charset=utf-8']],
-  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','guest-screen.js','workspace-ui.js','page-navigation.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
+  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','phone-input.js','phone-drop.js','guest-screen.js','workspace-ui.js','page-navigation.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
   ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css','workspace-ui.css','page-navigation.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
   ['/input-transport.js', ['input-transport.js', 'text/javascript; charset=utf-8']],
   ['/pwa.js', ['pwa.js', 'text/javascript; charset=utf-8']],
@@ -626,6 +626,19 @@ function createApp(options={}) {
         const match=/^\/api\/companion\/devices\/([-a-zA-Z0-9]{12,80})\/command$/.exec(pathname);if(req.method==='POST'&&match){try{const body=await jsonBody(req,128*1024),result=await companions.request(scope,match[1],body.action,body.payload||{},body.action==='file-hash'?60000:15000);if(['ring','stop-ring'].includes(body.action))accountData.record(scope,{type:'devices',action:'devices.'+body.action,label:body.action==='ring'?'Find my phone started':'Find my phone stopped',device:sessions.get(token)?.deviceName||'PC Remote'});return respond(res,200,{ok:true,result});}catch(error){return respond(res,error.status||503,{error:error.status?error.message:'The phone could not complete that action.'});}}
         return respond(res,405,{error:'Device action unavailable.'});
       }
+      if(pathname==='/api/phone/files'&&req.method==='POST'){
+        if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Sign in as the owner to send files to a phone.'});
+        try{
+          const body=await jsonBody(req,32768),scope=workspaceScope(token)||'owner';
+          if(typeof body.target!=='string'||!Array.isArray(body.names)||!body.names.length||body.names.length>100||body.names.some(name=>typeof name!=='string'||name.length>1200)||typeof body.group!=='string'||!/^[a-f0-9-]{32,36}$/.test(body.group))return respond(res,400,{error:'Choose files and one receiving phone.'});
+          const devices=await syncHub.devices(scope);if(!devices.some(device=>device.id===body.target))return respond(res,404,{error:'Open PC Remote on that phone using the same account first.'});
+          const files=await Promise.all(body.names.map(name=>fileTransfers.resolveFile(name)));
+          const result=await syncHub.enqueue({accountKey:scope,files,target:body.target,returnItems:true});
+          const offers=result.items.map(item=>({id:item.id,name:item.label,size:item.size,path:'/api/files/download?name='+encodeURIComponent(item.name),group:body.group}));
+          const receiving=guestScreens.offerFiles(body.target,offers,phoneToken=>(workspaceScope(phoneToken)||'owner')===scope);
+          return respond(res,200,{ok:true,count:result.count,receiving});
+        }catch(error){return respond(res,error.status||400,{error:error.status?error.message:'Files could not be queued for the phone.'});}
+      }
       if(pathname==='/api/host/send'&&req.method==='POST'||pathname==='/api/host/targets'&&req.method==='GET'){
         if(viaTunnel||!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)||!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Use Send to my phone from this Windows PC.'});
         try{if(req.method==='GET')return respond(res,200,{ok:true,devices:await syncHub.devices(workspaceScope(token)||'owner')});const body=await jsonBody(req,1024*1024);return respond(res,200,await syncHub.enqueue({accountKey:workspaceScope(token)||'owner',files:body.files||[],text:body.text||'',target:body.target||'*'}));}catch(error){return respond(res,error.status||400,{error:error.status?error.message:'The selected files could not be queued.'});}
@@ -818,7 +831,7 @@ function createApp(options={}) {
   server.keepAliveTimeout=65000;server.headersTimeout=70000;
   const inputStream=new WebSocketServer({noServer:true,maxPayload:100000,perMessageDeflate:false});
   const audioStream=new WebSocketServer({noServer:true,maxPayload:1024,perMessageDeflate:false});
-  const guestScreens=createGuestScreen({sessions,auth,sessionExpiry});
+  const guestScreens=createGuestScreen({sessions,auth,sessionExpiry,openHandoff:options.nativeFeatures?.openPhoneInput||(!options.disableAgent&&process.platform==='win32'?value=>nativeFeatures.openPhoneInput(value):undefined)});
   const webRtcVideo=createWebRtcVideo({sessions,auth,sessionExpiry});
   const nativeVideo=createNativeVideo({root:ROOT,sessions,auth,sessionExpiry,enabled:enabled&&!options.disableAgent,...options.nativeVideoDependencies});
   const cameraChannels=new Map(['pc','phone'].map(room=>[room,createWebRtcVideo({sessions,auth,sessionExpiry})]));

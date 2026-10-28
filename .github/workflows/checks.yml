@@ -45,3 +45,4 @@ jobs:
       - run: dotnet run --project test/AudioCodecChecks/AudioCodecChecks.csproj -c Release
       - run: dotnet build HostTray/HostTray.csproj -c Release --nologo
       - run: dotnet run --project test/HostTrayChecks/HostTrayChecks.csproj -c Release
+      - run: dotnet run --project test/PhoneDeskChecks/PhoneDeskChecks.csproj -c Release

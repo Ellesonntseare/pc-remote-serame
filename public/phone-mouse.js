@@ -4,7 +4,7 @@
   function wheelGesture(point,deltaX,deltaY){
     if(!point||!Number.isFinite(point.x)||!Number.isFinite(point.y)||!Number.isFinite(deltaX)||!Number.isFinite(deltaY)||(!deltaX&&!deltaY))return null;
     const horizontal=Math.abs(deltaX)>Math.abs(deltaY),delta=horizontal?deltaX:deltaY;
-    const distance=Math.min(.55,Math.max(.08,Math.abs(delta)/900)),axis=horizontal?'x':'y';
+    const distance=Math.min(.55,Math.max(.012,Math.abs(delta)/1100)),axis=horizontal?'x':'y';
     const start={x:clamp(point.x),y:clamp(point.y)},end={...start};
     // Move a finger opposite to the requested content-scroll direction.
     start[axis]=Math.max(distance,Math.min(1-distance,start[axis]));
@@ -65,7 +65,7 @@
     document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});
     window.addEventListener('pcr:hold-release',event=>{if(event.detail.scope==='phone')release();});
     window.addEventListener('pagehide',release);
-    return {release,refresh,point:event=>locked()?position:point(event),get locked(){return locked();}};
+    return {release,refresh,setPoint:value=>{if(Number.isFinite(value.x)&&Number.isFinite(value.y))position={x:clamp(value.x),y:clamp(value.y)};},point:event=>locked()?position:point(event),get locked(){return locked();}};
   }
   if(typeof module==='object'&&module.exports)module.exports={wheelGesture};
   else window.PCRPhoneMouse={create,wheelGesture};

@@ -380,6 +380,7 @@ class MainActivity : Activity() {
                     "stop" -> { pendingProjection = false; ScreenShareService.stopSharing() }
                     "mark" -> ScreenShareService.forwardMark(value)
                     "control-stop" -> ScreenShareService.stopPhoneControl()
+                    "phone-receive-folder" -> {externalActivity=true;startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),512)}
                 }
             } catch (_: Exception) { reply.postMessage("{\"type\":\"stopped\",\"message\":\"Could not start phone sharing.\"}") }
         }
@@ -407,6 +408,11 @@ class MainActivity : Activity() {
     @Deprecated("MediaProjection consent result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if(requestCode==512){
+            val folder=data?.data
+            if(resultCode==RESULT_OK&&folder?.scheme=="content"&&isAllowed(web.url?:""))runCatching{contentResolver.takePersistableUriPermission(folder,(data?.flags?:0) and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION));prefs.edit().putString("phoneDropFolder",folder.toString()).apply();Toast.makeText(this,"Incoming files will save to this folder with their original names.",Toast.LENGTH_LONG).show()}
+            return
+        }
         if(requestCode==511){finishSyncFolder(resultCode,data);return}
         if(requestCode==508){val source=pendingPhoneAudio;pendingPhoneAudio=null;if(source=="playback"&&resultCode==RESULT_OK&&data!=null&&isAllowed(web.url?:""))startPhoneAudio(source,data,resultCode)else phoneAudioEvent("stopped","Android audio sharing was cancelled.");return}
         if(requestCode==509){

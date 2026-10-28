@@ -90,6 +90,18 @@ private val EMOJI = listOf(
 )
 
 class SerameKeyboardService : InputMethodService() {
+    companion object { var instance:SerameKeyboardService?=null;private set }
+    internal fun phoneInput(command:za.co.pcremote.controller.PhoneCommand):Boolean {
+        if(!isInputViewShown||currentInputEditorInfo?.packageName==packageName)return false
+        val connection=currentInputConnection?:return false
+        if(command.action=="insert")return connection.commitText(command.text,1)
+        if(command.key=="Enter"&&performDefaultEditorAction(true))return true
+        val context=za.co.pcremote.controller.PhoneKeys.context(command)
+        if(context!=null)return connection.performContextMenuAction(context)
+        val down=connection.sendKeyEvent(za.co.pcremote.controller.PhoneKeys.event(command,KeyEvent.ACTION_DOWN))
+        val up=connection.sendKeyEvent(za.co.pcremote.controller.PhoneKeys.event(command,KeyEvent.ACTION_UP))
+        return down&&up
+    }
 
     private lateinit var prefs: Prefs
     private lateinit var clipboard: ClipboardManager
@@ -134,6 +146,7 @@ class SerameKeyboardService : InputMethodService() {
 
     override fun onCreate() {
         super.onCreate()
+        instance=this
         prefs = Prefs(this)
         clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -144,6 +157,7 @@ class SerameKeyboardService : InputMethodService() {
     }
 
     override fun onDestroy() {
+        if(instance===this)instance=null
         clipboard.removePrimaryClipChangedListener(clipListener)
         companionObserver?.invoke(); companionObserver=null
         recognizer?.destroy();recognizer=null
