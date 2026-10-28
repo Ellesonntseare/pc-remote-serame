@@ -1,0 +1,48 @@
+/* Explorer-inspired browsing with real Windows shell thumbnails. */
+#filesDialog .fileManager{--fm-line:#7899b01f;--fm-text:#c8d8e5}
+#filesDialog .fmViewTools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0;color:#95afc0;font-size:11px}
+#filesDialog .fmViewTools>.fmDeep{display:flex;align-items:center;gap:6px;min-height:36px;margin:0;font-size:11px}
+#filesDialog .fmViewTools>div{display:flex;gap:2px;background:#05141e;border:1px solid #294352;border-radius:8px;padding:2px}
+#filesDialog .fmViewTools button{min-height:36px;padding:6px 12px;border:0;border-radius:5px;background:transparent;color:#a2bdcf;font:12px system-ui}
+#filesDialog .fmViewTools button[aria-pressed=true]{background:#1b3b4a;color:#ebf5fa}
+#filesDialog .fileManager .fmFile{border:1px solid transparent;border-radius:7px;background:transparent;box-shadow:none}
+#filesDialog .fileManager .fmFile:hover{background:#8eb7ce0c;border-color:#89b5ce26}
+#filesDialog .fileManager .fmFile.fmSelected{background:#1e758437;border-color:#4abcb5a8}
+#filesDialog .fileManager .fmFile .fmFileIcon{position:relative;display:grid;place-items:center}
+#filesDialog .fmFileIcon svg{display:block;width:100%;height:100%;overflow:visible}
+#filesDialog .fmFileIcon img{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:3px}
+#filesDialog .fmFileIcon:not(.fmHasThumbnail) img{visibility:hidden}
+#filesDialog .fmHasThumbnail svg{visibility:hidden}
+#filesDialog .fmModified,#filesDialog .fmType,#filesDialog .fmFileSize{color:#91aabc;font-size:11px}
+#filesDialog .fmColumns{display:none;color:#8ba5b7;font:11px system-ui;border-bottom:1px solid var(--fm-line);padding:10px 12px}
+#filesDialog .fileManager[data-view=icons] [data-entries]{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px;align-items:start;margin-top:8px}
+#filesDialog .fileManager[data-view=icons] .fmFile{grid-template-columns:1fr;grid-template-rows:84px auto auto auto;gap:4px;position:relative;padding:12px 8px 8px;min-height:160px;text-align:center;align-items:start}
+#filesDialog .fileManager[data-view=icons] .fmFile .fmSelect{position:absolute;left:6px;top:6px;width:20px;height:20px;z-index:1}
+#filesDialog .fileManager[data-view=icons] .fmFile .fmFileIcon{grid-column:1;grid-row:1;width:78px;height:78px;justify-self:center}
+#filesDialog .fileManager[data-view=icons] .fmFile .fmFileName{grid-column:1;grid-row:2;text-align:center!important;line-height:1.35!important;font-size:12px!important;overflow-wrap:anywhere;min-height:32px!important;max-height:50px;overflow:hidden}
+#filesDialog .fileManager[data-view=icons] .fmFile small{grid-column:1;grid-row:3;justify-self:center;font-size:10px}
+#filesDialog .fileManager[data-view=icons] .fmFile .fmModified,#filesDialog .fileManager[data-view=icons] .fmFile .fmType{display:none}
+#filesDialog .fileManager[data-view=icons] .fmFile>a{grid-column:1;grid-row:4;justify-self:center;padding:3px 12px;min-height:36px;font-size:10px;background:#102833;border:1px solid #355262;border-radius:6px}
+#filesDialog .fileManager[data-view=details] [data-entries]{gap:0;margin-top:0}
+#filesDialog .fileManager[data-view=details] .fmFile{grid-template-columns:24px 32px minmax(0,1fr) 68px;grid-template-rows:auto auto;min-height:62px;padding:8px 10px;gap:3px 8px;border-bottom-color:var(--fm-line);border-radius:0}
+#filesDialog .fileManager[data-view=details] .fmFile .fmFileIcon{width:30px;height:34px}
+#filesDialog .fileManager[data-view=details] .fmFile .fmModified{grid-column:3;grid-row:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#filesDialog .fileManager[data-view=details] .fmFile .fmType{display:none}
+#filesDialog .fileManager[data-view=details] .fmFile small{grid-column:3;grid-row:3;font-size:10px}
+#filesDialog .fileManager[data-view=details] .fmFile>a{grid-column:4;grid-row:1/4}
+@media(min-width:900px){
+  #filesDialog .fileManager [data-pc-files]{display:grid;grid-template-columns:172px minmax(0,1fr);column-gap:24px;align-items:start}
+  #filesDialog .fileManager [data-pc-files]>*{grid-column:2;min-width:0}
+  #filesDialog .fileManager [data-pc-files]>.fmRoots{grid-column:1;grid-row:1/16;position:sticky;top:16px;display:flex;flex-direction:column;align-items:stretch;margin:0;border-right:1px solid var(--fm-line);padding-right:14px;gap:4px}
+  #filesDialog .fileManager .fmRoots button{flex:0 0 auto;text-align:left;background:transparent;border-color:transparent;min-height:42px}
+  #filesDialog .fileManager .fmRoots button:before{content:'▰';color:#efc55a;margin-right:10px}
+  #filesDialog .fileManager .fmRoots button[aria-current=true]{background:#1b526030;border-color:#558c9c42;color:#c3e8ed}
+  #filesDialog .fileManager[data-view=details] .fmColumns{display:grid;grid-template-columns:minmax(0,1fr) 160px 90px 80px;padding-left:84px;padding-right:88px;gap:12px}
+  #filesDialog .fileManager[data-view=details] .fmFile{grid-template-columns:24px 32px minmax(0,1fr) 160px 90px 80px 64px;grid-template-rows:auto;min-height:50px;gap:12px}
+  #filesDialog .fileManager[data-view=details] .fmFile .fmSelect,#filesDialog .fileManager[data-view=details] .fmFile .fmFileIcon,#filesDialog .fileManager[data-view=details] .fmFile .fmFileName{grid-row:1}
+  #filesDialog .fileManager[data-view=details] .fmFile .fmModified{grid-column:4;grid-row:1}
+  #filesDialog .fileManager[data-view=details] .fmFile .fmType{display:block;grid-column:5;grid-row:1}
+  #filesDialog .fileManager[data-view=details] .fmFile small{grid-column:6;grid-row:1;white-space:nowrap;font-size:11px}
+  #filesDialog .fileManager[data-view=details] .fmFile>a{grid-column:7;grid-row:1;min-height:36px}
+}
+@media(max-width:359px){#filesDialog .fileManager[data-view=icons] [data-entries]{grid-template-columns:repeat(2,minmax(0,1fr))}#filesDialog .fmViewTools{gap:6px}}

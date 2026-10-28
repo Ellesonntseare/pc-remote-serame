@@ -1,3 +1,16 @@
+# Personal app 2.1.3 fullscreen and Files — 28 October 2026
+
+- [x] Added one-finger PC scrolling at the right edge of fullscreen, a Fit action and a visible exit control. Fullscreen fits portrait/landscape and returns to Fit after closing typing.
+- [x] Kept screen/video/frame acknowledgement streams alive across Android Home/PiP entry. Unsuccessful entry expires into ordinary background pausing.
+- [x] Fixed original download filenames/extensions and MIME types, with ASCII and Unicode headers. Added APK filename parsing and unit checks for Android's document picker.
+- [x] Files has Icons/Details views, Windows shell icons/thumbnails, natural name sorting and persistent view preference. Native preview work is bounded and cached.
+- [x] Finger trail now blends with soft shading and a fading tail instead of separate hard circles.
+- [x] 50 focused checks passed. Real Windows shell previews were read successfully. Browser review passed at 320/390/844/1280 px, including fullscreen Fit, scroll-strip input, typing-close Fit and Home transition stream continuity.
+- [ ] Finish full application checks, publish signed 2.1.3 APK/installer and update the personal host.
+- [ ] Complete the function audit and record remaining improvements and physical-phone checks.
+
+---
+
 # Personal app 2.1.2 keyboard and controls — 28 October 2026
 
 - [x] Closing/reopening the keyboard retains the phone's text, acknowledged baseline and selection. Returning to the same Windows field checks its stable identity and resumes without clicking again or replaying old text; another field starts a fresh context.

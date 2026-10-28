@@ -6,7 +6,7 @@
   const pending=new Map();
   let lastFrameAck=null;
   function ready(){return !!socket&&socket.readyState===WebSocket.OPEN;}
-  function active(){return wanted&&rs.on&&!!rs.m&&!document.hidden;}
+  function active(){return wanted&&rs.on&&!!rs.m&&(!document.hidden||window.PCRMiniWindow?.keepAlive);}
   function rejectPending(message){
     for(const request of pending.values()){request.cleanup();request.reject(Error(message));}
     pending.clear();

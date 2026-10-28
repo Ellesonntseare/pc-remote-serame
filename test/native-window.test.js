@@ -23,3 +23,12 @@ test('Home eligibility follows the active remote screen and Minimise stays insid
 test('Android Home entry prepares the floating view without an explicit Minimise click',async t=>{
   const f=await fixture(t),view=f.d.getElementById('rsv');view.scrollTop=220;f.event({active:true});assert.equal(f.closes(),1);assert.equal(f.releases(),1);assert.equal(f.w.PCRMiniWindow.active,true);assert.equal(f.messages.filter(row=>row.type==='minimise').length,0);f.event({active:false});assert.equal(view.scrollTop,220);assert.deepEqual(f.zooms,[1.75]);
 });
+
+test('Home transition keeps eligibility while hidden and confirms the floating view without a stopped stream',async t=>{
+  const f=await fixture(t);f.w.PCRNativeCapabilities.homeMiniWindow=true;f.w.PCRMiniWindow.update();Object.defineProperty(f.d,'hidden',{configurable:true,value:true});f.d.dispatchEvent(new f.w.Event('visibilitychange'));assert.equal(f.messages.at(-1).active,true);assert.equal(f.w.PCRMiniWindow.background(),true);assert.equal(f.w.PCRMiniWindow.keepAlive,true);f.event({active:true});assert.equal(f.w.PCRMiniWindow.active,true);assert.equal(f.w.PCRMiniWindow.keepAlive,true);assert.ok(f.w.rs.m);
+  let paused=0;f.w.addEventListener('pcr:mini-background',()=>paused++);f.event({active:false});assert.equal(f.w.PCRMiniWindow.keepAlive,false);assert.equal(paused,1);
+});
+
+test('a Home transition that never enters PiP expires and resumes normal background pausing',async t=>{
+  const f=await fixture(t);f.w.PCRNativeCapabilities.homeMiniWindow=true;let expire,paused=0;f.w.setTimeout=(fn,ms)=>{assert.equal(ms,1800);expire=fn;return 1;};f.w.addEventListener('pcr:mini-background',()=>paused++);Object.defineProperty(f.d,'hidden',{configurable:true,value:true});assert.equal(f.w.PCRMiniWindow.background(),true);expire();assert.equal(f.w.PCRMiniWindow.keepAlive,false);assert.equal(f.d.body.classList.contains('pcrMiniWindow'),false);assert.equal(paused,1);assert.equal(f.w.PCRMiniWindow.background(),false);Object.defineProperty(f.d,'hidden',{configurable:true,value:false});f.d.dispatchEvent(new f.w.Event('visibilitychange'));assert.equal(f.w.PCRMiniWindow.keepAlive,true);
+});

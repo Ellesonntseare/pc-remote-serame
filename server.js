@@ -49,6 +49,7 @@ function sessionExpiry(until,expire,{now=Date.now,setTimer=setTimeout,clearTimer
 }
 // Explicit public asset map: no arbitrary filesystem paths or paired data.
 const PWA_ASSETS = new Map([
+  ['/file-browser.css',['file-browser.css','text/css; charset=utf-8']],
   ['/phone-audio.js',['phone-audio.js','text/javascript; charset=utf-8']],
   ['/phone-audio.css',['phone-audio.css','text/css; charset=utf-8']],
   ['/audio-capture-worklet.js',['audio-capture-worklet.js','text/javascript; charset=utf-8']],
@@ -201,7 +202,7 @@ function createApp(options={}) {
   const deviceLinks=createDeviceLinks({openLink:url=>nativeFeatures.openLink(url),readClipboard:()=>options.clipboardProvider?options.clipboardProvider.get():nativeClipboard(ROOT,'get')});
   const smart=createSmartQuality();
   const hostIdentity=os.hostname()+'|'+os.homedir();
-  const fileTransfers=createFileTransfers({directory:options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers'),maxBytes:options.maxFileBytes,watch:options.discovery===true,locations:pcLocations(options.fileLocations),locationsProvider:options.fileLocationsProvider});
+  const fileTransfers=createFileTransfers({directory:options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers'),maxBytes:options.maxFileBytes,watch:options.discovery===true,locations:pcLocations(options.fileLocations),locationsProvider:options.fileLocationsProvider,thumbnailProvider:options.thumbnailProvider||(!options.disableAgent&&nativeFeatures.fileThumbnail?file=>nativeFeatures.fileThumbnail(file):undefined)});
   const syncHub=createSyncHub({identity:hostIdentity,file:options.syncFile,stageFiles:fileTransfers.stageFromPC,getFileRevision:()=>fileTransfers.revision,getHostName:()=>hostname,setHostName:async name=>{try{await options.setDeviceName?.(name);}catch{throw Object.assign(Error('The PC name could not be saved. Check the host configuration file.'),{status:500});}hostname=name;discovery?.rename(name);},clipboard:options.clipboardProvider||{get:()=>nativeClipboard(ROOT,'get'),set:text=>nativeClipboard(ROOT,'set',text)}});
   const networkDevices=createNetworkDevices({enabled:options.discovery===true&&allowLan});
   const sessionKey=token=>crypto.createHash('sha256').update(token).digest('hex');

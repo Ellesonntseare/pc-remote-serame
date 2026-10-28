@@ -20,3 +20,14 @@
 body.screenCleanActive>.msg{display:none!important}
 #rsRestoreControls{display:none;position:absolute;z-index:70;bottom:max(15px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);border:0;border-radius:999px;padding:10px 17px;background:#162331a8;color:#b3d2df;font:600 11px system-ui;backdrop-filter:blur(12px);opacity:.45;transition:opacity .2s;cursor:pointer}#rs.screenClean.screenPresentation>#rsRestoreControls{display:inline-flex!important}#rsRestoreControls:hover,#rsRestoreControls:focus-visible{opacity:1}#rsPresentation{border:0;background:#28433b;color:#a8e7cc}
 .contextControls{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:6px 9px;background:#071a25;scrollbar-width:thin}.contextControls>span{font-size:10px;color:#8eafc3;white-space:nowrap}.contextControls button{flex:1 0 auto;min-height:36px;border:1px solid #24485a;border-radius:8px;padding:6px 9px;background:#0d2836;color:#d4e7f2;font:12px system-ui}.contextControls[hidden],#rs.typing .contextControls,#rs.screenClean .contextControls{display:none}
+
+/* Fullscreen fits the whole desktop; the side strip scrolls Windows, not the image. */
+#rs.screenClean{display:flex!important;flex-direction:column!important;padding:0!important;border:0!important;border-radius:0!important}
+#rs.screenClean>#rsv{position:absolute!important;inset:0!important;max-height:none!important;padding:0!important;margin:0!important}
+.fullscreenTouchControls{display:none;position:absolute;inset:0;pointer-events:none;z-index:8}
+#rs.screenClean>#fullscreenTouchControls{display:block!important}
+.fullscreenTouchControls>button{position:absolute;top:max(6px,env(safe-area-inset-top));width:44px;height:44px;padding:0;border:1px solid #9bc8d82b;border-radius:12px;background:#06141c99;color:#d6e8ed;font:24px system-ui;pointer-events:auto;opacity:.7;touch-action:manipulation}
+.fullscreenTouchControls>[data-controls]{right:max(6px,env(safe-area-inset-right))}.fullscreenTouchControls>[data-fit]{right:calc(max(6px,env(safe-area-inset-right)) + 50px)}
+.fullscreenScroll{position:absolute;right:max(2px,env(safe-area-inset-right));top:calc(50% - 80px);width:40px;height:160px;display:grid;place-items:center;pointer-events:auto;touch-action:none;border-radius:22px;background:linear-gradient(90deg,transparent,#03141b50);outline-offset:-3px}
+.fullscreenScroll>span{display:block;width:4px;height:78px;border-radius:6px;background:linear-gradient(transparent,#a6e6e2a8,transparent);box-shadow:0 0 9px #3bd4cb25;pointer-events:none}
+.fullscreenScroll.active{background:linear-gradient(90deg,transparent,#0c494e88)}.fullscreenScroll.active>span{background:linear-gradient(transparent,#83f1e9,transparent)}

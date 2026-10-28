@@ -15,8 +15,12 @@
     function draw(time){
       frame=0;if(!allowed()){stop();return;}context.clearRect(0,0,width,height);context.lineCap='round';context.lineJoin='round';
       for(const [id,points]of traces){while(points.length&&time-points[0].at>=duration)points.shift();if(!points.length){traces.delete(id);continue;}
-        for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i],fade=Math.max(0,1-(time-a.at)/duration);context.strokeStyle='rgba(78,226,207,'+(fade*fade*.64)+')';context.lineWidth=(a.size+b.size)/2;context.beginPath();context.moveTo(a.x,a.y);context.lineTo(b.x,b.y);context.stroke();}
-        const tip=points.at(-1),fade=Math.max(0,1-(time-tip.at)/duration);context.fillStyle='rgba(125,244,224,'+(fade*fade*.38)+')';context.beginPath();context.ellipse(tip.x,tip.y,tip.w/2,tip.h/2,0,0,Math.PI*2);context.fill();
+        const tip=points.at(-1),tail=points[0],fade=Math.max(0,1-(time-tip.at)/duration),shade=context.createLinearGradient(tail.x,tail.y,tip.x+.01,tip.y+.01);
+        shade.addColorStop(0,'rgba(18,74,78,0)');shade.addColorStop(.45,'rgba(62,157,153,.18)');shade.addColorStop(1,'rgba(126,228,213,.45)');
+        context.globalAlpha=fade*fade;context.lineWidth=tip.size*.8;context.strokeStyle=shade;context.shadowColor='rgba(72,204,190,.25)';context.shadowBlur=Math.min(18,tip.size*.35);
+        context.beginPath();context.moveTo(tail.x,tail.y);
+        for(let i=1;i<points.length;i++){const point=points[i],next=points[i+1];if(next)context.quadraticCurveTo(point.x,point.y,(point.x+next.x)/2,(point.y+next.y)/2);else context.lineTo(point.x,point.y);}context.stroke();
+        context.shadowBlur=0;const tipShade=context.createRadialGradient(tip.x,tip.y,0,tip.x,tip.y,Math.max(tip.w,tip.h)*.6);tipShade.addColorStop(0,'rgba(152,237,221,.28)');tipShade.addColorStop(.55,'rgba(65,157,151,.14)');tipShade.addColorStop(1,'rgba(17,60,65,0)');context.fillStyle=tipShade;context.beginPath();context.ellipse(tip.x,tip.y,tip.w*.6,tip.h*.6,0,0,Math.PI*2);context.fill();context.globalAlpha=1;
       }
       if(traces.size)pump();
     }

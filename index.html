@@ -44,6 +44,7 @@
 <script src="/file-manager.js" defer></script>
 <script src="/native-transfers.js" defer></script>
 <link rel="stylesheet" href="/file-manager.css">
+<link rel="stylesheet" href="/file-browser.css">
 <script src="/image-tools.js" defer></script>
 <link rel="stylesheet" href="/file-transfers.css">
 <link rel="stylesheet" href="/desktop-controls.css">
@@ -433,7 +434,7 @@ function rsClose(){window.PCRHoldControl?.release();window.PCRInputTransport?.st
 function rsModeUI(){const button=$('rsm');button.textContent='Touch screen';button.style.display='none';button.setAttribute('aria-label','Direct touch screen. Use the separate trackpad for pointer movement.');}
 function rsMode(){rs.mode='touch';rsModeUI()}
 function rsQ(){if(typeBusy){msg('Wait for typing to finish before changing quality.');return;}rs.qi=(rs.qi+1)%QN.length;ls('pcr_q',rs.qi);$('rsq').textContent=QL[rs.qi];$('rsq').dataset.quality=QN[rs.qi];rsPauseLive('Quality changed. Select the PC field again, then tap New field.');rsRun()}
-document.addEventListener('visibilitychange',()=>{if(!rs.on)return;if(document.hidden){window.PCRInputTransport?.stop();rs.m=null;window.PCRScreenTools?.disconnected('Screen paused');window.PCRPrecisionLens?.disconnected();rsPauseLive('Screen paused. Select the PC field again, then tap New field.');rs.ab?.abort();}else rsRun()});
+function rsVisibility(){if(!rs.on)return;if(document.hidden){if(window.PCRMiniWindow?.background())return;window.PCRInputTransport?.stop();rs.m=null;window.PCRScreenTools?.disconnected('Screen paused');window.PCRPrecisionLens?.disconnected();rsPauseLive('Screen paused. Select the PC field again, then tap New field.');rs.ab?.abort();}else if(!rs.m)rsRun()}document.addEventListener('visibilitychange',rsVisibility);window.addEventListener('pcr:mini-background',rsVisibility);
 function box(){if(window.PCRScreenTools)return window.PCRScreenTools.imageBox();const c=$('rsc'),e=c.getBoundingClientRect(),a=c.width/c.height||1;let w=e.width,h=e.height,x=e.left,y=e.top;if(w/h>a){const nw=h*a;x+=(w-nw)/2;w=nw}else{const nh=w/a;y+=(h-nh)/2;h=nh}return{x,y,w,h}}
 function pos(t){const b=box(),m=rs.m;if(!m||!b||b.w<=0||b.h<=0)return false;const f=(v,o,s,M)=>Math.round(Math.min(Math.max((v-o)/s,0),1)*(M-1));qc('abs '+f(t.clientX,b.x,b.w,m.w)+' '+f(t.clientY,b.y,b.h,m.h));return true;}
 const V=$('rsv');

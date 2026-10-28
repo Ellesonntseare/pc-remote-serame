@@ -19,6 +19,14 @@
   const presentButton=document.createElement('button');presentButton.type='button';presentButton.id='rsPresentation';presentButton.textContent='Present';presentButton.title='Presentation mode';presentButton.setAttribute('aria-label','Presentation mode');screen.querySelector('.rsbot').append(presentButton);
   const restoreButton=document.createElement('button');restoreButton.type='button';restoreButton.id='rsRestoreControls';restoreButton.textContent='Show controls';restoreButton.setAttribute('aria-label','Exit presentation and show controls');screen.append(restoreButton);
   fullButton.title='Show only the remote screen. Escape or a three-finger tap restores the controls.';
+  const cleanControls=document.createElement('div');cleanControls.className='fullscreenTouchControls';cleanControls.id='fullscreenTouchControls';cleanControls.innerHTML='<button type="button" data-fit title="Fit whole PC screen" aria-label="Fit whole PC screen">⛶</button><button type="button" data-controls title="Show controls" aria-label="Show remote controls">×</button><div class="fullscreenScroll" tabindex="0" role="application" aria-label="Scroll the PC. Swipe up or down, or use arrow keys."><span></span></div>';screen.append(cleanControls);
+  const cleanRail=cleanControls.querySelector('.fullscreenScroll');let cleanPointer=null;
+  function fitScreen(){typingPoint=null;setZoom(1);view.scrollLeft=view.scrollTop=0;}
+  cleanControls.querySelector('[data-fit]').onclick=fitScreen;cleanControls.querySelector('[data-controls]').onclick=restoreControls;
+  cleanRail.addEventListener('pointerdown',event=>{if(!rsCanPoint()||event.button>0)return;event.preventDefault();event.stopPropagation();cleanRail.setPointerCapture(event.pointerId);cleanPointer={id:event.pointerId,y:event.clientY,remainder:0};cleanRail.classList.add('active');});
+  cleanRail.addEventListener('pointermove',event=>{if(cleanPointer?.id!==event.pointerId)return;event.preventDefault();event.stopPropagation();if(!rsCanPoint())return;cleanPointer.remainder+=(event.clientY-cleanPointer.y)*4;cleanPointer.y=event.clientY;const delta=Math.trunc(cleanPointer.remainder);cleanPointer.remainder-=delta;if(delta)qc('wheel '+delta);});
+  for(const name of ['pointerup','pointercancel','lostpointercapture'])cleanRail.addEventListener(name,()=>{cleanPointer=null;cleanRail.classList.remove('active');});
+  cleanRail.addEventListener('keydown',event=>{const delta={ArrowUp:120,ArrowDown:-120,PageUp:600,PageDown:-600}[event.key];if(delta&&rsCanPoint()){event.preventDefault();qc('wheel '+delta);}});
   const minus=toolbar.querySelector('#rsZoomOut');
   const plus=toolbar.querySelector('#rsZoomIn');
   const zoomButton=toolbar.querySelector('#rsZoomReset');
@@ -243,10 +251,11 @@
   view.addEventListener('touchend',event=>{if(!pan)return;consume(event);stopGesture();},{capture:true,passive:false});
   view.addEventListener('touchcancel',event=>{if(!pan)return;consume(event);stopGesture();},{capture:true,passive:false});
   view.addEventListener('wheel',event=>{if(!pan)return;consume(event);view.scrollLeft+=event.deltaX;view.scrollTop+=event.deltaY;},{capture:true,passive:false});
+  let wasTyping=screen.classList.contains('typing');new MutationObserver(()=>{const typing=screen.classList.contains('typing');if(wasTyping&&!typing&&screen.classList.contains('screenClean')&&!document.body.classList.contains('pcrMiniWindow'))fitScreen();wasTyping=typing;}).observe(screen,{attributes:true,attributeFilter:['class']});
   new ResizeObserver(()=>layout()).observe(view);
   new ResizeObserver(()=>{adaptHeight();layout();}).observe(screen);
   window.visualViewport?.addEventListener('resize',()=>{if(typingPoint)requestAnimationFrame(()=>layout());});
   window.addEventListener('pcr:auth',()=>{if(!window.PCRAuth?.signedIn){savedView=null;typingPoint=null;setZoom(1);}});
-  window.PCRScreenTools={connecting,metadata,frame,disconnected,closed,imageBox,reconnect,setZoom,focusPoint,restoreControls,presentation};
+  window.PCRScreenTools={connecting,metadata,frame,disconnected,closed,imageBox,reconnect,setZoom,focusPoint,restoreControls,presentation,fitScreen};
   setZoom(1);updateFullscreen();
 })();

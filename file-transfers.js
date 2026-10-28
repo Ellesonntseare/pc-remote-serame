@@ -3,6 +3,8 @@ const fs=require('node:fs'),fsp=fs.promises,path=require('node:path'),crypto=req
 const {Transform}=require('node:stream'),{pipeline}=require('node:stream/promises');
 const CHUNK_BYTES=1024*1024,RETENTION_MS=7*24*60*60*1000;
 const PREVIEWS={png:['image','image/png'],jpg:['image','image/jpeg'],jpeg:['image','image/jpeg'],gif:['image','image/gif'],webp:['image','image/webp'],avif:['image','image/avif'],mp3:['audio','audio/mpeg'],wav:['audio','audio/wav'],ogg:['audio','audio/ogg'],flac:['audio','audio/flac'],m4a:['audio','audio/mp4'],aac:['audio','audio/aac'],mp4:['video','video/mp4'],webm:['video','video/webm'],mov:['video','video/quicktime'],ogv:['video','video/ogg'],pdf:['pdf','application/pdf']};
+function dispositionName(name){const leaf=name.split('/').at(-1);const ascii=leaf.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7e]|["\\]/g,'_');return 'filename="'+ascii+'"; filename*=UTF-8\'\''+encodeURIComponent(leaf);}
+function downloadMime(name){return previewInfo(name)?.mime||({txt:'text/plain',csv:'text/csv',json:'application/json',zip:'application/zip',apk:'application/vnd.android.package-archive',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',exe:'application/vnd.microsoft.portable-executable'}[path.extname(name).slice(1).toLowerCase()]||'application/octet-stream');}
 function problem(status,message){return Object.assign(new Error(message),{status});}
 function filename(value){
   if(typeof value!=='string'||!value||value.length>180||/[<>:"/\\|?*\x00-\x1f]/.test(value)||/[. ]$/.test(value)||/^\./.test(value)||/^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(value))throw problem(400,'Choose a valid filename without slashes or special Windows characters.');
@@ -26,8 +28,8 @@ function byteRange(header,size){
   else{start=Number(m[1]);end=m[2]?Number(m[2]):size-1;if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=size||start>end)throw problem(416,'Requested range is unavailable.');end=Math.min(end,size-1);}
   return {start,end};
 }
-function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],watch=false,locationsProvider}={}){
-  const root=path.resolve(directory),uploads=new Map();let diskReady;
+function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],watch=false,locationsProvider,thumbnailProvider}={}){
+  const root=path.resolve(directory),uploads=new Map(),thumbnails=require('./file-thumbnails').createThumbnails(thumbnailProvider);let diskReady;
   let mutation=Promise.resolve();function commit(change){const next=mutation.then(change);mutation=next.catch(()=>{});return next;}
   let revision=Date.now();const watched=new Map();
   function watchFolder(directory){if(!watch||watched.has(directory)||!fs.existsSync(directory))return;try{const watcher=fs.watch(directory,{recursive:true,persistent:false},(event,name)=>{if(name&&String(name).split(/[\\/]/).some(part=>part.startsWith('.')))return;revision=Date.now();});watcher.on('error',()=>{watcher.close();watched.delete(directory);});watched.set(directory,watcher);}catch{}}
@@ -132,7 +134,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
     if(totalBytes>Math.min(maxBytes,2*1024*1024*1024))throw problem(413,'This folder is too large for one archive. Download a smaller folder.');
     const entries=files.map(file=>({...file,encoded:Buffer.from(file.name,'utf8')}));
     const contentLength=entries.reduce((sum,file)=>sum+30+file.encoded.length+file.size+16+46+file.encoded.length,22);
-    res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="folder.zip"; filename*=UTF-8\'\''+encodeURIComponent(name.split('/').at(-1)+'.zip'),'Content-Length':contentLength,'Cache-Control':'no-store, no-transform','X-Content-Type-Options':'nosniff'});
+    res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; '+dispositionName(name+'.zip'),'Content-Length':contentLength,'Cache-Control':'no-store, no-transform','X-Content-Type-Options':'nosniff'});
     const write=bytes=>new Promise((resolve,reject)=>{if(res.destroyed)return reject(Error('Download disconnected'));res.write(bytes,error=>error?reject(error):resolve());});
     let offset=0;const central=[];
     for(const file of entries){
@@ -166,6 +168,11 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
       }
       if(req.method==='GET'&&pathname==='/api/files/hash'){
         if(!allowLocations)throw problem(403,'Pair this device to compare sync files.');const name=relativePath(url.searchParams.get('name')),source=await safeTarget(name),before=await fsp.lstat(source);if(!before.isFile()||before.isSymbolicLink())throw problem(404,'File not found');const hash=crypto.createHash('sha256');for await(const bytes of fs.createReadStream(source))hash.update(bytes);const after=await fsp.lstat(source);if(fileETag(name,before)!==fileETag(name,after))throw problem(409,'The PC file changed. Sync again.');respond(res,200,{ok:true,sha256:hash.digest('hex')});return true;
+      }
+      if(req.method==='GET'&&pathname==='/api/files/thumbnail'){
+        const name=relativePath(url.searchParams.get('name')),file=await safeTarget(name),stat=await fsp.lstat(file);if(stat.isSymbolicLink()||!stat.isFile()&&!stat.isDirectory())throw problem(404,'Preview unavailable.');
+        let bytes;try{bytes=await thumbnails.get(file,stat.mtimeMs+'|'+stat.size);}catch{throw problem(404,'Preview unavailable.');}if(req.destroyed||res.destroyed)return true;
+        res.writeHead(200,{'Content-Type':'image/png','Content-Length':bytes.length,'Cache-Control':'private, max-age=120','X-Content-Type-Options':'nosniff'});res.end(bytes);return true;
       }
       if(req.method==='GET'&&pathname==='/api/files/browse'){
         const folder=url.searchParams.get('path')||'';if(folder)relativePath(folder);
@@ -211,7 +218,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
         const name=relativePath(url.searchParams.get('name')),file=await safeTarget(name),stat=await fsp.lstat(file),preview=pathname.endsWith('/preview')?previewInfo(name):null;
         if(!stat.isFile()||stat.isSymbolicLink())throw problem(404,'File not found');
         if(pathname.endsWith('/preview')&&!preview)throw problem(415,'This file type is available as a download.');
-        const headers={'Content-Type':preview?preview.mime:'application/octet-stream','Content-Disposition':(preview?'inline':'attachment')+'; filename="download"; filename*=UTF-8\'\''+encodeURIComponent(name.split('/').at(-1)),'Cache-Control':'no-store, no-transform','X-Content-Type-Options':'nosniff','Accept-Ranges':'bytes','Content-Security-Policy':"default-src 'none'; sandbox; frame-ancestors 'self'",'X-Frame-Options':'SAMEORIGIN','Referrer-Policy':'no-referrer'};
+        const headers={'Content-Type':preview?preview.mime:downloadMime(name),'Content-Disposition':(preview?'inline; ':'attachment; ')+dispositionName(name),'Cache-Control':'no-store, no-transform','X-Content-Type-Options':'nosniff','Accept-Ranges':'bytes','Content-Security-Policy':"default-src 'none'; sandbox; frame-ancestors 'self'",'X-Frame-Options':'SAMEORIGIN','Referrer-Policy':'no-referrer'};
         headers.ETag='"'+digest(name+':'+stat.size+':'+stat.mtimeMs+':'+stat.ctimeMs)+'"';
         let range;try{range=byteRange(req.headers['if-range']&&req.headers['if-range']!==headers.ETag?null:req.headers.range,stat.size);}catch(e){res.setHeader('Content-Range','bytes */'+stat.size);throw e;}
         headers['Content-Length']=range?range.end-range.start+1:stat.size;if(range)headers['Content-Range']='bytes '+range.start+'-'+range.end+'/'+stat.size;
@@ -277,7 +284,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
     }
   }
   async function revoke(token){await ensure();for(const u of [...uploads.values()])if(u.token===token)await discard(u).catch(()=>{});}
-  async function close(){clearInterval(cleanup);for(const watcher of watched.values())watcher.close();watched.clear();for(const u of uploads.values()){u.request?.destroy();}}
+  async function close(){thumbnails.close();clearInterval(cleanup);for(const watcher of watched.values())watcher.close();watched.clear();for(const u of uploads.values()){u.request?.destroy();}}
   async function resolveFile(name){await ensure();const file=await safeTarget(name),stat=await fsp.lstat(file);if(!stat.isFile()||stat.isSymbolicLink())throw problem(400,'Choose a completed file inside the transfer folder.');return file;}
   async function stageFromPC(files){
     await ensure();if(!Array.isArray(files)||!files.length||files.length>100)throw problem(400,'Choose up to 100 files.');const items=[];

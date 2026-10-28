@@ -167,9 +167,9 @@ class MainActivity : Activity() {
             val parsed=runCatching{Uri.parse(url)}.getOrNull()
             if(!isAllowed(url)||parsed?.path !in listOf("/api/files/download","/api/files/folder"))return@setDownloadListener
             if(downloadRequest!=null){Toast.makeText(this,"Finish choosing where to save first.",Toast.LENGTH_SHORT).show();return@setDownloadListener}
-            val name=URLUtil.guessFileName(url,disposition,mime).replace(Regex("[\\\\/:*?\"<>|]"),"_").take(180)
+            val name=DownloadNames.resolve(url,disposition,URLUtil.guessFileName(url,disposition,mime))
             downloadRequest=Pair(url,name)
-            try{startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime?:"application/octet-stream").putExtra(Intent.EXTRA_TITLE,name),505)}catch(_:Exception){downloadRequest=null;Toast.makeText(this,"No file-saving app is available.",Toast.LENGTH_LONG).show()}
+            try{startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(if(mime.isNullOrBlank()||mime=="application/octet-stream") android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.',"").lowercase())?:"application/octet-stream" else mime).putExtra(Intent.EXTRA_TITLE,name),505)}catch(_:Exception){downloadRequest=null;Toast.makeText(this,"No file-saving app is available.",Toast.LENGTH_LONG).show()}
         }
         web.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
@@ -216,7 +216,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version","2.1.2");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version","2.1.3");view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow PC Remote through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
