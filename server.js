@@ -84,7 +84,7 @@ const PWA_ASSETS = new Map([
   ['/file-manager.css',['file-manager.css','text/css; charset=utf-8']],
   ['/brand.svg', ['brand.svg', 'image/svg+xml']],
   ['/app-refinements.css', ['app-refinements.css', 'text/css; charset=utf-8']],
-  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','guest-screen.js','workspace-ui.js','page-navigation.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
+  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','guest-screen.js','workspace-ui.js','page-navigation.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
   ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css','workspace-ui.css','page-navigation.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
   ['/input-transport.js', ['input-transport.js', 'text/javascript; charset=utf-8']],
   ['/pwa.js', ['pwa.js', 'text/javascript; charset=utf-8']],

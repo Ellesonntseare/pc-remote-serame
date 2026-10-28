@@ -129,8 +129,9 @@
         const owner = window.PCRAuth?.role === 'owner';
         const glyph = document.createElement('span'); glyph.className = 'dashboardTileIcon'; glyph.innerHTML = window.PCRDashboard.icon('guest');
         const copy = document.createElement('span'); copy.className = 'dashboardTileCopy';
-        const title = document.createElement('strong'); title.textContent = owner ? 'Guest screens' : 'Share screen';
-        const detail = document.createElement('small'); detail.textContent = owner ? 'View a shared screen' : 'Share your display';
+        const native = typeof window.PCRAndroid?.postMessage === 'function';
+        const title = document.createElement('strong'); title.textContent = native ? 'Use PC mouse' : owner ? 'Phone control' : 'Share screen';
+        const detail = document.createElement('small'); detail.textContent = native ? 'Control this phone from your PC' : owner ? 'Control a shared phone' : 'Share your display';
         copy.append(title, detail); guest.replaceChildren(glyph, copy);
       }
       compactTiles();

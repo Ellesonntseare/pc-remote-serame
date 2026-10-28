@@ -19,4 +19,13 @@ class PhoneControlPolicyTest {
         assertFalse(PhoneCommand("text",text="x".repeat(2001)).valid());assertFalse(PhoneCommand("text",text="\u0000").valid());assertTrue(PhoneCommand("text",text="你好\nhello").valid())
         assertEquals(1080f,PhonePoint(1.0,1.0).pixels(1081,2401).first);assertEquals(2400f,PhonePoint(1.0,1.0).pixels(1081,2401).second)
     }
+    @Test fun pointerUpdatesNeedConsentAndCannotReplayOrSurviveRotation() {
+        val policy=PhoneControlPolicy { 0L };val pointer=PhoneCommand("pointer",listOf(PhonePoint(.2,.8)))
+        assertTrue(pointer.valid());assertFalse(PhoneCommand("pointer").valid())
+        assertFalse(PhoneCommand("pointer",listOf(PhonePoint(-.1,.8))).valid())
+        assertFalse(policy.accept(id,1,1,1,pointer));policy.grant(id)
+        assertTrue(policy.accept(id,1,1,1,pointer));assertFalse(policy.accept(id,1,1,1,pointer))
+        assertFalse(policy.accept(id,2,1,2,pointer));assertTrue(policy.accept(id,2,2,2,PhoneCommand("hide-pointer")))
+        policy.revoke();assertFalse(policy.accept(id,3,2,2,pointer))
+    }
 }

@@ -68,3 +68,25 @@ test('a phone can decline control and ending its share cancels pending approval'
   owner.send(JSON.stringify({type:'control',id:request.id,seq:1,generation:1,command:{action:'home'}}));assert.equal((await next(owner,v=>v.type==='control-result')).ok,false);
   sender.send(JSON.stringify({type:'stop'}));await next(owner,v=>v.type==='stopped');sender.send(JSON.stringify({type:'control-response',id:request.id,approved:true}));await new Promise(r=>setTimeout(r,30));assert.equal(owner.queue.some(v=>v.type==='control-state'&&v.state==='active'),false);
 });
+
+test('an owner phone can publish and accept its PC mouse without a guest login; pointer updates do not block gestures',async t=>{
+  const f=await fixture(t),phone=f.ws(f.owner),pc=f.ws(f.owner),other=f.ws(f.owner),guest=await f.guest(),outsider=f.ws(guest.cookie);
+  await Promise.all([opened(phone),opened(pc),opened(other),opened(outsider)]);
+  phone.send(JSON.stringify({type:'start',controlSupported:true,mouseSupported:true,device:'My phone'}));await next(phone,v=>v.type==='sharing');
+  phone.send(JSON.stringify({type:'capture',generation:1,width:1080,height:2400}));phone.send(jpeg);
+  const list=await next(pc,v=>v.type==='shares'&&v.shares.length);const id=list.shares[0].id;assert.match(id,/^[a-f0-9]{32}$/);assert.equal(list.shares[0].device,'My phone');
+  pc.send(JSON.stringify({type:'watch',id}));await next(pc,v=>v.type==='watching');await next(pc,Buffer.isBuffer);
+  outsider.send(JSON.stringify({type:'watch',id}));await new Promise(r=>setTimeout(r,20));assert.equal(outsider.queue.some(Buffer.isBuffer),false);
+  pc.send(JSON.stringify({type:'control-request'}));const request=await next(phone,v=>v.type==='control-request');phone.send(JSON.stringify({type:'control-response',id:request.id,approved:true}));
+  assert.equal((await next(pc,v=>v.type==='control-state'&&v.state==='active')).mouseSupported,true);
+  const input=(type,seq,command,generation=1)=>({type,id:request.id,seq,generation,command});
+  pc.send(JSON.stringify(input('control',1,{action:'tap',points:[{x:.5,y:.5}]})));await next(phone,v=>v.type==='control');
+  pc.send(JSON.stringify(input('pointer',2,{action:'pointer',points:[{x:.3,y:.7}]})));assert.equal((await next(phone,v=>v.type==='pointer')).seq,2,'cursor remains responsive while Android is tapping');
+  phone.send(JSON.stringify({type:'control-result',id:request.id,seq:1,ok:true}));assert.equal((await next(pc,v=>v.type==='control-result'&&v.seq===1)).ok,true);
+  other.send(JSON.stringify({type:'watch',id}));await next(other,v=>v.type==='watching');other.send(JSON.stringify(input('pointer',3,{action:'pointer',points:[{x:.9,y:.1}]})));assert.equal((await next(other,v=>v.type==='control-result')).ok,false);
+  pc.send(JSON.stringify(input('pointer',2,{action:'pointer',points:[{x:.9,y:.1}]})));assert.equal((await next(pc,v=>v.type==='control-result'&&v.seq===2)).ok,false,'replayed cursor cannot move the phone');
+  pc.send(JSON.stringify(input('pointer',3,{action:'pointer',points:[{x:.9,y:.1}]},2)));assert.equal((await next(pc,v=>v.type==='control-result'&&v.seq===3)).ok,false,'stale capture dimensions cannot move the cursor');
+  pc.send(JSON.stringify(input('pointer',3,{action:'hide-pointer'})));assert.equal((await next(phone,v=>v.type==='pointer'&&v.seq===3)).command.action,'hide-pointer');
+  phone.send(JSON.stringify({type:'control-stop'}));await next(pc,v=>v.type==='control-state'&&v.state==='off');
+  pc.send(JSON.stringify(input('pointer',4,{action:'pointer',points:[{x:.1,y:.1}]})));assert.equal((await next(pc,v=>v.type==='control-result'&&v.seq===4)).ok,false);
+});

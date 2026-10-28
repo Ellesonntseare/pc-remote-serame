@@ -95,15 +95,32 @@ test('PC phone controls stay view-only until approval and send one action at a t
   const socket=sockets.find(s=>s.url.includes('/api/guest-screen'));doc.querySelector('.guestScreenHome').click();socket.emit({type:'shares',shares:[{id:'phone'}]});socket.emit({type:'watching',id:'phone',marks:[],capture:{generation:1,width:1080,height:1920}});socket.emit({type:'control-state',state:'off',supported:true,canControl:false});
   doc.querySelector('[data-phone-key="home"]').click();assert.equal(socket.sent.some(v=>v.type==='control'),false);
   doc.querySelector('[data-request-control]').click();assert.equal(socket.sent.at(-1).type,'control-request');socket.emit({type:'control-state',state:'pending',supported:true});assert.equal(doc.querySelector('[data-request-control]').disabled,true);
-  socket.emit({type:'control-state',state:'active',supported:true,canControl:true,id:'a'.repeat(32)});socket.emit(new window.Blob(['frame']));await new Promise(r=>setTimeout(r,20));
+  socket.emit({type:'control-state',state:'active',supported:true,mouseSupported:true,canControl:true,id:'a'.repeat(32)});socket.emit(new window.Blob(['frame']));await new Promise(r=>setTimeout(r,20));
   doc.querySelector('[data-phone-key="home"]').click();assert.equal(socket.sent.at(-1).command.action,'home');assert.equal(socket.sent.at(-1).generation,1);const seq=socket.sent.at(-1).seq;
   doc.querySelector('[data-phone-key="back"]').click();assert.equal(socket.sent.at(-1).seq,seq,'buttons block overlapping actions');socket.emit({type:'control-result',seq,ok:true});
   socket.emit({type:'capture',generation:2,width:1920,height:1080});doc.querySelector('[data-phone-key="back"]').click();assert.equal(socket.sent.at(-1).seq,seq,'old images cannot send new-display actions');
   socket.emit(new window.Blob(['rotated']));await new Promise(r=>setTimeout(r,20));doc.querySelector('[data-phone-key="back"]').click();assert.equal(socket.sent.at(-1).generation,2);
   socket.emit({type:'control-result',seq:socket.sent.at(-1).seq,ok:true});
+  const canvas=doc.querySelector('#guestScreenDialog canvas');canvas.requestPointerLock=()=>{Object.defineProperty(doc,'pointerLockElement',{configurable:true,value:canvas});doc.dispatchEvent(new window.Event('pointerlockchange'));};doc.exitPointerLock=()=>{Object.defineProperty(doc,'pointerLockElement',{configurable:true,value:null});doc.dispatchEvent(new window.Event('pointerlockchange'));};
+  const mouseButton=doc.querySelector('[data-pc-mouse]');assert.equal(mouseButton.disabled,false);mouseButton.click();assert.equal(socket.sent.at(-1).type,'pointer');
+  const move=new window.MouseEvent('pointermove',{bubbles:true});Object.defineProperties(move,{movementX:{value:30},movementY:{value:20}});canvas.dispatchEvent(move);
+  canvas.dispatchEvent(new window.MouseEvent('pointerdown',{button:0,bubbles:true,cancelable:true}));canvas.dispatchEvent(new window.MouseEvent('pointerup',{button:0,bubbles:true,cancelable:true}));assert.equal(socket.sent.at(-1).command.action,'tap');assert.ok(socket.sent.at(-1).command.points[0].x>.5,'captured mouse position reaches the phone tap');socket.emit({type:'control-result',seq:socket.sent.at(-1).seq,ok:true});
+  canvas.dispatchEvent(new window.WheelEvent('wheel',{deltaY:120,cancelable:true}));await new Promise(r=>setTimeout(r,90));assert.equal(socket.sent.at(-1).command.action,'swipe');socket.emit({type:'control-result',seq:socket.sent.at(-1).seq,ok:true});
+  doc.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(doc.pointerLockElement,null);assert.equal(socket.sent.at(-1).command.action,'hide-pointer');
   const hold=doc.querySelector('.phoneControlTools .holdPreference input');hold.click();assert.equal(window.PCRHoldControl.can('phone'),false);const before=socket.sent.length;doc.querySelector('[data-phone-key="home"]').click();assert.equal(socket.sent.length,before);
   doc.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Shift',bubbles:true}));doc.querySelector('[data-phone-key="home"]').click();assert.equal(socket.sent.at(-1).command.action,'home');doc.dispatchEvent(new window.KeyboardEvent('keyup',{key:'Shift',bubbles:true}));assert.equal(window.PCRHoldControl.can('phone'),false);
   doc.querySelector('#guestScreenDialog [data-close]').click();assert.equal(socket.sent.at(-1).type,'watch');assert.equal(socket.sent.at(-1).id,'');
+});
+
+test('Android owner can share its phone for PC mouse control without changing accounts',async t=>{
+  const f=await fixture(t),messages=[],phone=await f.page({android:messages});await login(phone,'serame');await until(()=>phone.PCRAuth?.role==='owner');
+  const doc=phone.document;doc.querySelector('.guestScreenHome').click();assert.deepEqual(messages,[{type:'start'}]);
+  assert.equal(doc.querySelector('.guestScreenSelect').hidden,true,'native owner publishes its phone instead of watching another screen');
+  phone.PCRAndroid.onmessage({data:JSON.stringify({type:'sharing'})});phone.PCRAndroid.onmessage({data:JSON.stringify({type:'frame',data:'AAAA',width:540,height:960})});
+  assert.equal(doc.querySelector('#guestScreenDialog img').hidden,false);
+  phone.PCRAndroid.onmessage({data:JSON.stringify({type:'control-state',state:'active'})});assert.equal(doc.querySelector('[data-phone-stop]').hidden,false);
+  Object.defineProperty(doc,'hidden',{configurable:true,value:true});doc.dispatchEvent(new phone.Event('visibilitychange'));assert.equal(messages.at(-1).type,'start','other Android apps remain controllable while the WebView is in the background');
+  doc.querySelector('[data-phone-stop]').click();assert.equal(messages.at(-1).type,'control-stop');phone.eval('showPair()');assert.equal(messages.at(-1).type,'stop');
 });
 
 test('Select all keeps partial selections and owner extensions update the guest ribbon without a new login',async t=>{

@@ -76,6 +76,7 @@ class ScreenShareService : Service() {
     }
     private fun updateNotification() { if (!ending) getSystemService(NotificationManager::class.java).notify(104,notification()) }
     private fun endControl(notifyServer: Boolean = true) {
+        PhoneControlService.instance?.hidePointer()
         pendingControlId=null;controlId=null;controlPolicy.revoke();controlBusy=false
         if(notifyServer)socket?.send("{\"type\":\"control-stop\"}")
         emit(JSONObject().put("type","control-state").put("state","off"));updateNotification()
@@ -94,13 +95,16 @@ class ScreenShareService : Service() {
                 pendingControlId=id;updateNotification();emit(value);main.postDelayed({if(pendingControlId==id){respond(id,false);endControl(false)}},120000)
             }
             "control-state" -> {if(value.optString("state")!="active"||value.optString("id")!=controlId)endControl(false) else emit(value)}
-            "control" -> {
+            "control", "pointer" -> {
                 val id=value.optString("id");val seq=value.optLong("seq",-1);val generation=value.optInt("generation",-1)
                 val payload=value.optJSONObject("command")?:return;val points=payload.optJSONArray("points")
                 val command=PhoneCommand(payload.optString("action"),if(points==null)emptyList() else (0 until points.length()).map { val p=points.getJSONObject(it);PhonePoint(p.getDouble("x"),p.getDouble("y")) },payload.optInt("duration",0),payload.optString("text",""))
+                val pointerMessage=value.optString("type")=="pointer"
+                if(pointerMessage != (command.action in listOf("pointer","hide-pointer")))return
                 fun result(ok: Boolean,message: String){socket?.send(JSONObject().put("type","control-result").put("id",id).put("seq",seq).put("ok",ok).put("message",message).toString())}
                 val input=PhoneControlService.instance
-                if(ending||controlBusy||id!=controlId||input==null||!controlPolicy.accept(id,seq,generation,captureGeneration,command)){result(false,"Phone control is unavailable or the display changed.");return}
+                if(ending||(!pointerMessage&&controlBusy)||id!=controlId||input==null||!controlPolicy.accept(id,seq,generation,captureGeneration,command)){if(!pointerMessage)result(false,"Phone control is unavailable or the display changed.");return}
+                if(pointerMessage){input.perform(command,captureWidth,captureHeight,{!ending&&controlId==id&&controlPolicy.active(id)&&captureGeneration==generation}){_,_->};return}
                 controlBusy=true
                 input.perform(command,captureWidth,captureHeight,{!ending&&controlId==id&&controlPolicy.active(id)&&captureGeneration==generation}){ok,message->controlBusy=false;result(ok,message)}
             }
@@ -117,7 +121,7 @@ class ScreenShareService : Service() {
         consent = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra("consent", Intent::class.java) else @Suppress("DEPRECATION") intent.getParcelableExtra("consent")
         consentCode = intent.getIntExtra("resultCode", 0)
         if (origin == null || cookie.isNullOrBlank() || !cookie.contains("pc_remote_session=") || consent == null || consentCode != Activity.RESULT_OK) {
-            finish("Sign in as an approved guest before sharing."); return START_NOT_STICKY
+            finish("Sign in before sharing your phone."); return START_NOT_STICKY
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("screen-sharing", "Screen sharing", NotificationManager.IMPORTANCE_LOW))
@@ -132,10 +136,10 @@ class ScreenShareService : Service() {
                 try {
                     val value = JSONObject(text)
                     when (value.optString("type")) {
-                        "ready" -> if (value.optString("role") == "guest") webSocket.send("{\"type\":\"start\",\"controlSupported\":true}") else finish("Use an approved guest account to share this phone.")
+                        "ready" -> if (value.optString("role") in listOf("guest","owner")) webSocket.send(JSONObject().put("type","start").put("controlSupported",true).put("mouseSupported",true).put("device",getSharedPreferences("pc_remote_android",MODE_PRIVATE).getString("deviceName","")?.takeIf{it.isNotBlank()} ?: "${Build.MANUFACTURER} ${Build.MODEL}").toString()) else finish("Sign in before sharing this phone.")
                         "sharing" -> if (!ready) { ready = true; worker.post { beginProjection() } }
                         "mark" -> emit(value)
-                        "control-request", "control-state", "control" -> main.post { try { controlMessage(value) } catch (_: Exception) { endControl() } }
+                        "control-request", "control-state", "control", "pointer" -> main.post { try { controlMessage(value) } catch (_: Exception) { endControl() } }
                     }
                 } catch (_: Exception) { finish("Screen sharing could not start.") }
             }
@@ -184,13 +188,14 @@ class ScreenShareService : Service() {
         return max(2, (width * scale).roundToInt() / 2 * 2) to max(2, (height * scale).roundToInt() / 2 * 2)
     }
     private fun configureReader(width: Int, height: Int) {
+        main.post { PhoneControlService.instance?.hidePointer() }
         captureWidth=width;captureHeight=height;captureGeneration++
         socket?.send(JSONObject().put("type","capture").put("generation",captureGeneration).put("width",width).put("height",height).toString())
         val size = dimensions(width, height); imageWidth = size.first; imageHeight = size.second
         reader = ImageReader.newInstance(imageWidth, imageHeight, PixelFormat.RGBA_8888, 2).also { capture -> capture.setOnImageAvailableListener({ readFrame(it) }, worker) }
     }
     private fun resize(width: Int, height: Int) {
-        if (dimensions(width, height) == (imageWidth to imageHeight)) return
+        if (width == captureWidth && height == captureHeight) return
         try {
             display?.surface = null; reader?.setOnImageAvailableListener(null, null); reader?.close(); cropped?.recycle(); cropped = null; pixels = ByteArray(0)
             configureReader(width, height); display?.resize(imageWidth, imageHeight, resources.displayMetrics.densityDpi); display?.surface = reader!!.surface

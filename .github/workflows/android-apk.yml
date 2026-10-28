@@ -81,7 +81,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view v2.1.7-preview || gh release create v2.1.7-preview --draft --prerelease --target "$GITHUB_SHA" --title "PC Remote 2.1.7 Personal Preview" --notes "Preserve original transfer filenames, resolve duplicate names explicitly, and add offline keyboard word suggestions with frequently used words. Install over the existing personal app."
-          test "$(gh release view v2.1.7-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
-          cp android/build/outputs/apk/debug/android-debug.apk PC-Remote-Android-2.1.7.apk
-          gh release upload v2.1.7-preview PC-Remote-Android-2.1.7.apk --clobber
+          gh release view v2.1.8-preview || gh release create v2.1.8-preview --draft --prerelease --target "$GITHUB_SHA" --title "PC Remote 2.1.8 Personal Preview" --notes "Control your Android phone using your PC mouse: visible phone pointer, mouse capture with Escape to release, wheel scrolling and main-account phone sharing. Install over the existing personal app."
+          test "$(gh release view v2.1.8-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
+          cp android/build/outputs/apk/debug/android-debug.apk PC-Remote-Android-2.1.8.apk
+          gh release upload v2.1.8-preview PC-Remote-Android-2.1.8.apk --clobber

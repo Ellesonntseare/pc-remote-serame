@@ -6,9 +6,9 @@ data class PhonePoint(val x: Double, val y: Double) {
 }
 data class PhoneCommand(val action: String, val points: List<PhonePoint> = emptyList(), val duration: Int = 0, val text: String = "") {
     fun valid(): Boolean = when (action) {
-        "tap", "longpress" -> points.size == 1 && points.all { it.valid() }
+        "tap", "longpress", "pointer" -> points.size == 1 && points.all { it.valid() }
         "swipe" -> points.size == 2 && points.all { it.valid() } && duration in 100..1500
-        "back", "home", "recents" -> true
+        "back", "home", "recents", "hide-pointer" -> true
         "text" -> text.length <= 2000 && !text.contains('\u0000')
         else -> false
     }

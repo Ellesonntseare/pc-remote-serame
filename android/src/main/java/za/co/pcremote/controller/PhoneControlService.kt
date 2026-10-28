@@ -11,12 +11,19 @@ import android.view.accessibility.AccessibilityNodeInfo
 /** User-enabled input only. No event collection, UI text logging or startup control. */
 class PhoneControlService : AccessibilityService() {
     companion object { var instance: PhoneControlService? = null; private set }
-    override fun onServiceConnected() { super.onServiceConnected(); instance = this }
+    private var pointer: PhonePointer? = null
+    override fun onServiceConnected() { super.onServiceConnected(); instance = this; pointer = PhonePointer(this) }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
     override fun onInterrupt() { ScreenShareService.stopPhoneControl() }
-    override fun onDestroy() { if (instance === this) instance = null; ScreenShareService.stopPhoneControl(); super.onDestroy() }
+    override fun onDestroy() { hidePointer(); if (instance === this) instance = null; ScreenShareService.stopPhoneControl(); super.onDestroy() }
+    fun hidePointer() { pointer?.hide() }
     fun perform(command: PhoneCommand, width: Int, height: Int, allowed: () -> Boolean, done: (Boolean, String) -> Unit) {
-        if (!allowed() || !command.valid() || getSystemService(KeyguardManager::class.java).isDeviceLocked) { done(false, "Phone control is unavailable or the phone is locked."); return }
+        if (!allowed() || !command.valid() || getSystemService(KeyguardManager::class.java).isDeviceLocked) { hidePointer(); done(false, "Phone control is unavailable or the phone is locked."); return }
+        if (command.action == "hide-pointer") { hidePointer(); done(true, ""); return }
+        if (command.action == "pointer") {
+            done(width >= 2 && height >= 2 && pointer?.move(command.points.single(), width, height) == true, "")
+            return
+        }
         if (command.action in listOf("back", "home", "recents")) {
             val action = when (command.action) { "back" -> GLOBAL_ACTION_BACK; "home" -> GLOBAL_ACTION_HOME; else -> GLOBAL_ACTION_RECENTS }
             done(performGlobalAction(action), ""); return

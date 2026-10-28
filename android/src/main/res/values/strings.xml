@@ -1,6 +1,6 @@
 <resources>
     <string name="phone_control_name">PC Remote phone control</string>
-    <string name="phone_control_description">Lets Serame send taps, swipes, navigation and text during an approved screen-sharing session. Enable this service, then approve each control request in PC Remote. Stop control anytime from the sharing notification. No control starts automatically.</string>
+    <string name="phone_control_description">Lets your PC mouse control this phone during an approved screen-sharing session: pointer, clicks, scrolling, navigation and text. Enable this service, then approve each control request in PC Remote. Stop control anytime from the sharing notification. No control starts automatically.</string>
     <string name="shortcut_screen">Remote Screen</string>
     <string name="shortcut_files">Files</string>
     <string name="shortcut_keyboard">Keyboard</string>

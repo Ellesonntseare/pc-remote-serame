@@ -371,7 +371,7 @@ class MainActivity : Activity() {
                     "start" -> {
                         if (pendingProjection) return@addWebMessageListener
                         val cookie = CookieManager.getInstance().getCookie(selectedOrigin!!).orEmpty()
-                        if (!cookie.contains("pc_remote_session=")) { reply.postMessage("{\"type\":\"stopped\",\"message\":\"Sign in as an approved guest first.\"}"); return@addWebMessageListener }
+                        if (!cookie.contains("pc_remote_session=")) { reply.postMessage("{\"type\":\"stopped\",\"message\":\"Sign in first to share your phone.\"}"); return@addWebMessageListener }
                         shareReply = reply; pendingProjection = true
                         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
                             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 501)
@@ -670,7 +670,7 @@ class MainActivity : Activity() {
         if(!hasWindowFocus() || isFinishing || controlDialog?.isShowing==true)return
         val enabled=PhoneControlService.instance!=null
         controlDialog=AlertDialog.Builder(this).setTitle("Allow Serame to control this phone?")
-            .setMessage(if(enabled)"Allow taps, swipes, Back, Home and replacing text in selected fields for this session (up to 10 minutes). Stop control anytime from the sharing notification." else "Phone control needs the PC Remote phone control Accessibility service. Enable it in Android settings, then return here and approve this request. Screen sharing can continue without control.")
+            .setMessage(if(enabled)"Allow PC mouse control, clicks, scrolling, Back, Home and replacing text in selected fields for this session (up to 10 minutes). Stop control anytime from the sharing notification." else "Enable PC Remote phone control in Android Accessibility settings, then return here and approve this request. This lets your PC mouse control other apps on your phone.")
             .setNegativeButton("Decline"){_,_->ScreenShareService.respondControl(id,false);controlDialog=null}
             .setPositiveButton(if(enabled)"Allow control" else "Open settings"){_,_->
                 controlDialog=null
