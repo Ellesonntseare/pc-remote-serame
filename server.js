@@ -21,6 +21,7 @@ const {saveDeviceName}=require('./host-settings');
 const {createNetworkDevices}=require('./network-devices');
 const nativeClipboard=require('./native-clipboard');
 const {createNativeFeatures}=require('./native-features');
+const {createAppUpdates}=require('./app-updates');
 const {createNativeVideo,PROFILES:NATIVE_VIDEO_PROFILES}=require('./native-video');
 const {createSessionAdmin}=require('./session-admin');
 const {createDisplayPrivacy}=require('./display-privacy');
@@ -84,7 +85,7 @@ const PWA_ASSETS = new Map([
   ['/file-manager.css',['file-manager.css','text/css; charset=utf-8']],
   ['/brand.svg', ['brand.svg', 'image/svg+xml']],
   ['/app-refinements.css', ['app-refinements.css', 'text/css; charset=utf-8']],
-  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','phone-input.js','phone-drop.js','guest-screen.js','workspace-ui.js','page-navigation.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
+  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','phone-input.js','phone-drop.js','guest-screen.js','workspace-ui.js','page-navigation.js','app-updates.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
   ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css','workspace-ui.css','page-navigation.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
   ['/input-transport.js', ['input-transport.js', 'text/javascript; charset=utf-8']],
   ['/pwa.js', ['pwa.js', 'text/javascript; charset=utf-8']],
@@ -207,6 +208,7 @@ function createApp(options={}) {
   let clipboardObserver=null,clipboardEcho=null;
   const sharedClipboard=createSharedClipboard({store:accountData,directory:options.sharedClipboardDirectory,apply:async value=>{if(options.sharedClipboardProvider?.apply)return options.sharedClipboardProvider.apply(value);if(options.clipboardProvider?.set&&['text','empty'].includes(value.kind))return options.clipboardProvider.set(value.text||'');if(!clipboardObserver?.active)throw Error('The Windows clipboard connection is starting.');return clipboardObserver.set(value);}});
   const nativeFeatures=options.nativeFeatures||createNativeFeatures({root:ROOT});
+  const appUpdates=options.appUpdates||createAppUpdates({root:ROOT,currentVersion:require('./package.json').version});
   const displayPrivacy=options.displayPrivacy||createDisplayPrivacy({root:ROOT});
   const audioSockets=new Set();
   const accountContext=requirePassword?crypto.createHash('sha256').update('pc-remote-owner-v1\0'+options.password).digest('hex'):undefined;
@@ -595,6 +597,15 @@ function createApp(options={}) {
       }
       const token=auth(req);
       if(!token)return respond(res,401,{error:'Pair your phone first'});
+      if(pathname==='/api/updates'||/^\/api\/updates\/(android|windows)\/download$/.test(pathname)){
+        if(sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Only the PC owner can install app updates.'});
+        if(req.method!=='GET')return respond(res,405,{error:'Use GET for app updates.'});
+        if(pathname==='/api/updates'){
+          if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
+          try{return respond(res,200,await appUpdates.status());}catch(error){return respond(res,503,{error:error.message});}
+        }
+        try{const item=await appUpdates.getPackage(pathname.includes('/android/')?'android':'windows');res.writeHead(200,{'Content-Type':pathname.includes('/android/')?'application/vnd.android.package-archive':'application/vnd.microsoft.portable-executable','Content-Length':item.size,'Content-Disposition':'attachment; filename="'+item.name+'"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Content-SHA256':item.sha256});fs.createReadStream(item.file).on('error',()=>res.destroy()).pipe(res);return;}catch(error){return respond(res,503,{error:error.message});}
+      }
       if(req.method==='POST'&&pathname==='/api/presence'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
         return respond(res,200,{ok:true});
@@ -957,7 +968,7 @@ function createApp(options={}) {
       });
     });
   });
-  function stop(){stopping=true;accountAPI.close();clipboardObserver?.close();clipboardObserver=null;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();companions.revoke();}
+  function stop(){stopping=true;appUpdates.close();accountAPI.close();clipboardObserver?.close();clipboardObserver=null;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();companions.revoke();}
   server.on('close',()=>{sessionAdmin.close();google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();nativeVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();companions.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   if(options.discovery===true)discovery=require('./local-discovery').advertise(server,{name:hostname,identity:hostIdentity,enabled:allowLan});
   server.once('close',()=>{networkDevices.close();clipboardObserver?.close();clipboardObserver=null;void syncHub.close();void sharedClipboard.close().finally(()=>accountData.close());});

@@ -1,4 +1,5 @@
 node_modules/
+.app-updates-cache/
 RemoteAgent/bin/
 RemoteAgent/obj/
 RemoteAgent/.vs/

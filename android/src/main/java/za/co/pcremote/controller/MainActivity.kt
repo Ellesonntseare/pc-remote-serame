@@ -151,6 +151,7 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.connectWebsite).setOnClickListener { connectTo("https://remote.teamtrader.co.za") }
         PhoneAudioService.events={value->runOnUiThread{if(!isFinishing&&!isDestroyed&&value.optString("origin")==selectedOrigin&&isAllowed(web.url?:""))web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:phone-audio',{detail:$value}))",null)}}
         TransferService.events={value->runOnUiThread{if(!isFinishing&&!isDestroyed&&value.optString("origin")==selectedOrigin&&isAllowed(web.url?:""))web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:transfer-queue',{detail:$value}))",null)}}
+        AppUpdateService.events={value->runOnUiThread{if(!isFinishing&&!isDestroyed&&value.optString("origin")==selectedOrigin&&isAllowed(web.url?:""))web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:app-update',{detail:$value}))",null)}}
         ScreenShareService.events = { value ->
             runCatching { shareReply?.postMessage(value.toString()) }
             if(value.optString("type")=="control-request")showControlRequest()
@@ -229,7 +230,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",true).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow Elleson Connect through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -299,6 +300,12 @@ class MainActivity : Activity() {
                 val value = JSONObject(message.data ?: "{}")
                 when (value.optString("type")) {
                     "transfer-ready" -> transferReady()
+                    "app-update" -> {
+                        val origin=selectedOrigin?:return@addWebMessageListener
+                        val sha=value.optString("sha256");val size=value.optLong("size");val version=value.optString("version")
+                        if(AppUpdatePolicy.valid(version,size,sha))startForegroundService(Intent(this,AppUpdateService::class.java).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("sha256",sha).putExtra("size",size).putExtra("version",version))
+                    }
+                    "app-update-install" -> {selectedOrigin?.let{origin->AppUpdateService.ready(origin)?.let{file->startActivity(Intent(this,AppUpdateActivity::class.java).putExtra("file",file.absolutePath))}}}
                     "transfer-pick" -> {
                         transferDestination=value.optString("destination").take(700)
                         try{startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),509)}catch(_:Exception){Toast.makeText(this,"Enable Android's Files app to choose documents.",Toast.LENGTH_LONG).show()}
@@ -573,6 +580,7 @@ class MainActivity : Activity() {
         connectionGeneration++
         pendingPhoneAudio=null;PhoneAudioService.stop();PhoneAudioService.events=null
         TransferService.events=null
+        AppUpdateService.events=null
         stopLocalMedia()
         hideFullscreen()
         volumeControlEnabled=false

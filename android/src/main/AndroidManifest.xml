@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <uses-permission android:name="android.permission.VIBRATE" />
     <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>
@@ -33,6 +34,8 @@
         <service android:name=".ScreenShareService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <service android:name=".PhoneAudioService" android:exported="false" android:foregroundServiceType="microphone|mediaProjection" />
         <service android:name=".TransferService" android:exported="false" android:foregroundServiceType="dataSync" />
+        <service android:name=".AppUpdateService" android:exported="false" android:foregroundServiceType="dataSync" />
+        <activity android:name=".AppUpdateActivity" android:exported="false" android:excludeFromRecents="true" />
         <service android:name=".PhoneControlService" android:exported="true" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:label="@string/phone_control_name">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/phone_control_accessibility" />
