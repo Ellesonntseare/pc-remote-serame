@@ -22,6 +22,8 @@ const {createNetworkDevices}=require('./network-devices');
 const nativeClipboard=require('./native-clipboard');
 const {createNativeFeatures}=require('./native-features');
 const {createAppUpdates}=require('./app-updates');
+const {createLocalRouteProof}=require('./local-route-proof');
+const {createSecondScreen}=require('./second-screen');
 const {createNativeVideo,PROFILES:NATIVE_VIDEO_PROFILES}=require('./native-video');
 const {createSessionAdmin}=require('./session-admin');
 const {createDisplayPrivacy}=require('./display-privacy');
@@ -64,7 +66,7 @@ const PWA_ASSETS = new Map([
   ['/google-signin.js',['google-signin.js','text/javascript; charset=utf-8']],
   ['/native-media.js',['native-media.js','text/javascript; charset=utf-8']],
   ['/device-companion.js',['device-companion.js','text/javascript; charset=utf-8']],
-  ...['mission-control','camera-sharing','local-connection'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
+  ...['mission-control','camera-sharing','local-connection','sculpted-flow'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/media-recording.js',['media-recording.js','text/javascript; charset=utf-8']],
   ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
   ...['workspace-settings','device-links','device-input','typing-controls','home-panels','native-window','window-presentation','touch-trail','explorer-workspace','account-workspace'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
@@ -85,8 +87,8 @@ const PWA_ASSETS = new Map([
   ['/file-manager.css',['file-manager.css','text/css; charset=utf-8']],
   ['/brand.svg', ['brand.svg', 'image/svg+xml']],
   ['/app-refinements.css', ['app-refinements.css', 'text/css; charset=utf-8']],
-  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','phone-input.js','phone-drop.js','guest-screen.js','workspace-ui.js','page-navigation.js','app-updates.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
-  ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css','workspace-ui.css','page-navigation.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
+  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','phone-input.js','phone-drop.js','guest-screen.js','workspace-ui.js','page-navigation.js','app-updates.js','mse-video.js','second-screen-policy.js','second-screen.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
+  ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css','workspace-ui.css','page-navigation.css','second-screen.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
   ['/input-transport.js', ['input-transport.js', 'text/javascript; charset=utf-8']],
   ['/pwa.js', ['pwa.js', 'text/javascript; charset=utf-8']],
   ['/pwa.css', ['pwa.css', 'text/css; charset=utf-8']],
@@ -209,6 +211,7 @@ function createApp(options={}) {
   const sharedClipboard=createSharedClipboard({store:accountData,directory:options.sharedClipboardDirectory,apply:async value=>{if(options.sharedClipboardProvider?.apply)return options.sharedClipboardProvider.apply(value);if(options.clipboardProvider?.set&&['text','empty'].includes(value.kind))return options.clipboardProvider.set(value.text||'');if(!clipboardObserver?.active)throw Error('The Windows clipboard connection is starting.');return clipboardObserver.set(value);}});
   const nativeFeatures=options.nativeFeatures||createNativeFeatures({root:ROOT});
   const appUpdates=options.appUpdates||createAppUpdates({root:ROOT,currentVersion:require('./package.json').version});
+  const localRouteProof=createLocalRouteProof();
   const displayPrivacy=options.displayPrivacy||createDisplayPrivacy({root:ROOT});
   const audioSockets=new Set();
   const accountContext=requirePassword?crypto.createHash('sha256').update('pc-remote-owner-v1\0'+options.password).digest('hex'):undefined;
@@ -501,7 +504,7 @@ function createApp(options={}) {
       }
       if(req.method==='GET'&&(pathname==='/manifest.json'||pathname==='/manifest.webmanifest'))return respond(res,200,{
         id:'/',name:'Elleson Connect',short_name:'Elleson Connect',description:'Control your own Windows PC from your phone.',
-        start_url:'/',scope:'/',display:'standalone',theme_color:'#07090f',background_color:'#07090f',
+        start_url:'/',scope:'/',display:'standalone',theme_color:'#10100F',background_color:'#10100F',
         icons:[
           {src:'/icons/icon-192.png',sizes:'192x192',type:'image/png',purpose:'any'},
           {src:'/icons/icon-512.png',sizes:'512x512',type:'image/png',purpose:'any'},
@@ -524,11 +527,14 @@ function createApp(options={}) {
         res.writeHead(200,{...headers,'Content-Length':asset.body.length});
         return res.end(asset.body);
       }
+      if(req.method==='GET'&&pathname==='/api/local-proof'){
+        try{const address=(req.socket.localAddress||'').replace(/^::ffff:/,''),port=req.socket.localPort,nonce=new URL(req.url,'http://localhost').searchParams.get('nonce')||'';return respond(res,200,{ok:true,...localRouteProof.proof(nonce,'http://'+address+':'+port)});}catch{return respond(res,409,{error:'Start this connection check from the signed-in app.'});}
+      }
       if(req.method==='GET'&&pathname==='/api/ping'){
         const token=auth(req),paired=!!token&&sessions.get(token).role!=='account';
         return respond(res,200,{ok:true,paired,requirePin,requirePassword,guestEnabled:requirePassword,...(paired?{name:sessions.get(token).role==='guest'?'Shared PC':hostname,...accessInfo(token),screen:enabled&&process.platform==='win32'&&permits(token,'screen')}:token?accessInfo(token):{})});
       }
-      if(req.method==='GET'&&pathname==='/api/app-version')return respond(res,200,{version:'1.9.0'});
+      if(req.method==='GET'&&pathname==='/api/app-version')return respond(res,200,{version:require('./package.json').version});
       if(pathname.startsWith('/api/auth/google/')){
         const url=new URL(req.url,'http://localhost'),action=pathname.slice('/api/auth/google/'.length),oauthCookie='pc_remote_google';
         const redirect=(location,headers={})=>{res.writeHead(303,{'Location':location,'Cache-Control':'no-store','Referrer-Policy':'no-referrer',...headers});res.end();};
@@ -597,6 +603,18 @@ function createApp(options={}) {
       }
       const token=auth(req);
       if(!token)return respond(res,401,{error:'Pair your phone first'});
+      if(pathname==='/api/local-route-key'&&req.method==='GET'){
+        if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required to choose a faster connection.'});
+        return respond(res,200,{ok:true,...localRouteProof.key(),persistent:!!sessions.get(token)?.persistent,expiresAt:sessions.get(token).until});
+      }
+      if(pathname==='/api/second-screen'&&req.method==='GET'){
+        if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required for Second screen.'});
+        try{return respond(res,200,{...await nativeFeatures.secondScreenProbe(),phoneRegistered:syncHub.device(token,workspaceScope(token)||'owner')?.platform==='android'});}catch{return respond(res,503,{error:'Update the Windows host to set up Second screen.'});}
+      }
+      if(pathname==='/api/second-screen/setup'&&req.method==='POST'){
+        if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required to set up Second screen.'});
+        try{await nativeFeatures.openLink('https://github.com/VirtualDrivers/Virtual-Display-Driver#-installation');return respond(res,200,{ok:true});}catch{return respond(res,503,{error:'Open the Virtual Display Driver installation page on your PC.'});}
+      }
       if(pathname==='/api/updates'||/^\/api\/updates\/(android|windows)\/download$/.test(pathname)){
         if(sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Only the PC owner can install app updates.'});
         if(req.method!=='GET')return respond(res,405,{error:'Use GET for app updates.'});
@@ -846,9 +864,15 @@ function createApp(options={}) {
   server.keepAliveTimeout=65000;server.headersTimeout=70000;
   const inputStream=new WebSocketServer({noServer:true,maxPayload:100000,perMessageDeflate:false});
   const audioStream=new WebSocketServer({noServer:true,maxPayload:1024,perMessageDeflate:false});
-  const guestScreens=createGuestScreen({sessions,auth,sessionExpiry,openHandoff:options.nativeFeatures?.openPhoneInput||(!options.disableAgent&&process.platform==='win32'?value=>nativeFeatures.openPhoneInput(value):undefined)});
+  const guestScreens=createGuestScreen({sessions,auth,sessionExpiry,openHandoff:options.nativeFeatures?.openPhoneInput||(!options.disableAgent&&process.platform==='win32'?value=>nativeFeatures.openPhoneInput(value):undefined),onDesktopFiles:async(controller,target,paths)=>{
+    const scope=workspaceScope(controller.token),grant=target.control;
+    if(sessions.get(controller.token)?.role!=='owner'||!scope||scope!==workspaceScope(target.token)||grant?.controller!==controller||!target.deviceId)throw Error('Pair the phone with the same account before sending files across the edge.');
+    const devices=await syncHub.devices(scope);if(!devices.some(device=>device.id===target.deviceId))throw Error('Open the phone app with the same account first.');
+    const result=await syncHub.enqueue({accountKey:scope,files:paths,target:target.deviceId,returnItems:true});guestScreens.offerFiles(target.deviceId,result.items,token=>workspaceScope(token)===scope&&target.control===grant&&grant.controller===controller);return result.count;
+  }});
   const webRtcVideo=createWebRtcVideo({sessions,auth,sessionExpiry});
   const nativeVideo=createNativeVideo({root:ROOT,sessions,auth,sessionExpiry,enabled:enabled&&!options.disableAgent,...options.nativeVideoDependencies});
+  const secondScreen=createSecondScreen({sessions,sessionExpiry,native:nativeFeatures,deviceFor:token=>syncHub.device(token,workspaceScope(token)||'owner'),onStop:token=>nativeVideo.revoke(token),onFiles:async(token,device,paths)=>{if(sessions.get(token)?.role!=='owner')throw Error('Your owner session ended.');const scope=workspaceScope(token);if(!scope)throw Error('Sign in before sending files.');const result=await syncHub.enqueue({accountKey:scope,files:paths,target:device.id,returnItems:true});return result.items;}});
   const cameraChannels=new Map(['pc','phone'].map(room=>[room,createWebRtcVideo({sessions,auth,sessionExpiry})]));
   const phoneAudio=createPhoneAudio({sessions,auth,sessionExpiry,openOutput:settings=>nativeFeatures.openAudioOutput(settings)});
   function cameraRevoke(token){phoneAudio.revoke(token);for(const channel of cameraChannels.values())channel.revoke(token);}
@@ -862,7 +886,7 @@ function createApp(options={}) {
   server.on('upgrade',(req,socket,head)=>{
     socket.on('error',()=>{});
     let pathname;try{pathname=new URL(req.url,'http://localhost').pathname;}catch{return rejectUpgrade(socket,400,'Bad URL');}
-    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video','/api/native-video','/api/collaboration','/api/camera','/api/phone-audio','/api/device-channel'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
+    if(!['/api/input-stream','/api/audio','/api/guest-screen','/api/webrtc-video','/api/native-video','/api/second-screen','/api/collaboration','/api/camera','/api/phone-audio','/api/device-channel'].includes(pathname))return rejectUpgrade(socket,404,'Not found');
     if(!allowedRequest(req))return rejectUpgrade(socket,403,'Input stream host rejected');
     try{
       const origin=new URL(req.headers.origin);
@@ -872,11 +896,13 @@ function createApp(options={}) {
     if(!token)return rejectUpgrade(socket,401,'Pair your phone first');
     if(sessions.get(token).role==='account')return rejectUpgrade(socket,403,'Pair this PC before opening a remote session');
     if(pathname==='/api/device-channel'){if(sessions.get(token)?.role!=='owner'||!workspaceScope(token))return rejectUpgrade(socket,403,'Pair your own device first.');return companions.upgrade(req,socket,head,token);}
+    if(pathname==='/api/second-screen'){if(sessions.get(token)?.role!=='owner')return rejectUpgrade(socket,403,'Owner access required.');return secondScreen.upgrade(req,socket,head,token);}
     if(pathname==='/api/native-video'){
       if(!enabled||!permits(token,'screen'))return rejectUpgrade(socket,403,'Screen viewing was not approved');
       const params=new URL(req.url,'http://localhost').searchParams,preset=params.get('p')||'auto';if(!Object.hasOwn(NATIVE_VIDEO_PROFILES,preset))return rejectUpgrade(socket,400,'Invalid video quality');
       let windowSource=null;if(params.has('window')){if(!permits(token,'apps'))return rejectUpgrade(socket,403,'Window presentation was not approved');try{windowSource=nativeFeatures.presentationApp(params.get('window'));}catch(error){return rejectUpgrade(socket,error.status||400,'Choose the window again');}}
-      return nativeVideo.upgrade(req,socket,head,token,preset,windowSource);
+      if(params.has('monitor')){if(params.has('window'))return rejectUpgrade(socket,400,'Choose one display source.');try{windowSource=secondScreen.source(token,params.get('monitor'));}catch{return rejectUpgrade(socket,400,'Start Second screen again.');}}
+      return nativeVideo.upgrade(req,socket,head,token,preset,windowSource,params.get('mse')==='1');
     }
     if(pathname==='/api/phone-audio'){
       if(sessions.get(token)?.role!=='owner')return rejectUpgrade(socket,403,'Only the paired PC owner can stream audio to this PC');
@@ -968,8 +994,8 @@ function createApp(options={}) {
       });
     });
   });
-  function stop(){stopping=true;appUpdates.close();accountAPI.close();clipboardObserver?.close();clipboardObserver=null;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();companions.revoke();}
-  server.on('close',()=>{sessionAdmin.close();google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();webRtcVideo.close();nativeVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();companions.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
+  function stop(){stopping=true;appUpdates.close();secondScreen.revoke();accountAPI.close();clipboardObserver?.close();clipboardObserver=null;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();companions.revoke();}
+  server.on('close',()=>{sessionAdmin.close();google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();secondScreen.close();webRtcVideo.close();nativeVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();companions.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   if(options.discovery===true)discovery=require('./local-discovery').advertise(server,{name:hostname,identity:hostIdentity,enabled:allowLan});
   server.once('close',()=>{networkDevices.close();clipboardObserver?.close();clipboardObserver=null;void syncHub.close();void sharedClipboard.close().finally(()=>accountData.close());});
   function clipboardPreferences(){

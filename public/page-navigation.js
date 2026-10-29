@@ -4,7 +4,7 @@
 // presentation and history; closing a page still runs its normal cleanup.
 (() => {
   if(window.PCRPages)return;
-  const titles={rs:'Remote screen',rsSettings:'Customize controls',remoteOptions:'Remote tools',workspaceSettings:'Settings',powerPage:'Power controls',filesDialog:'Files & text',filePreviewDialog:'File preview',audioPage:'Audio',pcAudioDialog:'PC audio',phoneAudioPage:'Send audio',pcAppsDialog:'Switch apps',guestApprovalDialog:'Guest access',guestScreenDialog:'Phone control',webrtcVideoDialog:'Watch PC',windowPresentation:'Presentation',sessionTools:'Devices & handoff',collaborationDialog:'Collaborate',screenTextDialog:'Copy screen text',imageClipboardDialog:'Image clipboard',installHelp:'Install to phone',localConnectionPage:'Local connection',cameraSharing:'Cameras & microphones',missionSearch:'Find a control',missionActivity:'Recent activity',missionHelp:'Help & support'};
+  const titles={ecControlsPage:'Controls',rs:'Remote screen',rsSettings:'Customize controls',remoteOptions:'Remote tools',workspaceSettings:'Settings',powerPage:'Power controls',filesDialog:'Files & text',filePreviewDialog:'File preview',audioPage:'Audio',pcAudioDialog:'PC audio',phoneAudioPage:'Send audio',pcAppsDialog:'Switch apps',guestApprovalDialog:'Guest access',guestScreenDialog:'Phone control',webrtcVideoDialog:'Watch PC',windowPresentation:'Presentation',secondScreenPage:'Second screen',sessionTools:'Devices & handoff',collaborationDialog:'Collaborate',screenTextDialog:'Copy screen text',imageClipboardDialog:'Image clipboard',installHelp:'Install to phone',localConnectionPage:'Local connection',cameraSharing:'Cameras & microphones',missionSearch:'Find a control',missionActivity:'Recent activity',missionHelp:'Help & support'};
   // Preferences also open from Home. Move the existing controls intact into a
   // real page dialog so they can appear above Settings without starting video.
   const oldPreferences=document.getElementById('rsSettings');
@@ -23,7 +23,7 @@
   try{history.replaceState(state([]),'');}catch{}
 
   function visible(node){
-    if(!node?.isConnected)return false;
+    if(!node?.isConnected||node.dataset.pcrParked==='true')return false;
     if(node.tagName==='DIALOG'||node.tagName==='DETAILS')return node.open;
     return !node.classList.contains('hide')&&(node.id!=='rsSettings'||visible(document.getElementById('rs')));
   }
@@ -187,7 +187,7 @@
   },true);
   document.addEventListener('focusin',event=>{
     const current=stack.at(-1)?.node;
-    if(current&&current.id!=='rs'&&current.tagName!=='DIALOG'&&!current.contains(event.target)&&!event.target.closest('dialog[open]'))focusPage(current);
+    if(current&&current.id!=='rs'&&current.tagName!=='DIALOG'&&!current.contains(event.target)&&!event.target.closest('dialog[open]')&&!event.target.closest('.ecNavigation'))focusPage(current);
   },true);
   window.addEventListener('popstate',event=>{
     const next=pathFrom(event.state);historyPath=next;
@@ -219,5 +219,32 @@
   });
   function home(){changing=true;try{for(let i=0;i<30&&stack.length;i++)closePage(stack.at(-1).node);}finally{changing=false;render();syncHistory();}}
   function show(id){reconcile();if(!stack.some(page=>page.node.id===id))return false;changing=true;try{for(let i=0;i<30&&stack.at(-1)?.node.id!==id;i++)closePage(stack.at(-1)?.node);}finally{changing=false;render();syncHistory();}focusPage(stack.at(-1).node);return true;}
-  window.PCRPages={back,home,show,get current(){reconcile();return stack.at(-1)?.node.id||'home';}};
+  // Switching workspaces parks durable surfaces without firing their Close
+  // handlers. Explicit Back/Close and sign-out still use normal feature cleanup.
+  const durable=new Set(['rs','filesDialog','audioPage']),parkClosures=new WeakSet();
+  document.addEventListener('close',event=>{if(parkClosures.has(event.target)){parkClosures.delete(event.target);event.stopImmediatePropagation();}},true);
+  function park(){
+    changing=true;
+    try{for(const page of stack.slice().reverse()){
+      if(!durable.has(page.node.id)){closePage(page.node);continue;}
+      const node=page.node;window.rsTypeClose?.();window.PCRHoldControl?.release();
+      node.dataset.pcrParked='true';node.classList.add('ecParked');
+      // Removing `open` on a modal leaves the document blocked in Chromium.
+      // Close its top-layer entry normally, suppressing only this synthetic
+      // parking close event so transfer/audio lifecycle handlers keep running.
+      if(node.tagName==='DIALOG'){parkClosures.add(node);nativeClose?.call(node);if(node.open)node.removeAttribute('open');}
+      leave(node,false);
+    }}finally{changing=false;render();syncHistory();}
+  }
+  function resume(id){
+    const node=pages.get(id);if(node?.dataset.pcrParked!=='true')return false;
+    if(id==='rs'&&window.PCRCanAccess&&!window.PCRCanAccess('screen'))return false;
+    if(id==='filesDialog'&&window.PCRCanAccess&&!['download','upload','clipboard'].some(name=>window.PCRCanAccess(name)))return false;
+    if(id==='audioPage'&&window.PCRCanAccess&&!window.PCRCanAccess('audio')&&window.PCRAuth?.role!=='owner')return false;
+    delete node.dataset.pcrParked;node.classList.remove('ecParked');
+    if(node.tagName==='DIALOG')node.showModal();else enter(node);
+    focusPage(node);return true;
+  }
+  window.addEventListener('pcr:auth',event=>{if(event.detail?.signedIn)return;for(const node of pages.values())if(node.dataset.pcrParked==='true'){delete node.dataset.pcrParked;node.classList.remove('ecParked');if(node.tagName==='DIALOG'){node.setAttribute('open','');node.close();}else if(node.id==='rs')window.rsClose?.();}});
+  window.PCRPages={back,home,show,park,resume,get current(){reconcile();return stack.at(-1)?.node.id||'home';}};
 })();

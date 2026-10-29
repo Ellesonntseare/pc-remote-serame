@@ -1,5 +1,6 @@
 'use strict';
 (()=>{
+ function mount(){
   const pc=document.getElementById('pcAudioDialog'),phone=document.getElementById('phoneAudioPage');if(!pc||!phone)return;
   const page=document.createElement('dialog');page.id='audioPage';page.className='workspacePage audioHub';
   page.innerHTML='<header><div><span class="nativeEyebrow">SOUND BETWEEN YOUR DEVICES</span><h2>Audio</h2></div><button type="button" data-close>Back</button></header><div class="audioRoutes" role="group" aria-label="Audio direction"><button type="button" data-audio-route="pc"><span aria-hidden="true">↓</span><strong>Listen to PC</strong><small>PC → this device</small></button><button type="button" data-audio-route="microphone"><span aria-hidden="true">↑</span><strong>Send microphone</strong><small>Microphone → PC</small></button><button type="button" data-audio-route="playback"><span aria-hidden="true">↑</span><strong>Send phone audio</strong><small>Phone sound → PC</small></button></div><p class="audioHubNotice" role="status"></p><div class="audioHubPanes"></div>';
@@ -21,4 +22,6 @@
   window.addEventListener('pcr:audio-state',event=>{pcState=event.detail?.state||'stopped';meter.firstElementChild.style.width=(event.detail?.muted?0:Math.min(100,(event.detail?.level||0)*250))+'%';});
   window.addEventListener('pcr:auth',()=>{generation++;changing=false;if(!window.PCRAuth?.signedIn){notice.textContent='';if(page.open)page.close();}draw();});
   window.PCRAudioHub={open,select,get mode(){return mode;},get pcState(){return pcState;}};draw();
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();

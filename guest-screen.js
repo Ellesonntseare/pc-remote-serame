@@ -9,11 +9,11 @@ function jpegSize(bytes){
   return null;
 }
 function validMark(value){return value&&['laser','pen','clear'].includes(value.tool)&&(value.tool==='clear'||Array.isArray(value.points)&&value.points.length>=1&&value.points.length<=64&&value.points.every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.x<=1&&p.y>=0&&p.y<=1));}
-function createGuestScreen({sessions,auth,sessionExpiry,openHandoff}){
+function createGuestScreen({sessions,auth,sessionExpiry,openHandoff,onDesktopFiles}){
   const wss=new WebSocketServer({noServer:true,maxPayload:1024*1024,perMessageDeflate:false}),peers=new Set();
   const send=(peer,data)=>{if(peer.ws.readyState===WebSocket.OPEN&&peer.ws.bufferedAmount<512*1024)peer.ws.send(typeof data==='string'||Buffer.isBuffer(data)?data:JSON.stringify(data));};
   const sharing=id=>Array.from(peers).find(p=>p.id===id&&p.sharing);
-  const control=createPhoneControl({send,peers,sharing,openHandoff});
+  const control=createPhoneControl({send,peers,sharing,openHandoff,onDesktopFiles});
   const shareList=()=>Array.from(peers).filter(p=>p.sharing).map(p=>({id:p.id,device:p.device,deviceId:p.deviceId||''}));
   function announce(){const shares=shareList();for(const peer of peers)if(peer.owner&&!peer.publisher)send(peer,{type:'shares',shares});}
   function stopShare(peer,reconnect=false){control.end(peer,undefined,reconnect);peer.frame=null;peer.capture=null;if(!peer.sharing)return;peer.sharing=false;peer.marks=[];for(const watcher of peers)if(watcher.owner&&watcher.watching===peer.id){watcher.watching=null;send(watcher,{type:'stopped',id:peer.id,reconnect});}announce();}

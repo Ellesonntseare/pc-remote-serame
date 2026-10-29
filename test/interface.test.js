@@ -32,6 +32,17 @@ async function fixture(t,appOptions={}){const dir=await fs.mkdtemp(path.join(__d
   return {page};
 }
 async function login(window,password){const doc=window.document;doc.getElementById('pin').value=password;doc.getElementById('rememberMe').checked=false;doc.getElementById('pairForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));}
+test('Sculpted Flow changes environments without closing live capture, audio or file state',async t=>{
+ const f=await fixture(t),w=await f.page({phone:true}),d=w.document;await login(w,'serame');await until(()=>w.PCRAuth?.signedIn&&w.EllesonFlow);
+ w.eval('rsRun=function(){rs.m={w:1920,h:1080};};$("screenBtn").classList.remove("hide");');w.rsOpen();await until(()=>w.PCRPages.current==='rs');const canvas=d.getElementById('rsc');w.PCRScreenTools.setZoom(1.75);
+ let audioClosed=0;d.getElementById('audioPage').addEventListener('close',()=>audioClosed++);
+ w.EllesonFlow.navigate('files');await until(()=>w.PCRPages.current==='filesDialog');const manager=w.PCRFileManager;const state=manager.state;w.EllesonFlow.navigate('audio');await until(()=>w.PCRPages.current==='audioPage');
+ w.EllesonFlow.navigate('home');await until(()=>w.PCRPages.current==='home');assert.equal(audioClosed,0,'parking audio does not dispatch its teardown event');
+ w.EllesonFlow.navigate('files');await until(()=>w.PCRPages.current==='filesDialog');assert.equal(w.PCRFileManager,manager);assert.equal(manager.state.path,state.path);
+ w.EllesonFlow.navigate('remote');await until(()=>w.PCRPages.current==='rs');assert.equal(w.eval('rs.on'),1);assert.equal(d.getElementById('rsc'),canvas);assert.equal(w.PCRScreenTools.zoom,1.75);assert.equal(d.querySelectorAll('.ecNavigation').length,1);assert.equal(d.querySelector('.ecNavigation').parentElement.id,'rs');
+ w.rsKb();w.PCRScreenTools.focusPoint({x:1000,y:700});await new Promise(r=>setTimeout(r,40));w.visualViewport.height=430;w.visualViewport.dispatchEvent(new w.Event('resize'));await new Promise(r=>setTimeout(r,40));assert.equal(w.PCRScreenTools.zoom,1.75,'the keyboard cannot override intentional zoom');w.rsTypeClose();assert.equal(w.PCRScreenTools.zoom,1.75);
+ w.EllesonFlow.navigate('files');await until(()=>w.PCRPages.current==='filesDialog');w.eval('showPair()');await until(()=>!w.PCRAuth.signedIn);assert.equal(w.eval('rs.on'),0);assert.equal(d.querySelectorAll('[data-pcr-parked=true]').length,0);assert.equal(d.querySelector('.ecNavigation').hidden,true);
+});
 test('dashboard keyboard opens the remote editor directly and common keys stay within reach',async t=>{
   const f=await fixture(t),window=await f.page({phone:true}),doc=window.document;
   await login(window,'serame');await until(()=>window.PCRAuth?.signedIn);
@@ -163,7 +174,7 @@ test('guest waits for owner approval, privacy defaults hide sensitive panels, an
   await login(guest,'guest');await until(()=>!guest.document.querySelector('.guestWaitingPanel').hidden);assert.equal(guest.PCRAuth?.signedIn,false);
   await until(()=>owner.document.querySelector('.guestRequestCard'));const card=owner.document.querySelector('.guestRequestCard');assert.equal(card.querySelector('[data-permission="screen"]').checked,true);assert.equal(card.querySelector('[data-permission="control"]').checked,false);assert.equal(card.querySelector('[data-permission="download"]').checked,false);card.querySelector('.guestDuration select').value='15';card.querySelector('.guestApprove').click();await until(()=>guest.PCRAuth?.role==='guest');
   for(const selector of ['.stats','.activity','.filesHome','#pcAudioHome','#pcAppsButton','#homeKeyboard','#homeApps','#rsm','.dashboardPowerTile','#powerDrawer','.mediaWrap'])assert.equal(guest.getComputedStyle(guest.document.querySelector(selector)).display,'none',selector);
-  assert.notEqual(guest.getComputedStyle(guest.document.querySelector('.hero')).display,'none','guest can still open approved screen viewing');
+  assert.notEqual(guest.getComputedStyle(guest.document.querySelector('#ecHome [data-ec-go=remote]')).display,'none','guest can still open approved screen viewing from the redesigned Home');
   assert.equal(guest.document.getElementById('name').textContent,'Shared PC');assert.equal(guest.document.querySelector('.guestScreenHome').hidden,false);assert.equal(guest.document.getElementById('guestManageButton').hidden,true);
   // A role switch in the same browser must not render the owner's saved text.
   guest.localStorage.setItem('pcr_clipboard_history_v1',owner.localStorage.getItem('pcr_clipboard_history_v1'));guest.dispatchEvent(new guest.CustomEvent('pcr:auth',{detail:guest.PCRAuth}));assert.equal(guest.document.getElementById('clipboardHistoryList').textContent.includes('Owner private sample'),false);

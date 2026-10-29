@@ -86,6 +86,7 @@
       else if(value.type==='control-result'&&value.seq===controlPending){clearTimeout(controlTimeout);controlPending=null;input?.result(value.ok);controlUI();if(!value.ok)status.textContent=value.message||'The phone could not perform that action.';}
       else if(value.type==='desktop-state')input?.desktopState(value);
       else if(value.type==='desktop-input')input?.native(value.event);
+      else if(value.type==='desktop-transfer')status.textContent=value.message;
       else if(value.type==='stopped'){if(!value.reconnect)resumeProofs.delete(watching);watching=null;resumeAttempted='';resetControl();hideFrame();status.textContent=value.reconnect?'Phone disconnected · waiting to reconnect…':'The phone stopped sharing.';}
       else if(value.type==='mark')applyMark(value);
     };

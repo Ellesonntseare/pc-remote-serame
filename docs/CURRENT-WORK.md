@@ -1,5 +1,15 @@
 # Elleson Connect checkpoint — 29 October 2026
 
+## 2.3.0 implementation checkpoint
+
+The user supplied the actual **Sculpted Flow** image and authorized remaining decisions while away. It is now the primary reference. Carbon/Vermilion Home, Remote, Files and Audio environments, persistent morphing navigation, a three-position gesture shelf, updated native/web icons and preserved workspace state are implemented. The keyboard's automatic 300% readability zoom has been removed; explicit zoom survives IME resizing. The other two concept images have not been supplied or inspected. `RELEASE-2.3.0.md` records the reference comparison and limits.
+
+Second-screen extension, aspect fitting, orientation lock, adaptive H.264, verified fast local routing, HTTP MediaSource fallback, approved screen-edge file drops and native in-app updates are implemented. No virtual driver has been installed and no real PC input hooks or display extension were activated for tests. Driver-dependent operation and physical phone checks remain explicit limitations.
+
+Verification so far: 374 portable Node checks passed; focused navigation/guest checks passed; real headless Edge checks passed at 320×700, 390×844, 844×390 and 1440×900; Windows helper and tray compile with no warnings. Full served-interface regression and Android CI are being completed before release/deployment. Version is 2.3.0 / Android code 23. Do not claim this version installed on the phone.
+
+The 2.2.0 release described below remains the previously published/deployed version until the new release is verified. The installer execution review block described below still applies; do not work around it.
+
 ## Completed
 
 - Rebranded the personal app, included keyboard, website, Windows host, notifications, sharing menus, installer and documentation as Elleson Connect / Elleson Keyboard.
@@ -38,7 +48,15 @@ Research references: Microsoft Indirect Display Driver overview, VirtualDrivers/
 
 This is a side conversation. Only its post-boundary requests are active. The user explicitly authorized rebranding, host/APK updates and the three new additions, and asked the assistant to make routine decisions while they sleep. No sub-agents. Preserve concurrent work in the original live checkout; never reset it or overwrite whole runtime files with a stale branch copy. Never read or print OAuth secrets, cloudflared tokens or real clipboard contents for testing.
 
-The earlier keyboard zoom/crash bug is recorded but the user said not to fix it yet. Do not work on it as part of these additions.
+The earlier keyboard zoom/crash bug was deferred, but the newly pasted redesign brief explicitly requires fixing keyboard-triggered zoom/clipping. It is now in scope under that newer instruction.
+
+## New visual redesign request
+
+The user supplied a complete redesign brief in `C:/Users/elles/.codex/attachments/bf0e4946-a1cb-4284-85f6-d62db2ff6c09/Pasted text.txt`. It is copied into `docs/UI-REDESIGN-BRIEF.md`; the implementation map is `docs/UI-REDESIGN-ARCHITECTURE.md`.
+
+Required palette: Carbon `#10100F`, Vermilion `#FC563E`, warm white `#EFE7DC`, muted gray `#77756E`. Rebuild Home, Remote, Files and Audio compositions, transforming bottom navigation and gesture/motion systems. Do not just recolour cards; preserve all functions and transport state. This latest Files direction explicitly supersedes the former Windows Explorer copying.
+
+The three concept images named in that brief were **not attached**. The attachment directory contains only the text file. A text-input question asking for their local file paths is pending. The brief requires studying all three before visual changes, so do not finalize or invent reference comparisons. Continue independent functional work and testing while waiting.
 
 ## Credit interruptions
 

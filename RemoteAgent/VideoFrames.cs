@@ -16,10 +16,12 @@ internal static class VideoFrames
             using var input=new StreamReader(Console.OpenStandardInput());
             string raw=input.ReadLine()??"";if(raw.Length>2048)throw new ArgumentException("Invalid video configuration");
             using var config=JsonDocument.Parse(raw);int maximum=config.RootElement.GetProperty("width").GetInt32(),fps=config.RootElement.GetProperty("fps").GetInt32();
-            if(maximum is <640 or >1920||fps is <5 or >30)throw new ArgumentException("Invalid video configuration");
+            if(maximum is <640 or >1920||fps is <5 or >60)throw new ArgumentException("Invalid video configuration");
             SetProcessDPIAware();using var window=config.RootElement.TryGetProperty("window",out var selection)?new WindowCapture(AppWindows.PresentationWindow(selection)):null;
-            var bounds=window!=null?new Rectangle(Point.Empty,window.Size):Screen.PrimaryScreen?.Bounds??throw new InvalidOperationException("No primary monitor");
-            double scale=Math.Min(1,Math.Min((double)maximum/bounds.Width,1080.0/bounds.Height));int width=Math.Max(2,(int)(bounds.Width*scale)/2*2),height=Math.Max(2,(int)(bounds.Height*scale)/2*2);
+            var monitor=config.RootElement.TryGetProperty("monitor",out var monitorSelection)?Screen.AllScreens.FirstOrDefault(display=>!display.Primary&&display.DeviceName==monitorSelection.GetString()):null;
+            if(config.RootElement.TryGetProperty("monitor",out _)&&monitor==null)throw new InvalidOperationException("The phone's virtual display is no longer connected.");
+            var bounds=window!=null?new Rectangle(Point.Empty,window.Size):monitor?.Bounds??Screen.PrimaryScreen?.Bounds??throw new InvalidOperationException("No primary monitor");
+            double scale=Math.Min(1,monitor!=null?maximum/(double)Math.Max(bounds.Width,bounds.Height):Math.Min((double)maximum/bounds.Width,1080.0/bounds.Height));int width=Math.Max(2,(int)(bounds.Width*scale)/2*2),height=Math.Max(2,(int)(bounds.Height*scale)/2*2);
             using var capture=window==null?new DesktopCapture(bounds):null;using var source=window==null?new Bitmap(bounds.Width,bounds.Height,PixelFormat.Format32bppArgb):null;using var target=new Bitmap(width,height,PixelFormat.Format32bppArgb);using var graphics=Graphics.FromImage(target);graphics.InterpolationMode=InterpolationMode.Bilinear;graphics.CompositingMode=CompositingMode.SourceCopy;
             using var output=Console.OpenStandardOutput();byte[] header=new byte[12];BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(0,4),width);BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(4,4),height);BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(8,4),fps);output.Write(header);output.Flush();
             int running=1;_ = Task.Run(()=>{try{while(input.ReadLine() is string line)if(line=="stop")break;}catch{}Interlocked.Exchange(ref running,0);});

@@ -15,10 +15,11 @@
   }
   function create({canvas,controls,mouse,ready,busy,send,sendPointer,sendDesktop,state,point,status,upload}){
     let held=false,heldPoint=null,holdTimer=null,desktop='off',lastGrant='',grantAttempt='',wheelPixels={x:0,y:0},wheelTimer=null,dragId=null;
-    let settings={side:'right',sensitivity:1,edge:false};try{settings={...settings,...JSON.parse(localStorage.getItem('pcr_phone_desk_v1')||'{}')};}catch{}
+    let settings={side:'right',sensitivity:1,edge:false,files:true};try{settings={...settings,...JSON.parse(localStorage.getItem('pcr_phone_desk_v1')||'{}')};}catch{}
     if(!['left','right','top','bottom'].includes(settings.side))settings.side='right';settings.sensitivity=Number.isFinite(settings.sensitivity)?Math.min(3,Math.max(.3,settings.sensitivity)):1;
     const panel=document.createElement('details');panel.className='phoneDeskSettings';panel.innerHTML='<summary>Arrange phone &amp; PC</summary><div class="phoneDeskLayout" role="group" aria-label="Phone position relative to PC"><button type="button" data-side="top">Phone above</button><button type="button" data-side="left">Phone left</button><span aria-hidden="true">▣ PC</span><button type="button" data-side="right">Phone right</button><button type="button" data-side="bottom">Phone below</button></div><label class="phoneEdgeSwitch"><input type="checkbox" data-phone-edge>Move mouse across the screen edge</label><label class="phoneSpeed">Mouse speed <input type="range" min="0.3" max="3" step="0.1" data-phone-speed></label><p data-edge-status role="status">Approve phone control to enable.</p><small>Escape returns the mouse to your PC. Your PC keyboard follows the pointer onto the phone.</small>';
     controls.append(panel);const edge=panel.querySelector('[data-phone-edge]'),speed=panel.querySelector('[data-phone-speed]'),edgeStatus=panel.querySelector('[data-edge-status]');edge.checked=!!settings.edge;speed.value=settings.sensitivity;
+    const fileLabel=document.createElement('label');fileLabel.className='phoneEdgeSwitch';fileLabel.innerHTML='<input type="checkbox" data-edge-files>Show Send to phone at this screen edge';speed.closest('label').before(fileLabel);const fileSwitch=fileLabel.querySelector('input');fileSwitch.checked=settings.files!==false;
     const queue=new InputQueue({ready,busy,send:command=>send(command,desktop==='active'),overflow:()=>{stop();status('Input stopped because the connection could not keep up. Start control again.');}});
     function save(){try{localStorage.setItem('pcr_phone_desk_v1',JSON.stringify(settings));}catch{}for(const item of panel.querySelectorAll('[data-side]'))item.setAttribute('aria-pressed',String(item.dataset.side===settings.side));}
     function clearTouch(){held=false;heldPoint=null;dragId=null;clearInterval(holdTimer);holdTimer=null;clearTimeout(wheelTimer);wheelTimer=null;wheelPixels={x:0,y:0};}
@@ -26,7 +27,7 @@
     function stop(){cancel();mouse.release();sendPointer({action:'hide-pointer'});if(desktop!=='off')sendDesktop({type:'desktop-stop'});desktop='off';}
     function startDesktop(){
       const current=state();if(!ready()||!current.advancedInput||!current.desktopAvailable)return;
-      mouse.release();cancel();grantAttempt=current.id;sendDesktop({type:'desktop-start',side:settings.side,sensitivity:settings.sensitivity});edgeStatus.textContent='Starting screen-edge switching…';
+      mouse.release();cancel();grantAttempt=current.id;sendDesktop({type:'desktop-start',side:settings.side,sensitivity:settings.sensitivity,files:settings.files!==false});edgeStatus.textContent='Starting screen-edge switching…';
     }
     function refresh(){
       const current=state();edge.disabled=!current.canControl||!current.advancedInput||!current.desktopAvailable;
@@ -40,6 +41,7 @@
     for(const item of panel.querySelectorAll('[data-side]'))item.onclick=()=>{settings.side=item.dataset.side;save();if(desktop!=='off')startDesktop();};
     speed.onchange=()=>{settings.sensitivity=Number(speed.value);save();if(desktop!=='off')startDesktop();};
     edge.onchange=()=>{settings.edge=edge.checked;save();if(settings.edge)startDesktop();else stop();};save();
+    fileSwitch.onchange=()=>{settings.files=fileSwitch.checked;save();if(desktop!=='off')startDesktop();};
     function begin(p){if(!ready()||!p||held)return;held=true;heldPoint=p;queue.push({action:'touch-start',points:[p]});holdTimer=setInterval(()=>{if(held&&heldPoint&&ready())queue.push({action:'touch-move',points:[heldPoint]});},250);}
     function move(p){if(!held||!p||!ready())return;heldPoint=p;queue.push({action:'touch-move',points:[p]});}
     function end(p){if(!held)return;const last=p||heldPoint;clearTouch();if(last&&ready())queue.push({action:'touch-end',points:[last]});}

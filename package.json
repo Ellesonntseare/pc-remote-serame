@@ -1,6 +1,6 @@
 {
   "name": "elleson-connect",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "private": true,
   "description": "Explicitly activated, PIN-paired LAN remote desktop for personal Windows PCs",
   "main": "server.js",

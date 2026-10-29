@@ -35,7 +35,7 @@
       document.getElementById('pcAppsButton')?.click();
     });
 
-    const order = {screen: 0, file: 1, keyboard: 2, apps: 3, audio: 4, video: 5, guest: 6, collaborate: 7, devices: 8, power: 9, camera: 10, 'send-audio': 11};
+    const order = {screen: 0, file: 1, keyboard: 2, apps: 3, audio: 4, video: 5, 'second-screen':5.5, guest: 6, collaborate: 7, devices: 8, power: 9, camera: 10, 'send-audio': 11};
     const labels = {
       screen: ['Remote screen', 'View & control'],
       file: ['Files & clipboard', 'Move files and text'],

@@ -15,4 +15,5 @@ function createEncoderSelector({spawnImpl=spawn,timeout=3000}={}){
   async function select(binary){if(selected&&!failed.has(selected))return selected;if(pending)return pending;pending=(async()=>{for(const codec of ['h264_qsv','h264_nvenc','h264_amf'])if(!failed.has(codec)&&await probe(binary,codec))return selected=codec;return selected='libx264';})().finally(()=>pending=null);return pending;}
   return {select,reject(codec){failed.add(codec);if(selected===codec)selected=null;}};
 }
-module.exports={createEncoderSelector,encodingArgs,LABELS};
+function mp4EncodingArgs(codec,profile){const args=encodingArgs(codec,profile),filter=args.indexOf('-bsf:v');if(filter>=0)args.splice(filter,2);const at=args.lastIndexOf('-f');args.splice(at,args.length-at,'-movflags','frag_keyframe+empty_moov+default_base_moof','-frag_duration','100000','-flush_packets','1','-f','mp4','pipe:1');return args;}
+module.exports={createEncoderSelector,encodingArgs,mp4EncodingArgs,LABELS};

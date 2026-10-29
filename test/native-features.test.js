@@ -11,6 +11,7 @@ test('screen-edge helper starts with validated geometry, accepts bounded events 
   const session=f.service.openPhoneInput({side:'left',width:1080,height:2400,sensitivity:1.2,onEvent:event=>events.push(event)}),call=f.calls[0];
   assert.deepEqual(call.args,['--phone-handoff']);assert.equal(call.options.windowsHide,true);assert.equal(call.options.shell,undefined);
   call.child.stdout.write('{"kind":"state","state":"armed"}\n{"kind":"text","text":"fixture"}\n');assert.equal(events.length,2);
+  call.child.stdout.write(JSON.stringify({kind:'files',paths:['C:\\Documents\\Original photo.png']})+'\n');assert.equal(events.at(-1).paths[0],'C:\\Documents\\Original photo.png');
   session.update({side:'top',width:2400,height:1080,sensitivity:.8});session.release();session.stop();call.child.emit('close',0);f.service.close();
 });
 

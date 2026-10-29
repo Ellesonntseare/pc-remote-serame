@@ -21,6 +21,7 @@ test('phone arrangement starts the fixed desktop mode and native keyboard input 
   const f=fixture(t);f.doc.querySelector('[data-side=left]').click();const edge=f.doc.querySelector('[data-phone-edge]');edge.checked=true;edge.dispatchEvent(new f.w.Event('change'));
   assert.equal(f.desktop.at(-1).type,'desktop-start');assert.equal(f.desktop.at(-1).side,'left');assert.equal(JSON.parse(f.w.localStorage.getItem('pcr_phone_desk_v1')).side,'left');
   f.input.desktopState({state:'active'});f.w.dispatchEvent(new f.w.Event('blur'));f.input.native({kind:'text',text:'fixture'});assert.equal(f.commands.at(-1).command.text,'fixture');assert.equal(f.commands.at(-1).external,true);f.ack();
+  const fileSwitch=f.doc.querySelector('[data-edge-files]');assert.equal(fileSwitch.checked,true);fileSwitch.checked=false;fileSwitch.dispatchEvent(new f.w.Event('change'));assert.equal(f.desktop.at(-1).files,false);assert.equal(JSON.parse(f.w.localStorage.getItem('pcr_phone_desk_v1')).files,false);
   f.input.native({kind:'pointer',x:.4,y:.6});assert.equal(f.pointers.at(-1).points[0].x,.4);
   f.input.desktopState({state:'armed'});assert.equal(f.pointers.at(-1).action,'hide-pointer');
 });

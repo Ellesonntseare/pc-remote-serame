@@ -69,7 +69,9 @@
     if(x<bounds.left+24||x>bounds.right-24)view.scrollLeft+=x-(bounds.left+bounds.width/2);
     if(y<top||y>bottom)view.scrollTop+=y-(top+Math.max(20,bottom-top)*.45);
   }
-  function focusPoint(point){if(!point||!Number.isFinite(point.x)||!Number.isFinite(point.y))return;typingPoint={x:point.x,y:point.y};requestAnimationFrame(()=>{if(!screen.classList.contains('typing'))return;const readable=Math.min(3,Math.max(zoom,(rs.m?.w||1280)/Math.max(1,view.clientWidth*1.5)));setZoom(readable,{precise:true});keepTypingVisible();});}
+  // IME insets change the available viewport, not the user's chosen zoom. The
+  // former readability heuristic enlarged a full desktop to 300% on phones.
+  function focusPoint(point){if(!point||!Number.isFinite(point.x)||!Number.isFinite(point.y))return;typingPoint={x:point.x,y:point.y};requestAnimationFrame(()=>{if(screen.classList.contains('typing'))keepTypingVisible();});}
   function panUI(){
     panButton.disabled=zoom===1;
     panButton.title=pan?'Control PC':'Pan view';panButton.setAttribute('aria-label',panButton.title);
@@ -251,11 +253,14 @@
   view.addEventListener('touchend',event=>{if(!pan)return;consume(event);stopGesture();},{capture:true,passive:false});
   view.addEventListener('touchcancel',event=>{if(!pan)return;consume(event);stopGesture();},{capture:true,passive:false});
   view.addEventListener('wheel',event=>{if(!pan)return;consume(event);view.scrollLeft+=event.deltaX;view.scrollTop+=event.deltaY;},{capture:true,passive:false});
-  let wasTyping=screen.classList.contains('typing');new MutationObserver(()=>{const typing=screen.classList.contains('typing');if(wasTyping&&!typing&&screen.classList.contains('screenClean')&&!document.body.classList.contains('pcrMiniWindow'))fitScreen();wasTyping=typing;}).observe(screen,{attributes:true,attributeFilter:['class']});
-  new ResizeObserver(()=>layout()).observe(view);
-  new ResizeObserver(()=>{adaptHeight();layout();}).observe(screen);
-  window.visualViewport?.addEventListener('resize',()=>{if(typingPoint)requestAnimationFrame(()=>layout());});
+  // Screen and view observers can both fire for one keyboard animation. Batch
+  // writes into one frame and never feed layout back into the same observer.
+  let layoutFrame=0;
+  function queueLayout(){if(layoutFrame)return;layoutFrame=requestAnimationFrame(()=>{layoutFrame=0;adaptHeight();layout();});}
+  new ResizeObserver(queueLayout).observe(view);
+  new ResizeObserver(queueLayout).observe(screen);
+  window.visualViewport?.addEventListener('resize',queueLayout);
   window.addEventListener('pcr:auth',()=>{if(!window.PCRAuth?.signedIn){savedView=null;typingPoint=null;setZoom(1);}});
-  window.PCRScreenTools={connecting,metadata,frame,disconnected,closed,imageBox,reconnect,setZoom,focusPoint,restoreControls,presentation,fitScreen};
+  window.PCRScreenTools={connecting,metadata,frame,disconnected,closed,imageBox,reconnect,setZoom,focusPoint,restoreControls,presentation,fitScreen,get zoom(){return zoom;}};
   setZoom(1);updateFullscreen();
 })();

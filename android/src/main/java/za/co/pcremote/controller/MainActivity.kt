@@ -68,6 +68,10 @@ class MainActivity : Activity() {
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
     private var connectionGeneration = 0
     private var nearby:NearbyComputers?=null
+    private val nearbyTargets=linkedSetOf<String>()
+    private var fastLocalPending=false
+    private var fastRouteGeneration=0
+    private var appForeground=false
     private var clipboardDirty=true
     private var companionObserver:(()->Unit)?=null
     private var pendingShortcut=""
@@ -128,7 +132,7 @@ class MainActivity : Activity() {
             val text=clipboard.primaryClip?.takeIf{it.itemCount>0}?.getItemAt(0)?.coerceToText(this)?.toString()?.trim().orEmpty()
             if(text.isNotBlank()){address.setText(text.take(160));address.setSelection(address.text.length);address.requestFocus()}else error.text="Copy your PC's IP address first."
         }
-        nearby=NearbyComputers(this){value->runOnUiThread{nearbyEvent(value)}}
+        nearby=NearbyComputers(this){value->runOnUiThread{if(value.optString("state")=="found"){TrustedOrigin.normalize("http://"+value.optString("address")+":"+value.optInt("port",7666))?.let{target->nearbyTargets.add(target);while(nearbyTargets.size>32)nearbyTargets.remove(nearbyTargets.first())}};nearbyEvent(value)}}
         findViewById<Button>(R.id.nearbyScan).setOnClickListener{nearby?.start()}
         findViewById<Button>(R.id.modeLocal).setOnClickListener{selectConnectionMode(false);nearby?.start()}
         findViewById<Button>(R.id.modeWebsite).setOnClickListener{selectConnectionMode(true)}
@@ -230,7 +234,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",true).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",true).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow Elleson Connect through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -287,7 +291,7 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun connectTo(origin: String) {
+    private fun connectTo(origin: String,suffix:String="") {
         connectionGeneration++
         DeviceCompanion.disconnect()
         selectedOrigin = TrustedOrigin.normalize(origin) ?: return
@@ -306,6 +310,11 @@ class MainActivity : Activity() {
                         if(AppUpdatePolicy.valid(version,size,sha))startForegroundService(Intent(this,AppUpdateService::class.java).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("sha256",sha).putExtra("size",size).putExtra("version",version))
                     }
                     "app-update-install" -> {selectedOrigin?.let{origin->AppUpdateService.ready(origin)?.let{file->startActivity(Intent(this,AppUpdateActivity::class.java).putExtra("file",file.absolutePath))}}}
+                    "second-screen-preferences" -> {val side=value.optString("side");val orientation=value.optString("orientation");val quality=value.optString("quality");if(side in listOf("left","right","top","bottom")&&orientation in listOf("portrait","landscape")&&quality in listOf("auto","hd","smooth","low")){val saved=JSONObject().put("side",side).put("orientation",orientation).put("quality",quality).put("fast",value.optBoolean("fast",true));prefs.edit().putString("secondScreenPreferences",saved.toString()).apply()}}
+                    "second-screen-route" -> chooseFastLocalConnection()
+                    "second-screen-route-cancel" -> {fastRouteGeneration++;fastLocalPending=false;nearby?.stop()}
+                    "second-screen-orientation" -> {val active=value.optBoolean("active");requestedOrientation=if(!active)android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED else if(value.optString("orientation")=="portrait")android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;if(active)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
+                    "phone-file-offer" -> {val origin=selectedOrigin?:return@addWebMessageListener;val offers=value.optJSONArray("offers")?:return@addWebMessageListener;if(offers.length() in 1..100)PhoneFileReceiver.offer(this,origin,CookieManager.getInstance().getCookie(origin).orEmpty(),offers){message->runOnUiThread{if(isAllowed(web.url?:"")){val detail=JSONObject().put("message",message);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:second-screen-files',{detail:$detail}))",null)}}}}
                     "transfer-pick" -> {
                         transferDestination=value.optString("destination").take(700)
                         try{startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),509)}catch(_:Exception){Toast.makeText(this,"Enable Android's Files app to choose documents.",Toast.LENGTH_LONG).show()}
@@ -391,7 +400,26 @@ class MainActivity : Activity() {
                 }
             } catch (_: Exception) { reply.postMessage("{\"type\":\"stopped\",\"message\":\"Could not start phone sharing.\"}") }
         }
-        error.text = ""; connectScreen.visibility = View.GONE; web.visibility = View.VISIBLE; web.requestFocus(); web.loadUrl("$selectedOrigin/")
+        error.text = ""; connectScreen.visibility = View.GONE; web.visibility = View.VISIBLE; web.requestFocus(); web.loadUrl("$selectedOrigin/$suffix")
+    }
+
+    private fun chooseFastLocalConnection(){
+        if(fastLocalPending)return
+        val origin=selectedOrigin?:return;val serial=connectionGeneration;val routeSerial=++fastRouteGeneration
+        fastLocalPending=true;nearby?.start()
+        web.postDelayed({
+            val candidates=nearbyTargets.toList();val cookie=CookieManager.getInstance().getCookie(origin).orEmpty()
+            Thread{
+                val result=runCatching{FastLocalConnection.choose(origin,cookie,candidates)}.getOrDefault(FastLocalConnection.Result(origin,null,0))
+                runOnUiThread{
+                    if(routeSerial!=fastRouteGeneration)return@runOnUiThread
+                    fastLocalPending=false;nearby?.stop()
+                    if(isFinishing||isDestroyed||!appForeground||serial!=connectionGeneration||origin!=selectedOrigin)return@runOnUiThread
+                    if(result.origin!=origin&&result.cookie!=null){CookieManager.getInstance().setCookie(result.origin,result.cookie){accepted->if(accepted&&appForeground&&serial==connectionGeneration){CookieManager.getInstance().flush();connectTo(result.origin,"#second-screen")}}}
+                    else{val detail=JSONObject().put("state","ready").put("local",origin.startsWith("http://")).put("milliseconds",result.milliseconds);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:local-route',{detail:$detail}))",null)}
+                }
+            }.start()
+        },1200)
     }
 
     @Suppress("DEPRECATION")
@@ -594,6 +622,7 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        appForeground=true
         DeviceCompanion.foreground(this,true)
         companionObserver?.invoke()
         companionObserver=DeviceCompanion.observe{if(isAllowed(web.url?:"")){val value=JSONObject().put("state",DeviceCompanion.state).put("connected",DeviceCompanion.connected);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:companion-state',{detail:$value}))",null)}}
@@ -601,6 +630,8 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        appForeground=false
+        fastRouteGeneration++;fastLocalPending=false
         DeviceCompanion.foreground(this,false)
         companionObserver?.invoke();companionObserver=null
         hidePhoneKeyboard()

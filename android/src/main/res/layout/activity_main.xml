@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#020D17">
+    android:background="#10100F">
 
     <ScrollView
         android:id="@+id/connectScreen"
@@ -17,47 +17,47 @@
             android:gravity="center_vertical">
             <ImageView android:layout_width="64dp" android:layout_height="64dp" android:src="@drawable/ic_remote" android:contentDescription="Elleson Connect logo" android:layout_marginBottom="18dp" />
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="ELLESON CONNECT  /  YOUR WORKSPACE" android:textColor="#34DDE9" android:textStyle="bold"
+                android:text="ELLESON CONNECT  /  YOUR WORKSPACE" android:textColor="#FC563E" android:textStyle="bold"
                 android:letterSpacing="0.13" android:textSize="11sp" android:layout_marginBottom="30dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Your PC.\nWithin reach."
-                android:textColor="#F7F9FF" android:textSize="36sp" android:textStyle="bold"
+                android:textColor="#EFE7DC" android:textSize="36sp" android:textStyle="bold"
                 android:layout_marginBottom="12dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Connect through your website, or use the PC's address on your Wi-Fi."
-                android:textColor="#A3C1D8" android:textSize="14sp" android:lineSpacingExtra="4dp"
+                android:textColor="#AFA18E" android:textSize="14sp" android:lineSpacingExtra="4dp"
                 android:layout_marginBottom="26dp" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:layout_marginBottom="24dp">
-                <Button android:id="@+id/modeLocal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:text="Local Wi-Fi" android:textAllCaps="false" android:textColor="#001522" android:textSize="14sp" android:background="@drawable/connect_background" android:backgroundTint="@null" android:layout_marginEnd="6dp" />
-                <Button android:id="@+id/modeWebsite" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:text="Website" android:textAllCaps="false" android:textColor="#A5D5EA" android:textSize="14sp" android:background="@drawable/field_background" android:backgroundTint="@null" android:layout_marginStart="6dp" />
+                <Button android:id="@+id/modeLocal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:text="Local Wi-Fi" android:textAllCaps="false" android:textColor="#24140E" android:textSize="14sp" android:background="@drawable/connect_background" android:backgroundTint="@null" android:layout_marginEnd="6dp" />
+                <Button android:id="@+id/modeWebsite" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:text="Website" android:textAllCaps="false" android:textColor="#D5B99A" android:textSize="14sp" android:background="@drawable/field_background" android:backgroundTint="@null" android:layout_marginStart="6dp" />
             </LinearLayout>
-            <Button android:id="@+id/nearbyScan" android:layout_width="match_parent" android:layout_height="48dp" android:text="Find my PC nearby" android:textAllCaps="false" android:textColor="#51E2D1" android:background="@drawable/field_background" android:layout_marginBottom="8dp" />
+            <Button android:id="@+id/nearbyScan" android:layout_width="match_parent" android:layout_height="48dp" android:text="Find my PC nearby" android:textAllCaps="false" android:textColor="#FC563E" android:background="@drawable/field_background" android:layout_marginBottom="8dp" />
             <LinearLayout android:id="@+id/nearbyHosts" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginBottom="12dp" />
             <LinearLayout android:id="@+id/websiteConnectionPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
             <Button android:id="@+id/connectWebsite" android:layout_width="match_parent"
                 android:layout_height="56dp" android:text="Connect to website  →" android:textAllCaps="false"
-                android:textSize="15sp" android:textStyle="bold" android:textColor="#001522" android:background="@drawable/connect_background"
+                android:textSize="15sp" android:textStyle="bold" android:textColor="#24140E" android:background="@drawable/connect_background"
                 android:layout_marginBottom="10dp" />
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="remote.teamtrader.co.za" android:gravity="center" android:textSize="11sp" android:textColor="#71A4C2" android:layout_marginBottom="32dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="remote.teamtrader.co.za" android:gravity="center" android:textSize="11sp" android:textColor="#9C8C76" android:layout_marginBottom="32dp" />
             </LinearLayout>
             <LinearLayout android:id="@+id/localConnectionPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="PC IP ADDRESS" android:textColor="#BAC8DE" android:textStyle="bold"
+                android:text="PC IP ADDRESS" android:textColor="#D4C6B3" android:textStyle="bold"
                 android:textSize="12sp" android:layout_marginBottom="8dp" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="58dp" android:orientation="horizontal">
             <EditText android:id="@+id/ipAddress" android:layout_width="0dp" android:layout_weight="1"
                 android:layout_height="56dp" android:singleLine="true" android:selectAllOnFocus="false"
                 android:inputType="textUri|textNoSuggestions" android:imeOptions="actionGo" android:maxLength="160" android:hint="192.168.8.100"
-                android:textColor="#FFFFFF" android:textColorHint="#668BA5" android:textSize="18sp"
+                android:textColor="#FFFFFF" android:textColorHint="#8F7D65" android:textSize="18sp"
                 android:padding="12dp" android:background="@drawable/field_background"
                 android:layout_marginBottom="0dp" />
-            <Button android:id="@+id/addressDot" android:layout_width="46dp" android:layout_height="match_parent" android:text="." android:contentDescription="Insert a dot in the PC address" android:textSize="25sp" android:textColor="#84E9F2" android:background="@drawable/field_background" android:backgroundTint="@null" android:layout_marginStart="6dp" />
-            <Button android:id="@+id/addressPaste" android:layout_width="62dp" android:layout_height="match_parent" android:text="Paste" android:textAllCaps="false" android:textSize="11sp" android:textColor="#84E9F2" android:background="@drawable/field_background" android:backgroundTint="@null" android:layout_marginStart="6dp" />
+            <Button android:id="@+id/addressDot" android:layout_width="46dp" android:layout_height="match_parent" android:text="." android:contentDescription="Insert a dot in the PC address" android:textSize="25sp" android:textColor="#F3AC85" android:background="@drawable/field_background" android:backgroundTint="@null" android:layout_marginStart="6dp" />
+            <Button android:id="@+id/addressPaste" android:layout_width="62dp" android:layout_height="match_parent" android:text="Paste" android:textAllCaps="false" android:textSize="11sp" android:textColor="#F3AC85" android:background="@drawable/field_background" android:backgroundTint="@null" android:layout_marginStart="6dp" />
             </LinearLayout>
-            <Button android:id="@+id/portToggle" android:layout_width="match_parent" android:layout_height="42dp" android:text="Port 7666 · Change" android:textAllCaps="false" android:textColor="#7DAEC8" android:textSize="11sp" android:background="@android:color/transparent" android:gravity="start|center_vertical" android:layout_marginTop="6dp" />
+            <Button android:id="@+id/portToggle" android:layout_width="match_parent" android:layout_height="42dp" android:text="Port 7666 · Change" android:textAllCaps="false" android:textColor="#A38F72" android:textSize="11sp" android:background="@android:color/transparent" android:gravity="start|center_vertical" android:layout_marginTop="6dp" />
             <LinearLayout android:id="@+id/portOptions" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="SERVER PORT" android:textColor="#BAC8DE" android:textStyle="bold"
+                android:text="SERVER PORT" android:textColor="#D4C6B3" android:textStyle="bold"
                 android:textSize="12sp" android:layout_marginBottom="8dp" />
             <EditText android:id="@+id/port" android:layout_width="match_parent"
                 android:layout_height="50dp" android:singleLine="true" android:inputType="number" android:imeOptions="actionGo" android:maxLength="5"
@@ -66,24 +66,24 @@
             </LinearLayout>
             <Button android:id="@+id/connect" android:layout_width="match_parent"
                 android:layout_height="56dp" android:text="Connect to my PC" android:textAllCaps="false"
-                android:textSize="15sp" android:textStyle="bold" android:textColor="#001522"
+                android:textSize="15sp" android:textStyle="bold" android:textColor="#24140E"
                 android:background="@drawable/connect_background" />
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Fast transfers on the same Wi-Fi or home network." android:textColor="#85AFC8" android:textSize="11sp" android:lineSpacingExtra="3dp" android:layout_marginTop="12dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Fast transfers on the same Wi-Fi or home network." android:textColor="#A38F72" android:textSize="11sp" android:lineSpacingExtra="3dp" android:layout_marginTop="12dp" />
             </LinearLayout>
             <TextView android:id="@+id/error" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:textColor="#FF9AA7"
                 android:textSize="13sp" android:layout_marginTop="16dp" />
-            <Button android:id="@+id/wakeOptions" android:layout_width="match_parent" android:layout_height="48dp" android:text="Wake-on-LAN  +" android:textColor="#81DDEA" android:textAllCaps="false" android:background="@drawable/field_background" android:layout_marginTop="20dp" />
+            <Button android:id="@+id/wakeOptions" android:layout_width="match_parent" android:layout_height="48dp" android:text="Wake-on-LAN  +" android:textColor="#EBAD82" android:textAllCaps="false" android:background="@drawable/field_background" android:layout_marginTop="20dp" />
             <LinearLayout android:id="@+id/wakeOptionsPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
-            <EditText android:id="@+id/wakeMac" android:layout_width="match_parent" android:layout_height="56dp" android:singleLine="true" android:hint="PC MAC · AA:BB:CC:DD:EE:FF" android:inputType="textNoSuggestions" android:textColor="#FFFFFF" android:textColorHint="#7D8BA1" android:textSize="14sp" android:padding="12dp" android:background="@drawable/field_background" android:layout_marginTop="14dp" />
-            <Button android:id="@+id/wakePc" android:layout_width="match_parent" android:layout_height="52dp" android:text="Wake my PC on this Wi-Fi" android:textAllCaps="false" android:textColor="#BDECF7" android:background="@drawable/field_background" android:layout_marginTop="10dp" android:layout_marginBottom="10dp" />
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Wake a compatible PC on the same Wi-Fi network." android:textColor="#8E9BB5" android:textSize="12sp" />
+            <EditText android:id="@+id/wakeMac" android:layout_width="match_parent" android:layout_height="56dp" android:singleLine="true" android:hint="PC MAC · AA:BB:CC:DD:EE:FF" android:inputType="textNoSuggestions" android:textColor="#FFFFFF" android:textColorHint="#9A8F7D" android:textSize="14sp" android:padding="12dp" android:background="@drawable/field_background" android:layout_marginTop="14dp" />
+            <Button android:id="@+id/wakePc" android:layout_width="match_parent" android:layout_height="52dp" android:text="Wake my PC on this Wi-Fi" android:textAllCaps="false" android:textColor="#F4D8B8" android:background="@drawable/field_background" android:layout_marginTop="10dp" android:layout_marginBottom="10dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Wake a compatible PC on the same Wi-Fi network." android:textColor="#BBAA92" android:textSize="12sp" />
             </LinearLayout>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Sign in with your app password. Approved guests can share their phone screen after granting Android's screen-sharing permission."
-                android:textColor="#8E9BB5" android:textSize="12sp" android:lineSpacingExtra="3dp"
+                android:textColor="#BBAA92" android:textSize="12sp" android:lineSpacingExtra="3dp"
                 android:layout_marginTop="20dp" />
-            <TextView android:id="@+id/appVersion" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Elleson Connect" android:textColor="#63869F" android:textSize="10sp" android:gravity="center" android:layout_marginTop="20dp" />
+            <TextView android:id="@+id/appVersion" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Elleson Connect" android:textColor="#947F64" android:textSize="10sp" android:gravity="center" android:layout_marginTop="20dp" />
         </LinearLayout>
     </ScrollView>
 

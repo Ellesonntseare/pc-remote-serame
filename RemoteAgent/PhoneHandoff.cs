@@ -19,6 +19,7 @@ internal sealed class PhoneHandoff : NativeWindow, IDisposable
     long heartbeat=Environment.TickCount64,edgeAt,lastPointAt,cooldown;
     Rectangle screen;Point parked;
     readonly byte[] keys=new byte[256];
+    EdgeFileDrop? fileDrop;bool files=true;
     delegate IntPtr Hook(int code,IntPtr message,IntPtr data);
     [StructLayout(LayoutKind.Sequential)]struct MouseData{public Point point;public uint data,flags,time;public UIntPtr extra;}
     [StructLayout(LayoutKind.Sequential)]struct KeyData{public uint key,scan,flags,time;public UIntPtr extra;}
@@ -57,12 +58,14 @@ internal sealed class PhoneHandoff : NativeWindow, IDisposable
         if(mouseHandle==IntPtr.Zero||keyboardHandle==IntPtr.Zero){Dispose();throw new InvalidOperationException();}
         if(!RegisterRawInputDevices([new RawDevice{page=1,usage=2,flags=0x100,target=Handle}],1,(uint)Marshal.SizeOf<RawDevice>())){Dispose();throw new InvalidOperationException();}
         clock.Tick+=(_,_)=>Tick();clock.Start();
+        if(files){fileDrop=new EdgeFileDrop(side,paths=>Publish(new{kind="files",paths}),message=>Publish(new{kind="drop-error",message}));fileDrop.Show();}
     }
     void Configure(JsonElement value){
         var next=value.GetProperty("side").GetString()??"";if(!PhoneDeskGeometry.ValidSide(next))throw new ArgumentException();
         var w=value.GetProperty("width").GetInt32();var h=value.GetProperty("height").GetInt32();var speed=value.GetProperty("sensitivity").GetDouble();
         if(w<2||h<2||w>16384||h>16384||!double.IsFinite(speed)||speed<.3||speed>3)throw new ArgumentException();
         if(side!=next&&active)Release();side=next;width=w;height=h;sensitivity=speed;heartbeat=Environment.TickCount64;
+        files=!value.TryGetProperty("files",out var transfer)||transfer.ValueKind==JsonValueKind.True;if(fileDrop!=null){fileDrop.Configure(side);fileDrop.Visible=files;}
     }
     void Publish(object value){if(!disposed&&!output.TryAdd(value)){Release(false);armed=false;commands.Enqueue("{\"type\":\"stop\"}");}}
     void Release(bool announce=true){
@@ -132,5 +135,5 @@ internal sealed class PhoneHandoff : NativeWindow, IDisposable
         if(Environment.TickCount64-heartbeat>3000){Release();armed=false;Application.ExitThread();return;}
         if(active){SetCursorPos(parked.X,parked.Y);long now=Environment.TickCount64;if(dirty||now-lastPointAt>250){dirty=false;lastPointAt=now;Publish(new{kind=leftDown?"drag":"pointer",x,y});}}
     }
-    public void Dispose(){if(disposed)return;Release();disposed=true;clock.Stop();clock.Dispose();if(mouseHandle!=IntPtr.Zero)UnhookWindowsHookEx(mouseHandle);if(keyboardHandle!=IntPtr.Zero)UnhookWindowsHookEx(keyboardHandle);if(Handle!=IntPtr.Zero){RegisterRawInputDevices([new RawDevice{page=1,usage=2,flags=1,target=IntPtr.Zero}],1,(uint)Marshal.SizeOf<RawDevice>());DestroyHandle();}output.CompleteAdding();}
+    public void Dispose(){if(disposed)return;Release();disposed=true;fileDrop?.Dispose();fileDrop=null;clock.Stop();clock.Dispose();if(mouseHandle!=IntPtr.Zero)UnhookWindowsHookEx(mouseHandle);if(keyboardHandle!=IntPtr.Zero)UnhookWindowsHookEx(keyboardHandle);if(Handle!=IntPtr.Zero){RegisterRawInputDevices([new RawDevice{page=1,usage=2,flags=1,target=IntPtr.Zero}],1,(uint)Marshal.SizeOf<RawDevice>());DestroyHandle();}output.CompleteAdding();}
 }

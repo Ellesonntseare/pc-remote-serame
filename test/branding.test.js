@@ -16,8 +16,8 @@ test('rebranding keeps upgrade, session, discovery and keyboard identities compa
  assert.ok(read('.github/workflows/android-apk.yml').includes('1803b0080ad05d54df52de3a61fa4a9978244ca51e9df842d0303d42636c11eb'));
 });
 test('versioned updates and new icons cover web, adaptive Android launchers and Windows',()=>{
- assert.equal(JSON.parse(read('package.json')).version,'2.2.0');
- assert.ok(read('android/build.gradle.kts').includes('versionCode = 22'));
+ assert.equal(JSON.parse(read('package.json')).version,'2.3.0');
+ assert.ok(read('android/build.gradle.kts').includes('versionCode = 23'));
  assert.ok(read('HostTray/HostTray.csproj').includes('<Product>Elleson Connect</Product>'));
  for(const [name,size]of [['icon-192.png',192],['icon-512.png',512],['icon-maskable-512.png',512],['apple-touch-icon.png',180]]){const bytes=fs.readFileSync(path.join(root,'public',name));assert.equal(bytes.toString('ascii',1,4),'PNG');assert.equal(bytes.readUInt32BE(16),size);assert.equal(bytes.readUInt32BE(20),size);}
  const ico=fs.readFileSync(path.join(root,'HostTray/Assets/remote.ico'));assert.equal(ico.readUInt16LE(2),1);assert.ok(ico.readUInt16LE(4)>=7);
