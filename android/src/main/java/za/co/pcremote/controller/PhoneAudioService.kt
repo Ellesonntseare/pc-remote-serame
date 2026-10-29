@@ -69,7 +69,7 @@ class PhoneAudioService:Service(){
             val manager=getSystemService(NotificationManager::class.java);manager.createNotificationChannel(NotificationChannel("phone-audio","Audio to PC",NotificationManager.IMPORTANCE_LOW))
             val stop=PendingIntent.getService(this,11,Intent(this,PhoneAudioService::class.java).setAction(STOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val open=PendingIntent.getActivity(this,12,Intent(this,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val notification=Notification.Builder(this,"phone-audio").setSmallIcon(R.drawable.ic_remote).setContentTitle(if(source=="playback")"Phone audio → PC" else "Microphone → PC").setContentText("Streaming audio only. Tap to return to controls.").setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null,"Stop",stop).build()).build()
+            val notification=Notification.Builder(this,"phone-audio").setSmallIcon(R.drawable.ic_notification).setContentTitle(if(source=="playback")"Phone audio → PC" else "Microphone → PC").setContentText("Streaming audio only. Tap to return to controls.").setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null,"Stop",stop).build()).build()
             if(source=="playback"&&Build.VERSION.SDK_INT>=29)startForeground(109,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
             else if(Build.VERSION.SDK_INT>=30)startForeground(109,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             else if(Build.VERSION.SDK_INT>=29)startForeground(109,notification,0)

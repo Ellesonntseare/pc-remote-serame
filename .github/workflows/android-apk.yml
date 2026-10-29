@@ -61,6 +61,8 @@ jobs:
           grep -q 'Signer #1 certificate SHA-256 digest: 1803b0080ad05d54df52de3a61fa4a9978244ca51e9df842d0303d42636c11eb' apk-signature.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/debug/android-debug.apk > apk-metadata.txt
           sed -n '1,8p' apk-metadata.txt
+          grep -q "application-label:'Elleson Connect'" apk-metadata.txt
+          grep -q "name='za.co.pcremote.controller' versionCode='22' versionName='2.2.0'" apk-metadata.txt
           grep -q "android.permission.CAMERA" apk-metadata.txt
           grep -q "android.permission.RECORD_AUDIO" apk-metadata.txt
           grep -q "android.permission.MODIFY_AUDIO_SETTINGS" apk-metadata.txt
@@ -70,7 +72,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
         uses: actions/upload-artifact@v4
         with:
-          name: PC-Remote-Android-APK
+          name: Elleson-Connect-Android-APK
           path: android/build/outputs/apk/debug/android-debug.apk
           if-no-files-found: error
           retention-days: 14
@@ -81,7 +83,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view v2.1.9-preview || gh release create v2.1.9-preview --draft --prerelease --target "$GITHUB_SHA" --title "PC Remote 2.1.9 Personal Preview" --notes "Control your Android phone using your PC mouse: visible phone pointer, mouse capture with Escape to release, wheel scrolling and main-account phone sharing. Install over the existing personal app."
-          test "$(gh release view v2.1.9-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
-          cp android/build/outputs/apk/debug/android-debug.apk PC-Remote-Android-2.1.9.apk
-          gh release upload v2.1.9-preview PC-Remote-Android-2.1.9.apk --clobber
+          gh release view v2.2.0-preview || gh release create v2.2.0-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.2.0 Personal Preview" --notes "Control your Android phone using your PC mouse: visible phone pointer, mouse capture with Escape to release, wheel scrolling and main-account phone sharing. Install over the existing personal app."
+          test "$(gh release view v2.2.0-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
+          cp android/build/outputs/apk/debug/android-debug.apk Elleson-Connect-Android-2.2.0.apk
+          gh release upload v2.2.0-preview Elleson-Connect-Android-2.2.0.apk --clobber

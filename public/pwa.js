@@ -10,7 +10,7 @@
   function installHelp(){
     let dialog=document.getElementById('installHelp');
     if(!dialog){dialog=document.createElement('dialog');dialog.id='installHelp';document.body.append(dialog);}
-    const title=document.createElement('h2');title.id='installHelpTitle';title.textContent='Install PC Remote';
+    const title=document.createElement('h2');title.id='installHelpTitle';title.textContent='Install Elleson Connect';
     dialog.setAttribute('aria-labelledby',title.id);
     const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
     const steps=document.createElement('p');
@@ -24,7 +24,7 @@
   window.addEventListener('beforeinstallprompt',event=>{
     event.preventDefault();installPrompt=event;updateButton();
   });
-  window.addEventListener('appinstalled',()=>{installed=true;installPrompt=null;updateButton();notify('PC Remote installed.');});
+  window.addEventListener('appinstalled',()=>{installed=true;installPrompt=null;updateButton();notify('Elleson Connect installed.');});
   standalone.addEventListener?.('change',updateButton);
   async function install(){
     if(isInstalled())return updateButton();

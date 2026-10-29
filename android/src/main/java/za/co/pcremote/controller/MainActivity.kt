@@ -110,7 +110,7 @@ class MainActivity : Activity() {
         error = findViewById(R.id.error)
         FolderSync.events={runOnUiThread{folderSyncEvent()}}
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).addPrimaryClipChangedListener(clipboardListener)
-        findViewById<TextView>(R.id.appVersion).text="PC Remote "+packageManager.getPackageInfo(packageName,0).versionName.orEmpty()
+        findViewById<TextView>(R.id.appVersion).text="Elleson Connect "+packageManager.getPackageInfo(packageName,0).versionName.orEmpty()
         address = findViewById(R.id.ipAddress)
         portField = findViewById(R.id.port)
         // An IP is text, not a decimal number. Numeric decimal key listeners
@@ -232,7 +232,7 @@ class MainActivity : Activity() {
                 if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
-                if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow PC Remote through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
+                if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow Elleson Connect through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
             }
         }
         if (savedInstanceState != null) {
@@ -270,10 +270,10 @@ class MainActivity : Activity() {
                 val probe=java.net.URL("http://$ip:$port/api/ping").openConnection() as HttpURLConnection;connection=probe
                 probe.connectTimeout=1800;probe.readTimeout=2200;probe.instanceFollowRedirects=false;probe.setRequestProperty("X-PCR","1");probe.setRequestProperty("Accept","application/json")
                 val code=probe.responseCode
-                if(code!=200)throw IllegalStateException(if(code==403)"The PC rejected local access. Restart the updated Windows host with local access enabled." else "This address did not respond as PC Remote (HTTP $code). Check the IP and port.")
-                val output=java.io.ByteArrayOutputStream();probe.inputStream.use{input->val buffer=ByteArray(2048);while(true){val count=input.read(buffer);if(count<0)break;if(output.size()+count>16384)throw IllegalStateException("This address is not a PC Remote host.");output.write(buffer,0,count)}}
-                val result=JSONObject(output.toString("UTF-8"));if(!result.optBoolean("ok")||!result.has("requirePassword")&&!result.has("requirePin"))throw IllegalStateException("This address is not a PC Remote host.")
-            }catch(e:Exception){failure=if(e is IllegalStateException)e.message else "Can't reach $ip:$port. Use the same Wi-Fi, keep the PC host running, and allow Node/PC Remote on your Windows Private network."}finally{connection?.disconnect()}
+                if(code!=200)throw IllegalStateException(if(code==403)"The PC rejected local access. Restart the updated Windows host with local access enabled." else "This address did not respond as Elleson Connect (HTTP $code). Check the IP and port.")
+                val output=java.io.ByteArrayOutputStream();probe.inputStream.use{input->val buffer=ByteArray(2048);while(true){val count=input.read(buffer);if(count<0)break;if(output.size()+count>16384)throw IllegalStateException("This address is not a Elleson Connect host.");output.write(buffer,0,count)}}
+                val result=JSONObject(output.toString("UTF-8"));if(!result.optBoolean("ok")||!result.has("requirePassword")&&!result.has("requirePin"))throw IllegalStateException("This address is not a Elleson Connect host.")
+            }catch(e:Exception){failure=if(e is IllegalStateException)e.message else "Can't reach $ip:$port. Use the same Wi-Fi, keep the PC host running, and allow Node/Elleson Connect on your Windows Private network."}finally{connection?.disconnect()}
             runOnUiThread{
                 if(isFinishing||isDestroyed||generation!=connectionGeneration)return@runOnUiThread
                 findViewById<Button>(R.id.connect).isEnabled=true
@@ -322,7 +322,7 @@ class MainActivity : Activity() {
                     "discover-local" -> nearby?.start()
                     "sync-clipboard-read" -> readSyncClipboard(value.optBoolean("force"))
                     "sync-clipboard-apply" -> applySyncClipboard(value.optString("text"))
-                    "pin-widget" -> {val manager=android.appwidget.AppWidgetManager.getInstance(this);if(manager.isRequestPinAppWidgetSupported)manager.requestPinAppWidget(android.content.ComponentName(this,RemoteWidget::class.java),null,null)else Toast.makeText(this,"Long-press your home screen, open Widgets, and choose PC Remote.",Toast.LENGTH_LONG).show()}
+                    "pin-widget" -> {val manager=android.appwidget.AppWidgetManager.getInstance(this);if(manager.isRequestPinAppWidgetSupported)manager.requestPinAppWidget(android.content.ComponentName(this,RemoteWidget::class.java),null,null)else Toast.makeText(this,"Long-press your home screen, open Widgets, and choose Elleson Connect.",Toast.LENGTH_LONG).show()}
                     "folder-sync-pc-change" -> {selectedOrigin?.let{origin->FolderSync.pairs(this).filter{it.optString("origin")==origin&&it.optBoolean("enabled")}.forEach{FolderSync.runNow(this,it.getString("id"))}}}
                     "folder-sync-host" -> {selectedOrigin?.let{FolderSync.connect(this,value.optString("hostId"),it,CookieManager.getInstance().getCookie(it).orEmpty())}}
                     "folder-sync-status" -> {selectedOrigin?.let{FolderSync.updateCookie(this,it,CookieManager.getInstance().getCookie(it).orEmpty())};folderSyncEvent()}
@@ -340,7 +340,7 @@ class MainActivity : Activity() {
                         if(downloadRequest==null&&encoded.length<=12*1024*1024){
                             val bytes=runCatching{android.util.Base64.decode(encoded,android.util.Base64.DEFAULT)}.getOrNull()
                             if(bytes!=null&&bytes.size>=8&&bytes.take(8)==listOf(137.toByte(),80.toByte(),78.toByte(),71.toByte(),13.toByte(),10.toByte(),26.toByte(),10.toByte())){
-                                val name="PC-Remote-"+System.currentTimeMillis()+".png";screenshotBytes=bytes;downloadRequest=Pair("",name)
+                                val name="Elleson-Connect-"+System.currentTimeMillis()+".png";screenshotBytes=bytes;downloadRequest=Pair("",name)
                                 try{startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/png").putExtra(Intent.EXTRA_TITLE,name),505)}catch(_:Exception){downloadRequest=null;screenshotBytes=null}
                             }
                         }
@@ -352,7 +352,7 @@ class MainActivity : Activity() {
                             val webm=bytes!=null&&bytes.size>=4&&bytes.take(4)==listOf(26.toByte(),69.toByte(),223.toByte(),163.toByte())
                             val mp4=bytes!=null&&bytes.size>=12&&String(bytes,4,4,Charsets.US_ASCII)=="ftyp"
                             if(bytes!=null&&((mime=="video/webm"&&webm)||(mime=="video/mp4"&&mp4))){
-                                val name="PC-Remote-"+System.currentTimeMillis()+if(mp4)".mp4"else".webm";screenshotBytes=bytes;downloadRequest=Pair("",name)
+                                val name="Elleson-Connect-"+System.currentTimeMillis()+if(mp4)".mp4"else".webm";screenshotBytes=bytes;downloadRequest=Pair("",name)
                                 try{startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE,name),505)}catch(_:Exception){downloadRequest=null;screenshotBytes=null;Toast.makeText(this,"No file-saving app is available.",Toast.LENGTH_LONG).show()}
                             }
                         }
@@ -554,7 +554,7 @@ class MainActivity : Activity() {
         if(packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)){
             entered=runCatching{enterPictureInPictureMode(miniParams(width,height,canHomeMini()))}.getOrDefault(false)
         }
-        if(!entered)miniWindowEvent(false,if(notifyFailure)"Allow Picture-in-picture for PC Remote in Android app settings, then try again."else"")
+        if(!entered)miniWindowEvent(false,if(notifyFailure)"Allow Picture-in-picture for Elleson Connect in Android app settings, then try again."else"")
     }
 
     private fun miniWindowEvent(active:Boolean,message:String=""){
@@ -611,7 +611,7 @@ class MainActivity : Activity() {
         val origin=selectedOrigin?:return;if(items.length()==0||!isAllowed(web.url?:""))return
         val cookie=CookieManager.getInstance().getCookie(origin).orEmpty();if(!cookie.contains("pc_remote_session="))return
         if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),510)
-        try{startForegroundService(Intent(this,TransferService::class.java).setAction(TransferService.ADD).putExtra("origin",origin).putExtra("cookie",cookie).putExtra("items",items.toString()))}catch(_:Exception){Toast.makeText(this,"Open PC Remote and retry the transfer.",Toast.LENGTH_LONG).show()}
+        try{startForegroundService(Intent(this,TransferService::class.java).setAction(TransferService.ADD).putExtra("origin",origin).putExtra("cookie",cookie).putExtra("items",items.toString()))}catch(_:Exception){Toast.makeText(this,"Open Elleson Connect and retry the transfer.",Toast.LENGTH_LONG).show()}
     }
     private fun transferReady(){
         val origin=selectedOrigin?:return;if(!isAllowed(web.url?:""))return
@@ -675,8 +675,8 @@ class MainActivity : Activity() {
         val id=ScreenShareService.pendingControl()?:return
         if(!hasWindowFocus() || isFinishing || controlDialog?.isShowing==true)return
         val enabled=PhoneControlService.instance!=null
-        controlDialog=AlertDialog.Builder(this).setTitle("Allow Serame to control this phone?")
-            .setMessage(if(enabled)"Allow PC mouse control, clicks, scrolling, Back, Home and replacing text in selected fields for this session (up to 10 minutes). Stop control anytime from the sharing notification." else "Enable PC Remote phone control in Android Accessibility settings, then return here and approve this request. This lets your PC mouse control other apps on your phone.")
+        controlDialog=AlertDialog.Builder(this).setTitle("Allow Elleson Connect to control this phone?")
+            .setMessage(if(enabled)"Allow PC mouse control, clicks, scrolling, Back, Home and replacing text in selected fields for this session (up to 10 minutes). Stop control anytime from the sharing notification." else "Enable Elleson Connect phone control in Android Accessibility settings, then return here and approve this request. This lets your PC mouse control other apps on your phone.")
             .setNegativeButton("Decline"){_,_->ScreenShareService.respondControl(id,false);controlDialog=null}
             .setPositiveButton(if(enabled)"Allow control" else "Open settings"){_,_->
                 controlDialog=null
@@ -705,7 +705,7 @@ class MainActivity : Activity() {
     }
     private fun applySyncClipboard(text:String){
         if(!isAllowed(web.url?:"")||text.length>250000||!window.decorView.hasWindowFocus())return
-        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("PC Remote",text));clipboardDirty=false
+        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Elleson Connect",text));clipboardDirty=false
         getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("clip_"+clipboardHash(selectedOrigin.orEmpty()),clipboardHash(text)).apply()
     }
     private fun shortcutIntent(value:Intent?){

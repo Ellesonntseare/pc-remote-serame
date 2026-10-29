@@ -1,4 +1,4 @@
-/* Explorer geometry follows the supplied Windows screenshots; colours follow PC Remote. */
+/* Explorer geometry follows the supplied Windows screenshots; colours follow Elleson Connect. */
 #filesDialog.explorerFiles{--ex-bg:#071923;--ex-panel:#0b202d;--ex-line:#92b1c225;--ex-select:#224659;--ex-hover:#173747;--ex-text:#dceaf0;--ex-muted:#9eb6c6;--ex-accent:#72cce0;padding:0 0 90px!important;width:100%;max-width:none;background:var(--ex-bg);color:var(--ex-text);font-family:'Segoe UI',Tahoma,system-ui,sans-serif}
 #filesDialog.explorerFiles>*{max-width:none!important}
 #filesDialog.explorerFiles .pcrPageHeader{padding:8px 14px!important;min-height:40px;gap:12px;border-bottom:0;margin:0}

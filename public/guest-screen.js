@@ -51,7 +51,7 @@
   if(nativeAvailable())window.PCRAndroid.onmessage=event=>{
     if(!window.PCRAuth?.signedIn||(!nativePending&&!nativeSharing))return;
     let value;try{value=JSON.parse(event.data);}catch{return;}
-    if(value.type==='sharing'){nativePending=false;nativeSharing=true;starting=false;q('[data-share]').hidden=true;q('[data-stop]').hidden=false;status.textContent='Your entire phone screen is live.';}
+    if(value.type==='sharing'){nativePending=false;nativeSharing=true;starting=false;q('[data-share]').hidden=true;q('[data-stop]').hidden=false;status.textContent='Your entire phone screen is live. After approving PC control, press Android Home to use other apps. Stop from the Elleson Connect notification.';}
     else if(value.type==='frame'&&nativeSharing&&typeof value.data==='string'&&value.data.length<=1400000&&/^[A-Za-z0-9+/]+=*$/.test(value.data)&&Number.isInteger(value.width)&&Number.isInteger(value.height)&&value.width>0&&value.height>0&&value.width<=1920&&value.height<=1920){dimensions={width:value.width,height:value.height};image.src='data:image/jpeg;base64,'+value.data;image.hidden=false;empty.hidden=true;draw();}
     else if(value.type==='mark'&&nativeSharing)applyMark(value);
     else if(value.type==='reconnecting'&&nativeSharing)status.textContent=value.message;
@@ -99,7 +99,7 @@
     else if(shares.length&&dialog.open){watching=(shares.find(share=>share.id===preferredShare)||shares[0]).id;hideFrame();send({type:'watch',id:watching});}
     else{watching=null;hideFrame();}
     button.textContent='Phone control'+(shares.length?' · '+shares.length:'');
-    if(!shares.length&&owner)status.textContent='On your phone, open PC Remote and tap Use PC mouse. Approve screen sharing, then request control here.';
+    if(!shares.length&&owner)status.textContent='On your phone, tap PC mouse on phone and approve Entire screen. Request control here, approve it on the phone, then press Android Home to use other phone apps.';
   }
   select.addEventListener('change',()=>{resumeProofs.delete(watching);resetControl();watching=preferredShare=select.value;resumeAttempted='';hideFrame();send({type:'watch',id:watching});});
   async function start(){
@@ -154,9 +154,9 @@
   dialog.addEventListener('close',()=>{clearTimeout(reconnectTimer);window.PCRHoldControl?.release();if(!owner)stop();else{resumeProofs.delete(watching);send({type:'watch',id:''});watching=null;resetControl();hideFrame();}});
   new ResizeObserver(draw).observe(stage);window.addEventListener('pagehide',()=>{stop();socket?.close();});
   function authChanged(){const auth=window.PCRAuth||{},next=auth.signedIn?(auth.role==='owner'?'owner':'guest:'+auth.guestId):'';if(next===account)return;account=next;epoch++;clearTimeout(reconnectTimer);resumeProofs.clear();stop();socket?.close();socket=null;dialog.close();shares=[];watching=null;owner=auth.role==='owner'&&!nativeAvailable();button.hidden=!auth.signedIn;
-    q('h2').textContent=owner?'Phone control':nativeAvailable()?'Use your PC mouse':'Share your screen';q('.guestScreenHint').textContent=owner?'Control your phone with the mouse. Right-click to long-press; use the wheel to scroll.':nativeAvailable()?'Approve sharing, then open Phone control on your PC. You can open other phone apps while control is active.':'Choose a screen or window to share.';q('.guestScreenSelect').hidden=!owner;q('[data-share]').hidden=owner;
+    q('h2').textContent=owner?'Phone control':nativeAvailable()?'PC mouse on phone':'Share your screen';q('.guestScreenHint').textContent=owner?'Control your phone with the mouse. Right-click to long-press; use the wheel to scroll.':nativeAvailable()?'Share your Entire screen, then open Phone control on your PC and approve control. Press Android Home: your PC mouse and keyboard keep working in other phone apps. Stop from the Elleson Connect notification.':'Choose a screen or window to share.';q('.guestScreenSelect').hidden=!owner;q('[data-share]').hidden=owner;
     q('[data-share]').textContent=nativeAvailable()?'Share phone screen':'Share my screen';q('.guestEyebrow').textContent='YOUR DEVICES';
-    button.textContent=owner?'Phone control':nativeAvailable()?'Use PC mouse':'Share my screen';if(owner&&auth.signedIn)void connect().catch(()=>{});
+    button.textContent=owner?'Phone control':nativeAvailable()?'PC mouse on phone':'Share my screen';if(owner&&auth.signedIn)void connect().catch(()=>{});
     if(owner&&auth.signedIn&&new URLSearchParams(location.search).get('phone-control')==='1')button.click();
   }
   window.addEventListener('pcr:auth',authChanged);authChanged();

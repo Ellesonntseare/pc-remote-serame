@@ -5,7 +5,7 @@ const allowedKey=key=>key.startsWith('setting:')?SETTINGS.has(key.slice(8)):/^(?
 const clientActions=new Set(['screen.opened','screen.closed','typing.started','typing.closed','audio.started','audio.stopped','audio.paused','camera.started','camera.stopped','recording.started','recording.saved','recording.stopped','screenshot.saved','screenshot.prepared','recording.prepared','presentation.started','presentation.stopped','page.opened','transfer.paused','transfer.resumed','transfer.cancelled','transfer.saved','files.selected','shared.opened','clipboard.local']);
 function createAccountAPI({store}={}){
   const waiting=new Set();
-  async function handle(req,res,{pathname,scope,device='PC Remote',valid=()=>true,readJson,respond}){
+  async function handle(req,res,{pathname,scope,device='Elleson Connect',valid=()=>true,readJson,respond}){
     if(pathname!=='/api/workspace'&&pathname!=='/api/history'&&!pathname.startsWith('/api/history/'))return false;
     const reply=(code,body)=>{respond(res,code,body);return true;};
     if(!scope)return reply(403,{error:'Sign in to your account to view its workspace.'});

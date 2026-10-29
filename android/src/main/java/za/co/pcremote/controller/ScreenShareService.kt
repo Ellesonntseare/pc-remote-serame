@@ -77,7 +77,7 @@ class ScreenShareService : Service() {
         val stop = PendingIntent.getService(this,1,Intent(this,ScreenShareService::class.java).setAction(STOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val open = PendingIntent.getActivity(this,2,Intent(this,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val title = if(!networkReady&&ready)"Phone sharing · reconnecting" else if (pendingControlId != null) "Phone control request — tap to review" else if (controlId != null) "Serame is controlling this phone" else "Sharing your phone screen"
-        val builder=Notification.Builder(this,"screen-sharing").setSmallIcon(R.drawable.ic_remote).setContentTitle(title).setContentText("Entire screen is shared. You can stop anytime.").setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null,"Stop sharing",stop).build())
+        val builder=Notification.Builder(this,"screen-sharing").setSmallIcon(R.drawable.ic_notification).setContentTitle(title).setContentText("Entire screen is shared. You can stop anytime.").setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null,"Stop sharing",stop).build())
         if (controlId != null || pendingControlId != null) {
             val stopControl=PendingIntent.getService(this,3,Intent(this,ScreenShareService::class.java).setAction(STOP_CONTROL),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             builder.addAction(Notification.Action.Builder(null,"Stop control",stopControl).build())
@@ -195,7 +195,7 @@ class ScreenShareService : Service() {
             current.registerCallback(projectionCallback!!, worker)
             val dimensions = screenDimensions()
             configureReader(dimensions.first, dimensions.second)
-            display = current.createVirtualDisplay("PC Remote guest screen", imageWidth, imageHeight, resources.displayMetrics.densityDpi,
+            display = current.createVirtualDisplay("Elleson Connect guest screen", imageWidth, imageHeight, resources.displayMetrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader!!.surface, null, worker)
             emit(JSONObject().put("type", "sharing"))
             main.postDelayed({ if (!ending && framesSent == 0L) finish("No screen frames arrived. Stop sharing and approve the entire screen again.") }, 10000)

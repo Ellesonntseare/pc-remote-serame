@@ -70,8 +70,8 @@ internal object PhoneFileReceiver {
             val group=offer.optString("group").filter{it.isLetterOrDigit()||it=='-'}.take(36)
             val label=SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(Date())+" "+group.take(8)
             pending=true
-            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,ContentValues().apply{put(MediaStore.MediaColumns.DISPLAY_NAME,name);put(MediaStore.MediaColumns.MIME_TYPE,mime);put(MediaStore.MediaColumns.RELATIVE_PATH,Environment.DIRECTORY_DOWNLOADS+"/PC Remote/"+label);put(MediaStore.MediaColumns.IS_PENDING,1)})?:error("Could not create the phone download.")
-        }else error("Choose an incoming-files folder in PC Remote first.")
+            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,ContentValues().apply{put(MediaStore.MediaColumns.DISPLAY_NAME,name);put(MediaStore.MediaColumns.MIME_TYPE,mime);put(MediaStore.MediaColumns.RELATIVE_PATH,Environment.DIRECTORY_DOWNLOADS+"/Elleson Connect/"+label);put(MediaStore.MediaColumns.IS_PENDING,1)})?:error("Could not create the phone download.")
+        }else error("Choose an incoming-files folder in Elleson Connect first.")
         try{
             val actual=resolver.query(destination,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{if(it.moveToFirst())it.getString(0)else null};TransferFileNames.destination(name,actual)
             val row=JSONObject().put("direction","download").put("name",name).put("uri",destination.toString()).put("path",path).put("inboxId",id).put("mediaStorePending",pending)

@@ -602,7 +602,7 @@ class SerameKeyboardService : InputMethodService() {
     private fun buildTopBar() {
         topBar.removeAllViews()
         val brand = TextView(this)
-        brand.text = "Serame"
+        brand.text = "Elleson"
         brand.setTextColor(C.ACCENT)
         brand.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
         brand.gravity = Gravity.CENTER_VERTICAL

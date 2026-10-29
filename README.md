@@ -1,10 +1,12 @@
-# PC Remote — Serame's personal remote app
+# Elleson Connect
+
+Your devices, together. Version **2.2.0** introduces the Elleson Connect identity across Android, Windows and the web, with a new EC icon family and the included **Elleson Keyboard**. Install it over your existing personal app to keep your settings and paired devices. See [branding and upgrade compatibility](docs/BRANDING.md).
 
 Personal 2.1.4 adds the Windows Explorer file workspace and shared account history, folders, drafts and supported preferences. See [the 2.1.4 guide](docs/USING-2.1.4.md) for use and platform limits.
 
 Version 2.0 adds one shared navigation bar, one Audio page, direct Windows H.264 video, completed-file actions, signed-in device management and an online indicator. See [direct video](docs/native-video.md) for engine details.
 
-Version 1.9 added background Android transfers, Share → PC Remote, a folder-based file manager, integrated remote video with fallback, efficient audio, the WebView microphone permission fix, a personal Windows installer, Lightweight appearance and simpler navigation. Air Mouse is removed. See [version 1.9](docs/version-1.9.md) for use and validation limits.
+Version 1.9 added background Android transfers, Share → Elleson Connect, a folder-based file manager, integrated remote video with fallback, efficient audio, the WebView microphone permission fix, a personal Windows installer, Lightweight appearance and simpler navigation. Air Mouse is removed. See [version 1.9](docs/version-1.9.md) for use and validation limits.
 
 Version 1.8 adds [phone-to-PC audio streaming](docs/phone-audio.md), with microphone/phone playback selection and direct Windows speaker output. The Cloudflare launcher reuses a healthy running host. Version 1.7 introduced faster local connections/transfers, Google registration/login, and native local camera/microphone capture. See [Google setup](GOOGLE-SIGN-IN.md), [version 1.7 checks](docs/version-1.7.md), [the feature guide](docs/mission-control.md), and [reference artwork notes](docs/design-artwork.md).
 
@@ -12,7 +14,7 @@ Version 1.8 adds [phone-to-PC audio streaming](docs/phone-audio.md), with microp
 
 Installed project: `C:\Users\elles\Downloads\pc-remote-redesigned\PC-Remote-Serame-Complete\pc-remote-android`
 
-1. Close the previous PC Remote host window.
+1. Close the previous Elleson Connect host window.
 2. Run **start-cloudflare.bat** for both `remote.teamtrader.co.za` and local Wi-Fi access, or **start.bat** to use your saved configuration.
 3. Wait for dependencies and the Windows desktop agent to build. Keep the host and Cloudflare connector running.
 4. Reload the site on your phone and sign in with your configured Google administrator account or your private PC owner password.
@@ -156,7 +158,7 @@ Native checks cover 4K frames, cumulative patches, skipped updates, dynamic reso
 
 ### Optional phone control (1.3)
 
-After the approved Android guest starts sharing, the PC owner opens **Guest screens**, selects the phone, and clicks **Request phone control**. The phone shows a native approval dialog. If the app is in the background, tap its sharing notification to review the request. Enable **PC Remote phone control** in Android Accessibility settings if requested, return to PC Remote, and explicitly choose **Allow control**. Enabling the service alone never grants remote input.
+After the approved Android guest starts sharing, the PC owner opens **Guest screens**, selects the phone, and clicks **Request phone control**. The phone shows a native approval dialog. If the app is in the background, tap its sharing notification to review the request. Enable **Elleson Connect phone control** in Android Accessibility settings if requested, return to Elleson Connect, and explicitly choose **Allow control**. Enabling the service alone never grants remote input.
 
 The owner selects **Control** to tap the picture, drag for a swipe, or right-click/hold for a long press. Back, Home and Recent apps are available below. **Set text** replaces the selected editable field; it does not read its previous contents, and password fields are excluded. Some apps or protected Android screens may reject input.
 

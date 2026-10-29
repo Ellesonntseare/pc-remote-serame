@@ -16,7 +16,7 @@
     stop(discard=false){if(discard)this.discard=true;clearTimeout(this.timer);this.timer=null;if(this.recorder?.state!=='inactive')this.recorder?.stop();}
   }
   function save(blob){globalThis.PCRAccountWorkspace?.record('recording.prepared','Recording ready to save',{size:blob.size,mime:blob.type});
-    const extension=blob.type.includes('mp4')?'mp4':'webm',name='PC-Remote-'+new Date().toISOString().replace(/[:.]/g,'-')+'.'+extension;
+    const extension=blob.type.includes('mp4')?'mp4':'webm',name='Elleson-Connect-'+new Date().toISOString().replace(/[:.]/g,'-')+'.'+extension;
     if(globalThis.PCRAndroid){if(blob.size>32*1024*1024){msg('This recording is too large to save in the Android app. Use the browser for longer recordings.');return;}const reader=new FileReader();reader.onload=()=>globalThis.PCRAndroid.postMessage(JSON.stringify({type:'save-recording',data:String(reader.result).split(',')[1],mime:blob.type.includes('mp4')?'video/mp4':'video/webm'}));reader.readAsDataURL(blob);}
     else{const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
   }

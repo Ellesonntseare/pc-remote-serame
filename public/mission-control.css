@@ -1,4 +1,4 @@
-/* PC Remote · Mission Control. Surfaces, scale and composition follow the
+/* Elleson Connect · Mission Control. Surfaces, scale and composition follow the
    supplied desktop and mobile references. Artwork never contains controls. */
 :root{--mc-bg:#020c15;--mc-panel:#061520;--mc-line:#25465b;--mc-text:#f1f6ff;--mc-muted:#9db9d3;--mc-cyan:#00e6ed;--mc-blue:#159fff;--mc-green:#00e2b2;--mc-radius:15px;--mc-ease:cubic-bezier(.16,1,.3,1)}
 html:has(.missionApp){background:var(--mc-bg);scrollbar-gutter:stable;color-scheme:dark}

@@ -42,7 +42,7 @@ class NearbyComputers(context:Context,private val event:(JSONObject)->Unit) {
                 resolving=false
                 val host=info.host;val marker=info.attributes["app"]?.toString(Charsets.UTF_8)
                 if(host is Inet4Address&&host.isSiteLocalAddress&&info.port in 1..65535&&marker=="pc-remote"){
-                    event(JSONObject().put("state","found").put("name",info.serviceName.removeSuffix(" · PC Remote")).put("address",host.hostAddress).put("port",info.port).put("id",info.attributes["id"]?.toString(Charsets.UTF_8).orEmpty()))
+                    event(JSONObject().put("state","found").put("name",info.serviceName.removeSuffix(" · Elleson Connect")).put("address",host.hostAddress).put("port",info.port).put("id",info.attributes["id"]?.toString(Charsets.UTF_8).orEmpty()))
                 }
                 resolve(serial)
             }}

@@ -6,8 +6,8 @@ This is the active implementation plan after personal 2.1.3. The current persona
 
 - The screenshots supplied on 28 October 2026 define the Windows Explorer layout: sidebar, navigation/address/search row, compact command bar, file columns, grouped dates, drive capacity view and status bar. The website's existing colours may be retained. This is a functional file browser, not a screenshot background.
 - Google owner and local owner-password sign-ins share the main account's data. Other accounts retain their own data.
-- Sync all supported PC Remote account data across phone, browser and PC: recorded actions, transfer states/history, files/folder changes, captured clipboard text, links/shared content, settings, favourites and saved workspace state. Uploads/downloads/clipboard were examples, not the entire scope.
-- Capture activity inside PC Remote and clipboard changes the platform permits. Android/browser background restrictions and other apps' private data remain explicit capability limits.
+- Sync all supported Elleson Connect account data across phone, browser and PC: recorded actions, transfer states/history, files/folder changes, captured clipboard text, links/shared content, settings, favourites and saved workspace state. Uploads/downloads/clipboard were examples, not the entire scope.
+- Capture activity inside Elleson Connect and clipboard changes the platform permits. Android/browser background restrictions and other apps' private data remain explicit capability limits.
 - Existing PC host remains the user's server. Preserve current features, queued/resumable transfers, local offline access, Google sign-in and the personal app's signing identity.
 
 ## Implementation checklist

@@ -1,4 +1,4 @@
-# PC Remote 2.1.5 personal preview
+# Elleson Connect 2.1.5 personal preview
 
 ## Direct PC typing
 
@@ -6,19 +6,19 @@ Open Remote Screen and tap a PC text field, either in the picture or using the t
 
 Windows accessibility providers differ between applications. Automated tests cover field replies, trackpad clicks, stale replies, text continuity and keyboard dismissal. Actual Android keyboard display still needs a physical phone check.
 
-## Shared clipboard and Serame Keyboard
+## Shared clipboard and Elleson Keyboard
 
-Sign in to the same PC Remote account on your devices. In Settings, open Shared clipboard & keyboard. Enable copy/paste and copied pictures as desired. Copy normally on Windows or your phone and paste in the destination application; there is no Send button for each copy.
+Sign in to the same Elleson Connect account on your devices. In Settings, open Shared clipboard & keyboard. Enable copy/paste and copied pictures as desired. Copy normally on Windows or your phone and paste in the destination application; there is no Send button for each copy.
 
-For Android clipboard sync while using other apps, open Set up Serame Keyboard, enable it in Android settings, then choose it as your keyboard. This is optional and is never changed automatically. Keeping another keyboard supports clipboard sync while PC Remote has focus. Android does not allow an ordinary background app to read other apps’ clipboard contents.
+For Android clipboard sync while using other apps, open Set up Elleson Keyboard, enable it in Android settings, then choose it as your keyboard. This is optional and is never changed automatically. Keeping another keyboard supports clipboard sync while Elleson Connect has focus. Android does not allow an ordinary background app to read other apps’ clipboard contents.
 
 Serame works as a normal phone keyboard. Its PC toolbar offers an explicit PC typing mode, Ctrl/Alt, Tab/Esc, shortcuts and dictation. PC typing requires an active remote-screen session. Approve Microphone once in Keyboard settings to use dictation. Normal browsers do not reliably expose their current website to an IME; use the linked PC toolbar explicitly when typing outside the APK.
 
-The connection does not persist login cookies in the keyboard. Reopen PC Remote and sign in if Android kills the process or the session ends. Sensitive clipboard items marked by Android are excluded from automatic capture. Image size limits apply.
+The connection does not persist login cookies in the keyboard. Reopen Elleson Connect and sign in if Android kills the process or the session ends. Sensitive clipboard items marked by Android are excluded from automatic capture. Image size limits apply.
 
 ## Windows sharing window
 
-The Windows Send to my phone window uses PC Remote’s colours and icon, shows a removable file list, and lets you choose a device and add text or links. Files remain queued for receiving devices that are offline. The title bar, tray and installer use the existing PC Remote brand icon.
+The Windows Send to my phone window uses Elleson Connect’s colours and icon, shows a removable file list, and lets you choose a device and add text or links. Files remain queued for receiving devices that are offline. The title bar, tray and installer use the existing Elleson Connect brand icon.
 
 ## Verification and remaining work
 

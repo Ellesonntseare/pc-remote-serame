@@ -1,6 +1,6 @@
 # Google registration and login
 
-Users choose **Create account → Sign up with Google**, select their Gmail/Google account, and approve Google sign-in. PC Remote creates a separate account with the verified email. Later they choose **Sign in with Google** and return to that same account. Google’s stable account ID identifies the account, so repeat sign-ins never create duplicate registrations.
+Users choose **Create account → Sign up with Google**, select their Gmail/Google account, and approve Google sign-in. Elleson Connect creates a separate account with the verified email. Later they choose **Sign in with Google** and return to that same account. Google’s stable account ID identifies the account, so repeat sign-ins never create duplicate registrations.
 
 Registration is available to new verified Google users. The old single-email sign-in restriction has been removed. Registration does not grant control of the PC hosting the website. A new account links a PC by entering that PC’s password once; later Google logins recognise the paired account. Changing the PC password removes other users' saved pairings; explicitly configured PC-owner emails retain direct access. Each self-hosted PC keeps its own account records.
 
@@ -20,7 +20,7 @@ The script supports an owner-controlled HTTPS domain. These settings configure t
 
 ## Android and local connections
 
-Android opens Google in the phone's browser. Complete sign-in and return to PC Remote: a short-lived, single-use handoff signs in the requesting app without exposing Google tokens to the WebView. The PC's HTTPS website must be accessible even if the app is connected over local Wi-Fi. The password remains available for offline local use.
+Android opens Google in the phone's browser. Complete sign-in and return to Elleson Connect: a short-lived, single-use handoff signs in the requesting app without exposing Google tokens to the WebView. The PC's HTTPS website must be accessible even if the app is connected over local Wi-Fi. The password remains available for offline local use.
 
 Google requires a real configured OAuth client. The button will explain that setup is needed until credentials are entered. Automated tests use a simulated Google provider; a real Google sign-in still needs to be verified after setup.
 

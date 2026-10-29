@@ -173,7 +173,7 @@
       try{
         await screen.requestFullscreen({navigationUI:'hide'});
         if(request!==fullscreenRequest){if(document.fullscreenElement===screen)await document.exitFullscreen();return;}
-      }catch{if(request===fullscreenRequest){requestedFullscreen=false;setClean(false);msg('Full screen is unavailable here. Install PC Remote for a standalone view.');}}
+      }catch{if(request===fullscreenRequest){requestedFullscreen=false;setClean(false);msg('Full screen is unavailable here. Install Elleson Connect for a standalone view.');}}
       updateFullscreen();return;
     }
     screen.classList.add('screenExpanded');setClean(true);updateFullscreen();

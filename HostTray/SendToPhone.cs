@@ -17,7 +17,7 @@ internal class SendToPhone:Form
     sealed record Target(string Id,string Name){public override string ToString()=>Name;}
     public SendToPhone(string hostRoot,IEnumerable<string> selected)
     {
-        root=hostRoot;Text="Send to your devices · PC Remote";ClientSize=new Size(640,620);MinimumSize=new Size(540,540);StartPosition=FormStartPosition.CenterScreen;AutoScaleMode=AutoScaleMode.Dpi;AllowDrop=true;HostTheme.Window(this);
+        root=hostRoot;Text="Send to your devices · Elleson Connect";ClientSize=new Size(640,620);MinimumSize=new Size(540,540);StartPosition=FormStartPosition.CenterScreen;AutoScaleMode=AutoScaleMode.Dpi;AllowDrop=true;HostTheme.Window(this);
         var panel=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=8,Padding=new Padding(24)};
         foreach(var height in new[]{62,55,44,0,30,88,68,24})panel.RowStyles.Add(height==0?new RowStyle(SizeType.Percent,100):new RowStyle(SizeType.Absolute,height));Controls.Add(panel);
         var heading=new Label{Text="Send to your devices",Dock=DockStyle.Fill,Font=new Font(Font.FontFamily,20,FontStyle.Bold),TextAlign=ContentAlignment.MiddleLeft};panel.Controls.Add(heading,0,0);
@@ -55,7 +55,7 @@ internal class SendToPhone:Form
         status.Text="Connecting to your PC…";try{
             http.DefaultRequestHeaders.Add("X-PCR","1");http.DefaultRequestHeaders.UserAgent.ParseAdd("PCRemote-Windows-SendTo/2.1");var config=JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root,"config.json")));await Call("/api/pair",new{password=config?["password"]?.GetValue<string>()??"",remember=false});signedIn=true;
             var data=await Call("/api/host/targets");if(closing)return;targets.Items.Add(new Target("*","All my devices"));if(data["devices"] is JsonArray devices)foreach(var device in devices){if(device==null)continue;targets.Items.Add(new Target(device["id"]!.GetValue<string>(),device["name"]!.GetValue<string>()+(device["online"]?.GetValue<bool>()==true?" · connected":" · delivery queued")));}targets.SelectedIndex=targets.Items.Count==2?1:0;send.Enabled=true;status.Text="Ready to send";
-        }catch{if(!closing)status.Text="Start the PC Remote host, then reopen this window.";}
+        }catch{if(!closing)status.Text="Start the Elleson Connect host, then reopen this window.";}
     }
     async Task Deliver()
     {

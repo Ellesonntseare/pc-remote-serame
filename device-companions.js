@@ -40,7 +40,7 @@ function createDeviceCompanions({clipboard,sessions,auth,scopeFor,sessionExpiry,
   function devices(scope){return[...peers].filter(peer=>peer.scope===scope&&peer.id).map(peer=>({id:peer.id,name:peer.name,online:true,capabilities:peer.capabilities,status:peer.status,seen:peer.seen}));}
   function request(scope,deviceId,action,payload={},timeout=15000){
     if(!actions.has(action))return Promise.reject(Object.assign(Error('Unsupported phone action.'),{status:400}));
-    const peer=[...peers].find(peer=>peer.scope===scope&&peer.id===deviceId);if(!peer)return Promise.reject(Object.assign(Error('Open PC Remote on that phone to connect it.'),{status:409}));
+    const peer=[...peers].find(peer=>peer.scope===scope&&peer.id===deviceId);if(!peer)return Promise.reject(Object.assign(Error('Open Elleson Connect on that phone to connect it.'),{status:409}));
     if([...pending.values()].filter(item=>item.peer===peer).length>=8)return Promise.reject(Object.assign(Error('The phone is busy. Try again in a moment.'),{status:429}));
     if(Buffer.byteLength(JSON.stringify(payload))>128*1024)return Promise.reject(Object.assign(Error('Phone request is too large.'),{status:400}));
     const id=crypto.randomUUID();return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(id);reject(Object.assign(Error('The phone did not respond. Check its connection.'),{status:504}));},Math.min(60000,Math.max(1000,timeout)));timer.unref?.();pending.set(id,{peer,resolve,reject,timer});if(!send(peer,{type:'command',id,action,payload})){pending.delete(id);clearTimeout(timer);reject(Object.assign(Error('The phone connection is busy.'),{status:409}));}});

@@ -114,7 +114,14 @@ test('PC phone controls stay view-only until approval and send one action at a t
 
 test('Android owner can share its phone for PC mouse control without changing accounts',async t=>{
   const f=await fixture(t),messages=[],phone=await f.page({android:messages});await login(phone,'serame');await until(()=>phone.PCRAuth?.role==='owner');
-  const doc=phone.document;doc.querySelector('.guestScreenHome').click();assert.deepEqual(messages,[{type:'start'}]);
+  const doc=phone.document,tile=doc.querySelector('.guestScreenHome');
+  assert.equal(tile.querySelector('strong').textContent,'PC mouse on phone','the Android entry must not be overwritten with Guest screens after login');
+  phone.dispatchEvent(new phone.CustomEvent('pcr:auth',{detail:phone.PCRAuth}));
+  phone.dispatchEvent(new phone.Event('pcr:native-ready'));
+  assert.equal(tile.querySelector('strong').textContent,'PC mouse on phone');
+  assert.equal(phone.PCRWorkspace.getTiles().find(item=>item.id==='guest').title,'PC mouse on phone','Settings exposes the same dedicated phone-control entry');
+  tile.click();assert.deepEqual(messages,[{type:'start'}]);
+  assert.match(doc.querySelector('.guestScreenHint').textContent,/Android Home/);
   assert.equal(doc.querySelector('.guestScreenSelect').hidden,true,'native owner publishes its phone instead of watching another screen');
   phone.PCRAndroid.onmessage({data:JSON.stringify({type:'sharing'})});phone.PCRAndroid.onmessage({data:JSON.stringify({type:'frame',data:'AAAA',width:540,height:960})});
   assert.equal(doc.querySelector('#guestScreenDialog img').hidden,false);

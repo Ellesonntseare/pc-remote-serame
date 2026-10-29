@@ -1,11 +1,11 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Publish PC Remote Android - PRIVATE GitHub
+title Publish Elleson Connect Android - PRIVATE GitHub
 
 echo.
 echo ======================================================
-echo  PC Remote + Android APK builder - PRIVATE repository
+echo  Elleson Connect + Android APK builder - PRIVATE repository
 
 echo ======================================================
 echo.
@@ -24,7 +24,7 @@ git add -A || (echo Could not stage files. & pause & exit /b 1)
 git diff --cached --check || (echo Whitespace or patch errors detected. & pause & exit /b 1)
 git diff --cached --quiet
 if errorlevel 1 (
-  git commit -m "PC Remote Android client and configurable phone controls" || (echo Please configure Git name/email and rerun. & pause & exit /b 1)
+  git commit -m "Elleson Connect Android client and configurable phone controls" || (echo Please configure Git name/email and rerun. & pause & exit /b 1)
 )
 echo.
 echo These tracked files will be uploaded:

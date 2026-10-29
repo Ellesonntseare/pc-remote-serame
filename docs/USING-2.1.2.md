@@ -6,7 +6,7 @@
 - Fullscreen Remote Screen remains interactive. Tap PC buttons and text fields; desktop shortcuts retain Windows' normal double-click/double-tap behaviour. The APK keeps its WebView visible while hiding Android system bars. Back or Show controls restores the normal view.
 - The pad has no visible text labels or latency counter. Its vertical scroll indicator remains. Enter is deep blue and Backspace red. Accessibility descriptions remain available to screen readers.
 - **Settings → Appearance → Finger trail** turns the fading touchpad trail on or off. Its width follows reported contact area and pressure, with a fallback for phones that do not report them. Lightweight appearance pauses the effect; it stops drawing when the trail fades or the remote page is hidden.
-- **Settings → Connection → Connected devices → Rename** changes the PC host or an app device's name inline. Save or press Enter to keep it. Names persist after reconnect/restart, and renaming works with settings/clipboard sync turned off. These are PC Remote names; the Windows computer name is unchanged.
+- **Settings → Connection → Connected devices → Rename** changes the PC host or an app device's name inline. Save or press Enter to keep it. Names persist after reconnect/restart, and renaming works with settings/clipboard sync turned off. These are Elleson Connect names; the Windows computer name is unchanged.
 
 Install the 2.1.2 APK over the previous personal app for Android Home/gesture auto-entry and native immersive full screen. The updated Windows helper and website provide stable field recognition and the interface changes. Text is retained in the current app session; this does not promise recovery after Android terminates the app process.
 

@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "PCRemoteAndroid"
+rootProject.name = "EllesonConnect"
 include(":android")

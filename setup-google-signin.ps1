@@ -6,7 +6,7 @@ if(!$Email){$Email=@($settings.googleSignIn.ownerEmails+$settings.googleSignIn.a
 if(!$Email){$Email=Read-Host 'PC owner Google email (new users register separately)'}
 if($Email -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$'){throw 'Enter a valid Google email address.'}
 if(!$Origin){$Origin=[string]$settings.googleSignIn.origin}
-if(!$Origin){$Origin=Read-Host 'Your HTTPS PC Remote website (example: https://remote.example.com)'}
+if(!$Origin){$Origin=Read-Host 'Your HTTPS Elleson Connect website (example: https://remote.example.com)'}
 $uri=[uri]$Origin
 if($uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.AbsolutePath -ne '/' -or $uri.Query -or $uri.Fragment){throw 'Enter only your HTTPS website origin.'}
 if(!$ClientId){$ClientId=[string]$settings.googleSignIn.clientId}

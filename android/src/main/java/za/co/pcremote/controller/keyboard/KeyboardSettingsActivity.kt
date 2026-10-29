@@ -36,9 +36,9 @@ class KeyboardSettingsActivity : Activity() {
             setPadding(dp(20), dp(28), dp(20), dp(48))
         }
 
-        text("Serame Keyboard", 26f, C.TEXT, 0)
+        text("Elleson Keyboard", 26f, C.TEXT, 0)
         text("Set it up, then try it in the box.", 14f, C.TEXT_DIM, 4)
-        text("Sign in to your PC in PC Remote. Once this keyboard is selected, copied text and pictures can sync while you use other apps. Your keyboard is never changed automatically.",14f,C.TEXT_DIM,8)
+        text("Sign in to your PC in Elleson Connect. Once this keyboard is selected, copied text and pictures can sync while you use other apps. Your keyboard is never changed automatically.",14f,C.TEXT_DIM,8)
 
         button("1. Enable keyboard") {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))

@@ -55,7 +55,7 @@ class PhoneControlService : AccessibilityService() {
             return
         }
         if(command.action.startsWith("touch-")){drag?.perform(command,width,height,done)?:done(false,"Phone touch is unavailable.");return}
-        if(command.action in listOf("insert","key")){val result=type(command);done(result,if(result)"" else "Click a phone text field. On older Android versions, select Serame Keyboard for full keyboard support.");return}
+        if(command.action in listOf("insert","key")){val result=type(command);done(result,if(result)"" else "Click a phone text field. On older Android versions, select Elleson Keyboard for full keyboard support.");return}
         if(drag?.active==true){done(false,"Release the phone drag first.");return}
         if (command.action in listOf("back", "home", "recents")) {
             val action = when (command.action) { "back" -> GLOBAL_ACTION_BACK; "home" -> GLOBAL_ACTION_HOME; else -> GLOBAL_ACTION_RECENTS }

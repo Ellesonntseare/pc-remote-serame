@@ -17,7 +17,7 @@ internal static class PrivacyDisplay
         protected override bool ShowWithoutActivation => true;
         protected override CreateParams CreateParams { get { var value=base.CreateParams;value.ExStyle|=0x08000000|0x20|0x80|0x80000;return value;} }
         protected override void WndProc(ref Message message) { if(message.Msg==0x312)Application.ExitThread();base.WndProc(ref message); }
-        protected override void OnPaint(PaintEventArgs e) { base.OnPaint(e);TextRenderer.DrawText(e.Graphics,"PC Remote · Privacy mode\nRestore displays: Ctrl + Alt + Shift + P",SystemFonts.MessageBoxFont,new Rectangle(20,20,Width-40,75),Color.FromArgb(70,80,90),TextFormatFlags.HorizontalCenter); }
+        protected override void OnPaint(PaintEventArgs e) { base.OnPaint(e);TextRenderer.DrawText(e.Graphics,"Elleson Connect · Privacy mode\nRestore displays: Ctrl + Alt + Shift + P",SystemFonts.MessageBoxFont,new Rectangle(20,20,Width-40,75),Color.FromArgb(70,80,90),TextFormatFlags.HorizontalCenter); }
     }
     public static void Run()
     {

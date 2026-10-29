@@ -25,7 +25,7 @@
   function screenshot(){
     if(!remoteActive()||!window.PCRCanAccess?.('screen'))return;
     const canvas=document.getElementById('rsc');if(!canvas.width||!canvas.height){msg('Wait for a PC picture first.');return;}
-    const name='PC-Remote-'+new Date().toISOString().replace(/[:.]/g,'-')+'.png';
+    const name='Elleson-Connect-'+new Date().toISOString().replace(/[:.]/g,'-')+'.png';
     if(hasNative()){const data=canvas.toDataURL('image/png').split(',')[1];if(data.length>12*1024*1024){msg('This screen image is too large. Reduce quality and try again.');return;}window.PCRAccountWorkspace?.record('screenshot.prepared','Screen screenshot ready',{name});native({type:'save-image',name,data});return;}
     canvas.toBlob(blob=>{if(!blob)return;window.PCRAccountWorkspace?.record('screenshot.prepared','Screen screenshot ready',{name,size:blob.size});const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);msg('Screenshot ready to save.');},'image/png');
   }

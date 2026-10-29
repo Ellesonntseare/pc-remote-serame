@@ -19,11 +19,12 @@
     <application
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
-        android:label="PC Remote"
-        android:icon="@drawable/ic_remote"
+        android:label="Elleson Connect"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.PCRemote">
-        <activity android:name=".keyboard.KeyboardSettingsActivity" android:exported="true" android:label="Serame Keyboard" />
-        <service android:name=".keyboard.SerameKeyboardService" android:label="Serame Keyboard · PC Remote" android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true"><intent-filter><action android:name="android.view.InputMethod" /></intent-filter><meta-data android:name="android.view.im" android:resource="@xml/serame_input_method" /></service>
+        <activity android:name=".keyboard.KeyboardSettingsActivity" android:exported="true" android:label="Elleson Keyboard" />
+        <service android:name=".keyboard.SerameKeyboardService" android:label="Elleson Keyboard · Elleson Connect" android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true"><intent-filter><action android:name="android.view.InputMethod" /></intent-filter><meta-data android:name="android.view.im" android:resource="@xml/serame_input_method" /></service>
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.clipfiles" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/serame_clip_paths" /></provider>
         <service android:name="androidx.work.impl.foreground.SystemForegroundService" android:foregroundServiceType="dataSync" tools:node="merge" />
         <receiver android:name=".FolderSyncControl" android:exported="false" />

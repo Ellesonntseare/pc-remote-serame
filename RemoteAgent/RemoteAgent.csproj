@@ -8,6 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>RemoteAgent</AssemblyName>
+    <Product>Elleson Connect</Product>
+    <Title>Elleson Connect Desktop Agent</Title>
+    <Version>2.2.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <Using Include="System.IO" />

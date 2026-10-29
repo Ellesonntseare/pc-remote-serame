@@ -59,7 +59,7 @@ object DeviceCompanion {
     private var inputScheduled = false
     private var inputBusy = false
     private val listeners = linkedSetOf<() -> Unit>()
-    var state = "Open PC Remote and sign in to connect"
+    var state = "Open Elleson Connect and sign in to connect"
         private set
     val connected: Boolean get() = ready && link != null
     val remoteContext: Boolean get() = connected && page in setOf("rs", "presentation")
@@ -152,7 +152,7 @@ object DeviceCompanion {
     private fun lost(current: Link, ws: WebSocket, code: Int) {
         if (link !== current || socket !== ws) return
         socket = null; ready = false; pcTyping = false
-        if (code in setOf(401, 403, 1008) || code == 1001) { disconnect("Your session ended. Open PC Remote to sign in."); return }
+        if (code in setOf(401, 403, 1008) || code == 1001) { disconnect("Your session ended. Open Elleson Connect to sign in."); return }
         notifyState("Waiting for your PC · reconnecting")
         val delay = minOf(30000L, 1000L shl minOf(reconnect++, 5))
         main.postDelayed({ if (link === current && socket == null) openSocket(current) }, delay)
@@ -210,15 +210,15 @@ object DeviceCompanion {
                 if (link !== current || revision != expectedRevision || lastCopyTime != localCopyAtStart) return@post
                 if (file == null) { revision=0;notifyState("Picture waiting for the PC · reconnect to retry") } else {
                     val uri = FileProvider.getUriForFile(app, "${app.packageName}.clipfiles", file)
-                    applyClip(current, value, ClipData.newUri(app.contentResolver, "PC Remote picture", uri))
+                    applyClip(current, value, ClipData.newUri(app.contentResolver, "Elleson Connect picture", uri))
                 }
             }
         }
     }
     private fun apply(current: Link, value: JSONObject) {
         val clip = when (value.optString("kind")) {
-            "text" -> { val text = value.optString("text"); if (text.length > 250000) return; ClipData.newPlainText("PC Remote", text) }
-            "empty" -> ClipData.newPlainText("PC Remote", "")
+            "text" -> { val text = value.optString("text"); if (text.length > 250000) return; ClipData.newPlainText("Elleson Connect", text) }
+            "empty" -> ClipData.newPlainText("Elleson Connect", "")
             else -> return
         }
         applyClip(current, value, clip)
@@ -227,7 +227,7 @@ object DeviceCompanion {
         if (link !== current || !sharedEnabled) return
         suppressedClip = clip
         runCatching { clipboard.setPrimaryClip(clip) }.onSuccess {appliedId = value.optString("id"); appliedHash = value.optString("hash"); lastLocalHash = appliedHash}
-            .onFailure {revision=0;notifyState("Android paused clipboard access · open PC Remote")}
+            .onFailure {revision=0;notifyState("Android paused clipboard access · open Elleson Connect")}
     }
     fun captureClipboard() {
         if (!::app.isInitialized || link == null || !sharedEnabled || (!focused && !defaultKeyboard())) return

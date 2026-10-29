@@ -84,14 +84,14 @@ class TransferService : Service() {
                     val savedOrigin=row.optString("origin");val currentCookie=android.webkit.CookieManager.getInstance().getCookie(savedOrigin).orEmpty();if(currentCookie.contains("pc_remote_session="))cookies[savedOrigin]=currentCookie
                     if(row.optString("state") !in listOf("complete","cancelled"))when(action) {
                         "pause"->{row.put("state","paused");if(id==activeId)activeCall?.cancel()}
-                        "resume"->{val target=row.optString("origin");val current=android.webkit.CookieManager.getInstance().getCookie(target).orEmpty();if(current.contains("pc_remote_session="))cookies[target]=current;if(cookies.containsKey(target)){if(id==activeId)row.put("resumeRequested",true)else row.put("state","queued")}else row.put("message","Open PC Remote and sign in before resuming.")}
+                        "resume"->{val target=row.optString("origin");val current=android.webkit.CookieManager.getInstance().getCookie(target).orEmpty();if(current.contains("pc_remote_session="))cookies[target]=current;if(cookies.containsKey(target)){if(id==activeId)row.put("resumeRequested",true)else row.put("state","queued")}else row.put("message","Open Elleson Connect and sign in before resuming.")}
                         "replace"->{
                             val etag=row.optString("conflictingETag")
                             if(row.optString("direction")=="upload"&&row.optString("state")=="paused"&&etag.matches(Regex("\"[a-f0-9]{64}\""))){
                                 if(cookies.containsKey(savedOrigin)){
                                     row.put("replaceETag",etag);row.remove("conflictingETag")
                                     if(id==activeId)row.put("resumeRequested",true)else row.put("state","queued")
-                                }else row.put("message","Open PC Remote and sign in before replacing this file.")
+                                }else row.put("message","Open Elleson Connect and sign in before replacing this file.")
                             }
                         }
                         "cancel"->{row.put("state","cancelled");if(id==activeId)activeCall?.cancel();cleanup(row)}
@@ -226,7 +226,7 @@ class TransferService : Service() {
     private fun notification(row:JSONObject?,bytes:Long=row?.optLong("received")?:0):Notification {
         val open=PendingIntent.getActivity(this,109,Intent(this,MainActivity::class.java).putExtra("openFiles",true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val state=row?.optString("state").orEmpty();val size=row?.optLong("size",-1)?:-1
-        val builder=Notification.Builder(this,"transfers").setSmallIcon(android.R.drawable.stat_sys_upload).setContentTitle(row?.optString("name")?.takeIf{it.isNotBlank()}?:"PC Remote transfers").setContentText(when(state){"running"->"${if(row?.optString("direction")=="upload")"Sending to PC" else "Receiving on phone"} · ${bytes/1024} KB";"saving"->"Saving on your phone…";"complete"->"Transfer complete";"paused"->row?.optString("message")?.ifBlank{"Paused · tap Resume to continue"};"cancelled"->"Transfer cancelled";else->"Preparing transfer…"}).setContentIntent(open).setOnlyAlertOnce(true).setOngoing(state in listOf("running","saving","queued")).setAutoCancel(state=="complete")
+        val builder=Notification.Builder(this,"transfers").setSmallIcon(R.drawable.ic_notification).setContentTitle(row?.optString("name")?.takeIf{it.isNotBlank()}?:"Elleson Connect transfers").setContentText(when(state){"running"->"${if(row?.optString("direction")=="upload")"Sending to PC" else "Receiving on phone"} · ${bytes/1024} KB";"saving"->"Saving on your phone…";"complete"->"Transfer complete";"paused"->row?.optString("message")?.ifBlank{"Paused · tap Resume to continue"};"cancelled"->"Transfer cancelled";else->"Preparing transfer…"}).setContentIntent(open).setOnlyAlertOnce(true).setOngoing(state in listOf("running","saving","queued")).setAutoCancel(state=="complete")
         if(state in listOf("running","saving","queued"))builder.setProgress(100,if(size>0)(100.0*bytes/size).toInt().coerceIn(0,100)else 0,size<=0)
         if(row!=null&&state !in listOf("complete","cancelled"))for(command in listOf(if(state=="paused")"resume" else "pause","cancel")) {
             val action=Intent(this,TransferService::class.java).setAction(CONTROL).putExtra("id",row.optString("id")).putExtra("command",command)

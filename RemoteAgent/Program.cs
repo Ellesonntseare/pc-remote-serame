@@ -1,4 +1,4 @@
-// PC Remote desktop agent. Runs only as the signed-in Windows user while the
+// Elleson Connect desktop agent. Runs only as the signed-in Windows user while the
 // user has explicitly started the visible Node server and a paired viewer connects.
 // Binary stdout: [1-byte type][4-byte BE length][JPEG frame or JSON metadata].
 using System;

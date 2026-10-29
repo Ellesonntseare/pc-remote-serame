@@ -12,7 +12,7 @@ Previously unsent text stays available through **Insert saved draft**; new typin
 
 Tap **Minimise** in the Remote Screen header. Android shows the PC view in a small picture-in-picture window over other apps. Use Android's expand control to return to full remote control and typing; the prior zoom and scroll are restored. The small window is a viewer, not an interactive mouse/keyboard surface.
 
-Android 8 or newer and picture-in-picture support/permission are required. If Android declines it, the app restores the full screen and explains where to enable Picture-in-picture in Android's PC Remote settings. This feature is in the APK.
+Android 8 or newer and picture-in-picture support/permission are required. If Android declines it, the app restores the full screen and explains where to enable Picture-in-picture in Android's Elleson Connect settings. This feature is in the APK.
 
 ## Present Chrome or another window
 

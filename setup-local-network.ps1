@@ -14,5 +14,5 @@ foreach ($taskProfile in $taskProfiles) {
 $taskNode = (Get-Command node.exe -ErrorAction Stop).Source
 $taskRuleName = 'PC-Remote-Local-TCP-7666'
 Get-NetFirewallRule -Name $taskRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-New-NetFirewallRule -Name $taskRuleName -DisplayName 'PC Remote - local private network' -Direction Inbound -Action Allow -Profile Private -Protocol TCP -LocalPort 7666 -RemoteAddress LocalSubnet -Program $taskNode | Out-Null
-Write-Output 'PC Remote is allowed on trusted Private networks for devices on the local subnet. Keep the Windows host running.'
+New-NetFirewallRule -Name $taskRuleName -DisplayName 'Elleson Connect - local private network' -Direction Inbound -Action Allow -Profile Private -Protocol TCP -LocalPort 7666 -RemoteAddress LocalSubnet -Program $taskNode | Out-Null
+Write-Output 'Elleson Connect is allowed on trusted Private networks for devices on the local subnet. Keep the Windows host running.'

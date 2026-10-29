@@ -1,19 +1,19 @@
-# PC Remote 2.1.8 — PC mouse controls your Android phone
+# Elleson Connect 2.1.8 — PC mouse controls your Android phone
 
-Install this APK over your existing personal app. Serame Keyboard remains included.
+Install this APK over your existing personal app. Elleson Keyboard remains included.
 
 ## Start controlling your phone
 
 1. Sign in on the phone and PC. Your main owner account works on both; a guest login is optional.
 2. On the phone, tap **Use PC mouse** on Home. Approve Android's screen-sharing prompt for the entire screen.
 3. On the PC, open **Phone control** and choose the phone if several devices are sharing.
-4. Click **Request phone control**. Approve on the phone. The first time, enable **PC Remote phone control** in Android Accessibility settings, return to PC Remote, then approve.
+4. Click **Request phone control**. Approve on the phone. The first time, enable **Elleson Connect phone control** in Android Accessibility settings, return to Elleson Connect, then approve.
 5. Click or drag the phone preview, right-click to long-press, and use the mouse wheel to scroll. Back, Home and Recent apps remain beside the controls.
 6. Click **Use PC mouse** on the PC for captured mouse movement. The pointer appears on the phone even while you use other Android apps. Press **Escape** to return the mouse to the PC, or click **Release mouse**.
 
 The PC's Phone control page must stay open and in the foreground for captured mouse mode. Direct clicking and scrolling over the preview also work without pointer capture. A browser that declines capture can use this direct mode.
 
-This release shares the mouse through the PC Remote page. Moving the pointer beyond the edge of the Windows desktop to switch devices automatically remains a separate enhancement. The phone continues running Android apps; this is not an extra Windows monitor.
+This release shares the mouse through the Elleson Connect page. Moving the pointer beyond the edge of the Windows desktop to switch devices automatically remains a separate enhancement. The phone continues running Android apps; this is not an extra Windows monitor.
 
 ## Stop or pause
 

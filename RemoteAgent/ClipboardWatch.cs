@@ -22,7 +22,7 @@ internal static class ClipboardWatch
         private uint sequence;private int attempts;private bool initial=true;
         internal WatchWindow(bool includeImages)
         {
-            images=includeImages;CreateHandle(new CreateParams{Caption="PC Remote clipboard connection",Parent=new IntPtr(-3)});
+            images=includeImages;CreateHandle(new CreateParams{Caption="Elleson Connect clipboard connection",Parent=new IntPtr(-3)});
             if(!AddClipboardFormatListener(Handle))throw new InvalidOperationException("Clipboard observation unavailable.");
             timer.Tick+=(_,_)=>Read();timer.Start();
         }

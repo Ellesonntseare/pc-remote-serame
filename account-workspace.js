@@ -30,7 +30,7 @@ function createAccountWorkspace({file=':memory:',now=Date.now}={}){
   function metadata(scope){return info.get(account(scope))||{revision:0,eventCount:0,historyRevision:0};}
   function normalise(scope,event){
     account(scope);if(!event||typeof event!=='object')throw Error('Invalid activity.');
-    const id=event.id||crypto.randomUUID(),type=event.type||'activity',action=event.action||'activity.recorded',label=event.label||action,device=event.device||'PC Remote',text=event.text||'',payload=JSON.stringify(event.payload||{});
+    const id=event.id||crypto.randomUUID(),type=event.type||'activity',action=event.action||'activity.recorded',label=event.label||action,device=event.device||'Elleson Connect',text=event.text||'',payload=JSON.stringify(event.payload||{});
     if(typeof id!=='string'||id.length>180||!id||typeof type!=='string'||!/^[a-z0-9-]{1,40}$/.test(type)||typeof action!=='string'||!/^[a-z0-9.-]{1,80}$/.test(action)||typeof label!=='string'||label.length>500||typeof device!=='string'||device.length>160||typeof text!=='string'||text.length>250000||Buffer.byteLength(payload)>32768)throw Error('Invalid activity data.');
     const time=Number.isSafeInteger(event.time)&&event.time>=0&&event.time<=now()+300000?event.time:now();return{id,type,action,label,device,text,payload,time};
   }

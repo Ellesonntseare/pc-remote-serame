@@ -51,7 +51,7 @@ internal sealed class PhoneHandoff : NativeWindow, IDisposable
     }
     PhoneHandoff(string initial){
         using(var value=JsonDocument.Parse(initial))Configure(value.RootElement);
-        CreateHandle(new CreateParams{Caption="PC Remote phone mouse",Parent=new IntPtr(-3)});
+        CreateHandle(new CreateParams{Caption="Elleson Connect phone mouse",Parent=new IntPtr(-3)});
         mouseHook=Mouse;keyboardHook=Keyboard;
         var module=GetModuleHandle(null);mouseHandle=SetWindowsHookEx(14,mouseHook,module,0);keyboardHandle=SetWindowsHookEx(13,keyboardHook,module,0);
         if(mouseHandle==IntPtr.Zero||keyboardHandle==IntPtr.Zero){Dispose();throw new InvalidOperationException();}

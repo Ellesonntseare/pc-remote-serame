@@ -1,4 +1,4 @@
-# PC Remote 1.6 — Mission Control
+# Elleson Connect 1.6 — Mission Control
 
 The phone starts in Spatial Workspace, with the desk scene and live feature hotspots. Dashboard opens Mission Control. Desktop starts in Mission Control and has Spatial Workspace in its sidebar. Files, Settings, Devices, Cameras and other features open as full pages. Home has heading-only control tiles under All controls; Settings contains the drag/reorder/hide/add board. Frequently used input and file buttons stay beside the remote view.
 
@@ -14,7 +14,7 @@ The phone starts in Spatial Workspace, with the desk scene and live feature hots
 
 PC webcam and Phone camera & microphone are distinct channels from Watch PC. Open the same channel on both signed-in owner devices. On the device with the camera, choose Share from this device; on the other, choose Watch here. Camera, microphone, front/back lens and source device choices are explicit. Microphone-only sharing is supported. Guest accounts cannot access these camera channels. Closing capture or putting its source page in the background releases its tracks.
 
-Camera capture requires HTTPS or localhost, per the [MediaDevices secure-context requirement](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia). In Android use Connect to website for capture. Local HTTP can receive a stream. The Android app maps only the requested camera/microphone resources to runtime permissions and limits requests to the selected trusted origin, following [WebChromeClient permission handling](https://developer.android.com/reference/android/webkit/WebChromeClient#onPermissionRequest(android.webkit.PermissionRequest)). Sharing displays the feed in PC Remote; it does not install a system-wide virtual webcam or microphone driver for other programs.
+Camera capture requires HTTPS or localhost, per the [MediaDevices secure-context requirement](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia). In Android use Connect to website for capture. Local HTTP can receive a stream. The Android app maps only the requested camera/microphone resources to runtime permissions and limits requests to the selected trusted origin, following [WebChromeClient permission handling](https://developer.android.com/reference/android/webkit/WebChromeClient#onPermissionRequest(android.webkit.PermissionRequest)). Sharing displays the feed in Elleson Connect; it does not install a system-wide virtual webcam or microphone driver for other programs.
 
 Watch PC shares the PC browser's selected tab/screen and its available system audio. Enable audio in the PC share picker. Record saves the current stream to this device, including only the tracks that were approved/shared. Recordings are bounded to 24 MiB in Android and 128 MiB in browsers, or 30 minutes. Android saves through its system document picker. Closing a recording saves it; signing out discards it. Protected video may prevent screen capture.
 

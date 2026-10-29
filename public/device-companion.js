@@ -3,7 +3,7 @@
  function mount(){
   const settings=document.getElementById('workspaceSettings');if(!settings)return;
   const card=document.createElement('section');card.className='workspaceSettingsCard companionSettings';card.hidden=true;
-  card.innerHTML='<h3>Shared clipboard & keyboard</h3><label><input type="checkbox" data-shared-clipboard checked>Copy and paste across my devices</label><label><input type="checkbox" data-shared-pictures checked>Include copied pictures</label><p data-companion-state role="status">Connecting to your PC…</p><button type="button" data-keyboard-setup>Set up Serame Keyboard</button><p data-keyboard-help>Keep your current keyboard for sync while PC Remote is open, or choose Serame Keyboard once for clipboard sync in other apps. Copy and paste normally after setup.</p>';
+  card.innerHTML='<h3>Shared clipboard & keyboard</h3><label><input type="checkbox" data-shared-clipboard checked>Copy and paste across my devices</label><label><input type="checkbox" data-shared-pictures checked>Include copied pictures</label><p data-companion-state role="status">Connecting to your PC…</p><button type="button" data-keyboard-setup>Set up Elleson Keyboard</button><p data-keyboard-help>Keep your current keyboard for sync while Elleson Connect is open, or choose Elleson Keyboard once for clipboard sync in other apps. Copy and paste normally after setup.</p>';
   (settings.querySelector('[data-settings-section=controls] .settingsGroupContent')||settings).append(card);
   const send=value=>window.PCRAndroid?.postMessage(JSON.stringify(value)),native=()=>!!window.PCRNativeCapabilities?.sharedClipboard;
   let linked='',page='',lastContext='',timer=null;

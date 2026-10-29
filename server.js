@@ -1,5 +1,5 @@
 'use strict';
-// Visible, LAN-only Windows PC Remote service. Runs only while user keeps the host console open.
+// Visible, LAN-only Windows Elleson Connect service. Runs only while user keeps the host console open.
 const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -216,7 +216,7 @@ function createApp(options={}) {
   const smart=createSmartQuality();
   const hostIdentity=os.hostname()+'|'+os.homedir();
   const locationProvider=options.useWindowsLocations&&nativeFeatures.fileLocations?createLocationProvider({native:()=>nativeFeatures.fileLocations(),fallback:options.fileLocationsProvider||(()=>options.fileLocations||[])}):options.fileLocationsProvider;
-  const fileTransfers=createFileTransfers({onActivity:(actor,event)=>{if(actor?.accountKey)accountData.record(actor.accountKey,{...event,device:actor.device||'PC Remote'});},directory:options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers'),maxBytes:options.maxFileBytes,watch:options.discovery===true,locations:pcLocations(options.fileLocations),locationsProvider:locationProvider,thumbnailProvider:options.thumbnailProvider||(!options.disableAgent&&nativeFeatures.fileThumbnail?file=>nativeFeatures.fileThumbnail(file):undefined)});
+  const fileTransfers=createFileTransfers({onActivity:(actor,event)=>{if(actor?.accountKey)accountData.record(actor.accountKey,{...event,device:actor.device||'Elleson Connect'});},directory:options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers'),maxBytes:options.maxFileBytes,watch:options.discovery===true,locations:pcLocations(options.fileLocations),locationsProvider:locationProvider,thumbnailProvider:options.thumbnailProvider||(!options.disableAgent&&nativeFeatures.fileThumbnail?file=>nativeFeatures.fileThumbnail(file):undefined)});
   const syncHub=createSyncHub({identity:hostIdentity,onActivity:(scope,event)=>{if(event.action==='clipboard.sent')clipboardEcho={text:event.text,at:Date.now()};try{accountData.record(scope,event);}catch{console.error('Account activity could not be saved.');}},onRegister:(scope,token,device)=>{const session=sessions.get(token);if(session&&(session.clientId!==device.id||session.deviceName!==device.name)){session.clientId=device.id;session.deviceName=device.name;saveSessions();}},file:options.syncFile,stageFiles:fileTransfers.stageFromPC,getFileRevision:()=>fileTransfers.revision,getHostName:()=>hostname,setHostName:async name=>{try{await options.setDeviceName?.(name);}catch{throw Object.assign(Error('The PC name could not be saved. Check the host configuration file.'),{status:500});}hostname=name;discovery?.rename(name);},clipboard:options.clipboardProvider||{get:()=>nativeClipboard(ROOT,'get'),set:text=>nativeClipboard(ROOT,'set',text)}});
   const networkDevices=createNetworkDevices({enabled:options.discovery===true&&allowLan});
   const sessionKey=token=>crypto.createHash('sha256').update(token).digest('hex');
@@ -498,7 +498,7 @@ function createApp(options={}) {
         return res.end(page.body);
       }
       if(req.method==='GET'&&(pathname==='/manifest.json'||pathname==='/manifest.webmanifest'))return respond(res,200,{
-        id:'/',name:'PC Remote',short_name:'PC Remote',description:'Control your own Windows PC from your phone.',
+        id:'/',name:'Elleson Connect',short_name:'Elleson Connect',description:'Control your own Windows PC from your phone.',
         start_url:'/',scope:'/',display:'standalone',theme_color:'#07090f',background_color:'#07090f',
         icons:[
           {src:'/icons/icon-192.png',sizes:'192x192',type:'image/png',purpose:'any'},
@@ -541,7 +541,7 @@ function createApp(options={}) {
             if(action==='browser'){const result=google.browser(url.searchParams.get('ticket'));return redirect(result.url,{'Set-Cookie':oauthCookie+'='+result.cookie+'; Path=/api/auth/google; HttpOnly; Secure; SameSite=Lax; Max-Age=300'});}
             const result=await google.callback({id:url.searchParams.get('state'),code:url.searchParams.get('code'),cookie:cookie(req,oauthCookie),error:url.searchParams.get('error')});
             if(!result.device)return redirect('/',{'Set-Cookie':[clearCookie,await googleSession(result,ip,true,req)]});
-            res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer','Set-Cookie':clearCookie,'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'"});return res.end('<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Signed in · PC Remote</title><style>body{background:#031321;color:#eef8ff;font:18px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center}h1{color:#24dccb;font-size:28px}p{color:#a3c4db;max-width:300px;line-height:1.6}</style><main><h1>You’re signed in.</h1><p>Return to the PC Remote app to continue.</p></main>');
+            res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer','Set-Cookie':clearCookie,'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'"});return res.end('<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Signed in · Elleson Connect</title><style>body{background:#031321;color:#eef8ff;font:18px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center}h1{color:#24dccb;font-size:28px}p{color:#a3c4db;max-width:300px;line-height:1.6}</style><main><h1>You’re signed in.</h1><p>Return to the Elleson Connect app to continue.</p></main>');
           }
           if(action==='poll'&&req.method==='POST'){
             if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});const body=await jsonBody(req),result=google.poll({id:body.id,secret:body.secret,ip});
@@ -616,14 +616,14 @@ function createApp(options={}) {
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
         return respond(res,200,{ok:true,account:sessions.get(token).account||null,paired:sessions.get(token).role!=='account'});
       }
-      if(await accountAPI.handle(req,res,{pathname,scope:workspaceScope(token),valid:()=>!!sessions.get(token)&&sessions.get(token).until>Date.now(),device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC Remote',readJson:jsonBody,respond}))return;
+      if(await accountAPI.handle(req,res,{pathname,scope:workspaceScope(token),valid:()=>!!sessions.get(token)&&sessions.get(token).until>Date.now(),device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||sessions.get(token)?.device||'Elleson Connect',readJson:jsonBody,respond}))return;
       if(sessions.get(token).role==='account'&&!['/api/unpair','/api/session','/api/presence'].includes(pathname))return respond(res,403,{error:'Your Google account is signed in. Pair this PC before accessing its controls or files.',needsPairing:true});
       if(await syncHub.handle(req,res,{pathname,token,accountKey:workspaceScope(token)||'owner',role:sessions.get(token)?.role,readJson:jsonBody,respond}))return;
-      if(await sharedClipboard.handle(req,res,{pathname,scope:workspaceScope(token),role:sessions.get(token)?.role,device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||'PC Remote',sourceId:syncHub.device(token,workspaceScope(token)||'owner')?.id||'device',readJson:jsonBody,respond}))return;
+      if(await sharedClipboard.handle(req,res,{pathname,scope:workspaceScope(token),role:sessions.get(token)?.role,device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||'Elleson Connect',sourceId:syncHub.device(token,workspaceScope(token)||'owner')?.id||'device',readJson:jsonBody,respond}))return;
       if(pathname==='/api/companion/devices'||pathname.startsWith('/api/companion/devices/')){
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Pair your own device first.'});
         const scope=workspaceScope(token);if(req.method==='GET'&&pathname==='/api/companion/devices')return respond(res,200,{ok:true,devices:companions.devices(scope)});
-        const match=/^\/api\/companion\/devices\/([-a-zA-Z0-9]{12,80})\/command$/.exec(pathname);if(req.method==='POST'&&match){try{const body=await jsonBody(req,128*1024),result=await companions.request(scope,match[1],body.action,body.payload||{},body.action==='file-hash'?60000:15000);if(['ring','stop-ring'].includes(body.action))accountData.record(scope,{type:'devices',action:'devices.'+body.action,label:body.action==='ring'?'Find my phone started':'Find my phone stopped',device:sessions.get(token)?.deviceName||'PC Remote'});return respond(res,200,{ok:true,result});}catch(error){return respond(res,error.status||503,{error:error.status?error.message:'The phone could not complete that action.'});}}
+        const match=/^\/api\/companion\/devices\/([-a-zA-Z0-9]{12,80})\/command$/.exec(pathname);if(req.method==='POST'&&match){try{const body=await jsonBody(req,128*1024),result=await companions.request(scope,match[1],body.action,body.payload||{},body.action==='file-hash'?60000:15000);if(['ring','stop-ring'].includes(body.action))accountData.record(scope,{type:'devices',action:'devices.'+body.action,label:body.action==='ring'?'Find my phone started':'Find my phone stopped',device:sessions.get(token)?.deviceName||'Elleson Connect'});return respond(res,200,{ok:true,result});}catch(error){return respond(res,error.status||503,{error:error.status?error.message:'The phone could not complete that action.'});}}
         return respond(res,405,{error:'Device action unavailable.'});
       }
       if(pathname==='/api/phone/inbox'&&req.method==='GET'){
@@ -635,7 +635,7 @@ function createApp(options={}) {
         try{
           const body=await jsonBody(req,32768),scope=workspaceScope(token)||'owner';
           if(typeof body.target!=='string'||!Array.isArray(body.names)||!body.names.length||body.names.length>100||body.names.some(name=>typeof name!=='string'||name.length>1200)||typeof body.group!=='string'||!/^[a-f0-9-]{32,36}$/.test(body.group))return respond(res,400,{error:'Choose files and one receiving phone.'});
-          const devices=await syncHub.devices(scope);if(!devices.some(device=>device.id===body.target))return respond(res,404,{error:'Open PC Remote on that phone using the same account first.'});
+          const devices=await syncHub.devices(scope);if(!devices.some(device=>device.id===body.target))return respond(res,404,{error:'Open Elleson Connect on that phone using the same account first.'});
           const files=await Promise.all(body.names.map(name=>fileTransfers.resolveFile(name)));
           const result=await syncHub.enqueue({accountKey:scope,files,target:body.target,returnItems:true});
           const offers=result.items.map(item=>({id:item.id,name:item.label,size:item.size,path:'/api/files/download?name='+encodeURIComponent(item.name),group:body.group}));
@@ -764,7 +764,7 @@ function createApp(options={}) {
           }
           const body=await jsonBody(req,1024*1024);
           if(typeof body.text!=='string'||body.text.length>250000||body.text.includes('\0')||Buffer.from(body.text,'utf8').toString('utf8')!==body.text)return respond(res,400,{error:'Use text up to 250,000 characters.'});
-          if(sessions.get(token)?.role==='owner'&&sharedClipboard.enabled(workspaceScope(token)))await sharedClipboard.copy(workspaceScope(token),{kind:'text',text:body.text},{source:syncHub.device(token,workspaceScope(token))?.name||sessions.get(token)?.deviceName||'PC Remote',sourceId:syncHub.device(token,workspaceScope(token))?.id||'device',activityLabel:'Copied text to PC'});else{if(options.clipboardProvider)await options.clipboardProvider.set(body.text);else await nativeClipboard(ROOT,'set',body.text);record(ip,'Copied text to PC',body.text,token);}
+          if(sessions.get(token)?.role==='owner'&&sharedClipboard.enabled(workspaceScope(token)))await sharedClipboard.copy(workspaceScope(token),{kind:'text',text:body.text},{source:syncHub.device(token,workspaceScope(token))?.name||sessions.get(token)?.deviceName||'Elleson Connect',sourceId:syncHub.device(token,workspaceScope(token))?.id||'device',activityLabel:'Copied text to PC'});else{if(options.clipboardProvider)await options.clipboardProvider.set(body.text);else await nativeClipboard(ROOT,'set',body.text);record(ip,'Copied text to PC',body.text,token);}
           return respond(res,200,{ok:true});
         }catch(e){return respond(res,503,{error:e.message});}
       }
@@ -785,7 +785,7 @@ function createApp(options={}) {
         const permission=pathname.startsWith('/api/files/uploads')||pathname==='/api/files/mkdir'?'upload':'download';
         if(!permits(token,permission))return respond(res,403,{error:(permission==='upload'?'Sending files':'PC file access')+' was not approved.'});
       }
-      if(await fileTransfers.handle(req,res,{pathname,token,activityContext:{accountKey:workspaceScope(token)||'owner',device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||sessions.get(token)?.device||'PC Remote'},allowLocations:sessions.get(token)?.role==='owner',chunkBytes:viaTunnel?1024*1024:options.localChunkBytes||8*1024*1024,accountContext:sessions.get(token)?.role==='guest'?undefined:accountContext,readJson:jsonBody,respond:(response,status,data,headers)=>respond(response,status,sessions.get(token)?.role==='guest'&&data.folder?{...data,folder:'Shared transfer folder'}:data,headers)}))return;
+      if(await fileTransfers.handle(req,res,{pathname,token,activityContext:{accountKey:workspaceScope(token)||'owner',device:syncHub.device(token,workspaceScope(token)||'owner')?.name||sessions.get(token)?.deviceName||sessions.get(token)?.device||'Elleson Connect'},allowLocations:sessions.get(token)?.role==='owner',chunkBytes:viaTunnel?1024*1024:options.localChunkBytes||8*1024*1024,accountContext:sessions.get(token)?.role==='guest'?undefined:accountContext,readJson:jsonBody,respond:(response,status,data,headers)=>respond(response,status,sessions.get(token)?.role==='guest'&&data.folder?{...data,folder:'Shared transfer folder'}:data,headers)}))return;
       if(req.method==='GET'&&pathname==='/api/status'){
         const guest=sessions.get(token).role==='guest';
         return respond(res,200,{ok:true,name:guest?'Shared PC':hostname,...accessInfo(token),...(permits(token,'status')?{uptime:Math.round(os.uptime()),cpu,mem:Math.round(100*(1-os.freemem()/os.totalmem())),system:systemMetrics.get()}:{}),historyCount:guest?0:accountData.metadata(workspaceScope(token)||'owner').eventCount,log:guest?[]:accountData.list(workspaceScope(token)||'owner',{limit:6}).events.map(event=>({t:event.time,text:event.label,...event.preview&&{preview:event.preview}})),screen:enabled&&process.platform==='win32'&&permits(token,'screen')});
@@ -990,8 +990,8 @@ if(require.main===module){
   app.server.listen(app.port,allowLan?'0.0.0.0':'127.0.0.1',()=>{
     const actual=app.server.address().port;
     const ip=app.addresses.find(a=>a.startsWith('192.168.'))||app.addresses[0]||'127.0.0.1';
-    console.log(`\nPC Remote — personal Windows host\n${allowLan?'Local phone URL: http://'+ip+':'+actual+'\n':''}${config.tunnelHostname?'Website: https://'+tunnelHost(config.tunnelHostname)+'\n':''}Sign in with your app password. Remember me is available.\nKeep this terminal open; Ctrl+C stops sharing.\nNever forward port ${actual} to the internet.\n`);
+    console.log(`\nElleson Connect — personal Windows host\n${allowLan?'Local phone URL: http://'+ip+':'+actual+'\n':''}${config.tunnelHostname?'Website: https://'+tunnelHost(config.tunnelHostname)+'\n':''}Sign in with your app password. Remember me is available.\nKeep this terminal open; Ctrl+C stops sharing.\nNever forward port ${actual} to the internet.\n`);
   });
-  app.server.on('error',e=>{console.error(e.code==='EADDRINUSE'?'Port is in use. Close the previous PC Remote terminal before starting a new instance.':e.message);process.exitCode=1;});
+  app.server.on('error',e=>{console.error(e.code==='EADDRINUSE'?'Port is in use. Close the previous Elleson Connect terminal before starting a new instance.':e.message);process.exitCode=1;});
 }
 module.exports={createApp,privateIP,validInput,sessionExpiry};

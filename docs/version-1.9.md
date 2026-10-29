@@ -1,4 +1,4 @@
-# PC Remote personal app 1.9
+# Elleson Connect personal app 1.9
 
 ## Everyday navigation
 
@@ -12,7 +12,7 @@ The Android app reconnects to the last selected trusted host on a normal fresh l
 
 The Android foreground transfer service owns network/disk work independently of the WebView. Uploads use acknowledged resumable chunks. Downloads resume using Range and ETag/If-Range; a changed remote file restarts safely. Android's notification offers Pause/Resume and Cancel; the same queue appears in Files. File selection grants access only to the chosen documents. Transfers survive switching apps; a force-stop/process death pauses jobs until the user resumes, subject to their source document still being available. Android's long-running service timeout pauses work. Signing out stops transfers and removes that origin's saved queue, including completed filenames. Cookies are never written to queue metadata.
 
-From another Android app, choose Share → PC Remote. Photos/documents wait in a confirmation inbox. Links/text become an editable draft. Pick the destination PC folder, then Send. The app does not silently send shared text or files. The file browser covers the PC's configured transfer folder and subfolders. Phone storage/cloud providers are browsed through Android's system document picker. Downloads ask for a destination using the system Save picker.
+From another Android app, choose Share → Elleson Connect. Photos/documents wait in a confirmation inbox. Links/text become an editable draft. Pick the destination PC folder, then Send. The app does not silently send shared text or files. The file browser covers the PC's configured transfer folder and subfolders. Phone storage/cloud providers are browsed through Android's system document picker. Downloads ask for a destination using the system Save picker.
 
 ## Microphone fix and efficient audio
 

@@ -1,6 +1,6 @@
-# PC Remote 2.1.7 personal preview
+# Elleson Connect 2.1.7 personal preview
 
-Install PC-Remote-Android-2.1.7.apk over the existing personal app. Serame Keyboard is included; select Serame Keyboard · PC Remote in Android keyboard settings.
+Install PC-Remote-Android-2.1.7.apk over the existing personal app. Elleson Keyboard is included; select Elleson Keyboard · Elleson Connect in Android keyboard settings.
 
 ## Original file names
 
@@ -12,7 +12,7 @@ Folder sync preserves original names and reports incompatible names. If both dev
 
 ## Word suggestions
 
-Serame Keyboard displays up to three tappable suggestions for the current word. The offline English starter vocabulary is supplemented by frequently typed words learned on the phone, including words in other languages. It does not automatically correct or replace words. Settings offer Show word suggestions, Learn my frequently typed words and Clear learned words.
+Elleson Keyboard displays up to three tappable suggestions for the current word. The offline English starter vocabulary is supplemented by frequently typed words learned on the phone, including words in other languages. It does not automatically correct or replace words. Settings offer Show word suggestions, Learn my frequently typed words and Clear learned words.
 
 Suggestions use the active phone text connection, including normal typing into the remote PC view. They are hidden in password, number, address and private input fields, and in the explicit PC toolbar typing mode where the phone cannot inspect the PC cursor. Learned words stay in the phone's keyboard preferences.
 
