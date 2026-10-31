@@ -75,7 +75,9 @@
   const dock=document.getElementById('remoteSwipeDock'),tools=document.getElementById('screenTools');let snap=1,drag=null,dragFrame=0;
   if(dock){
    const handle=document.createElement('button');handle.type='button';handle.className='ecShelfHandle';handle.setAttribute('aria-label','Expand remote controls');handle.innerHTML='<span></span>';dock.prepend(handle);
-   const mouseActions=document.createElement('div');mouseActions.className='ecMouseActions';mouseActions.innerHTML='<button type="button" data-ec-click="l">'+icon('mouse')+'Left click</button><button type="button" data-ec-click="r">'+icon('mouse')+'Right click</button>';dock.append(mouseActions);
+   const mouseActions=document.createElement('div');mouseActions.className='ecMouseActions';mouseActions.innerHTML='<button type="button" data-ec-click="l">'+icon('mouse')+'Left click</button><button type="button" data-ec-click="r">'+icon('mouse')+'Right click</button>';
+   function placeMouseActions(){const editor=document.getElementById('typePanel');if(remote.classList.contains('typing')&&editor)editor.prepend(mouseActions);else dock.insertBefore(mouseActions,dock.querySelector('.dockQuickKeys,.remoteSwipeSurfaces')||handle.nextSibling);}
+   placeMouseActions();mouseActions.addEventListener('mousedown',event=>event.preventDefault());
    mouseActions.onclick=event=>{const button=event.target.closest('[data-ec-click]');if(button&&(!window.PCRCanAccess||window.PCRCanAccess('control'))&&(!window.PCRHoldControl||window.PCRHoldControl.can('pc')))window.qc?.('click '+button.dataset.ecClick);};
    const rail=document.createElement('div');rail.className='ecRemoteRail';rail.setAttribute('role','toolbar');rail.setAttribute('aria-label','Remote screen actions');
    const modes={mouse:['Mouse','mouse'],keyboard:['Keyboard','keyboard'],files:['Files','file'],tools:['Tools','controls']};
@@ -103,7 +105,7 @@
    current.onkeydown=event=>{const directions={ArrowLeft:[-12,0],ArrowRight:[12,0],ArrowUp:[0,-12],ArrowDown:[0,12]};if(directions[event.key]){event.preventDefault();event.stopPropagation();const [x,y]=directions[event.key];place(rail.offsetLeft+x,rail.offsetTop+y);remember();}else if(event.key==='Enter'||event.key===' ')ignoreClick=false;};
    rail.addEventListener('keydown',event=>{if(event.key==='Escape'&&!choices.hidden){event.preventDefault();event.stopPropagation();expand(false);current.focus();}});
    document.addEventListener('pointerdown',event=>{if(!rail.contains(event.target))expand(false);},{passive:true});
-   new MutationObserver(()=>{if(remote.classList.contains('typing'))select('keyboard');else if(mode==='keyboard')select('mouse');}).observe(remote,{attributes:true,attributeFilter:['class']});
+   new MutationObserver(()=>{if(remote.classList.contains('typing'))select('keyboard');else if(mode==='keyboard')select('mouse');placeMouseActions();}).observe(remote,{attributes:true,attributeFilter:['class']});
    window.addEventListener('pcr:page',event=>{expand(false);if(event.detail?.id==='rs'){select(remote.classList.contains('typing')?'keyboard':'mouse');requestAnimationFrame(restore);}});
    window.addEventListener('resize',restore);window.visualViewport?.addEventListener('resize',restore);select('mouse');requestAnimationFrame(restore);
    function setSnap(value){snap=Math.max(0,Math.min(2,value));dock.dataset.snap=String(snap);handle.setAttribute('aria-expanded',String(snap===2));handle.setAttribute('aria-label',snap===2?'Collapse remote controls':'Expand remote controls');dock.style.removeProperty('--ec-drag');remote.dataset.ecShelf=String(snap);}

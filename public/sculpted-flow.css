@@ -108,3 +108,11 @@ html.ecFlow body #ecControlsPage .quick[data-pcr-denied=true],html.ecFlow body #
 @media(prefers-reduced-motion:reduce){.ecNavCurrent{transition:none!important}.ecNavRipple{display:none}}
 html[data-appearance=light].ecFlow .ecNavCurrent{background:#40281d!important}
 html[data-appearance=light].ecFlow :is(.ecNavLiquid,.ecNavRipple){display:none}
+
+/* Keyboard is selected from the floating mode menu; click buttons stay on top. */
+.ecFlow #remoteSwipeDock .dockQuickKeys #rsKeyboard{display:none!important}
+.ecFlow #remoteSwipeDock .dockQuickKeys{grid-template-columns:repeat(4,minmax(0,1fr));order:2!important}
+.ecFlow #rs #remoteSwipeDock .ecMouseActions{order:1!important;margin:4px 0 8px}
+.ecFlow #rs #remoteSwipeDock .remoteSwipeSurfaces{order:3!important}
+.ecFlow #rs #remoteSwipeDock .contextControls{order:4!important}
+.ecFlow #typePanel>.ecMouseActions{order:-1;flex-shrink:0;width:100%;grid-column:1/-1;margin:0 0 8px}

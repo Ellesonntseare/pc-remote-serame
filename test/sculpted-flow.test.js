@@ -28,10 +28,11 @@ test('Explorer keeps its Windows layout, live nodes and working folder navigatio
 });
 test('floating mode button reveals only the other three actions and selecting one closes the choices',async t=>{
  const f=fixture(t);assert.equal(f.d.getElementById('remoteSwipeDock').dataset.snap,'2','Mouse mode starts with its trackpad visible');assert.equal(f.rail.dataset.mode,'mouse');assert.equal(f.choices.hidden,true);
+ const editor=f.d.createElement('section');editor.id='typePanel';f.remote.append(editor);
  f.current.click();assert.equal(f.current.getAttribute('aria-expanded'),'true');assert.equal(f.calls.keyboard+f.calls.files+f.calls.tools,0);
  assert.deepEqual([...f.choices.children].filter(n=>!n.hidden).map(n=>n.dataset.ecRail),['keyboard','files','tools']);
- f.d.querySelector('[data-ec-rail=keyboard]').click();await tick();assert.equal(f.calls.keyboard,1);assert.equal(f.rail.dataset.mode,'keyboard');assert.equal(f.choices.hidden,true);
- f.current.click();f.d.querySelector('[data-ec-rail=mouse]').click();await tick();assert.equal(f.remote.classList.contains('typing'),false);assert.equal(f.d.getElementById('remoteSwipeDock').dataset.snap,'2');
+ f.d.querySelector('[data-ec-rail=keyboard]').click();await tick();assert.equal(f.calls.keyboard,1);assert.equal(f.rail.dataset.mode,'keyboard');assert.equal(f.choices.hidden,true);assert.equal(editor.firstElementChild.className,'ecMouseActions');
+ f.current.click();f.d.querySelector('[data-ec-rail=mouse]').click();await tick();assert.equal(f.remote.classList.contains('typing'),false);assert.equal(f.d.getElementById('remoteSwipeDock').dataset.snap,'2');assert.equal(f.d.querySelector('.ecMouseActions').previousElementSibling.className,'ecShelfHandle');
  f.current.click();f.d.querySelector('[data-ec-rail=files]').click();assert.equal(f.calls.files,1);assert.equal(f.rail.dataset.mode,'files');assert.equal(f.choices.hidden,true);
 });
 test('drag stays inside the phone viewport, persists its position and never opens a mode',t=>{
