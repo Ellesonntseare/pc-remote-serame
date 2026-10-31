@@ -46,6 +46,14 @@ test('text moves in both directions without a filename or an open remote screen'
   f.d.getElementById('filesNote').value='';f.d.getElementById('clipboardGet').click();await until(()=>f.d.getElementById('filesNote').value===text);
   assert.match(f.d.getElementById('filesStatus').textContent,/received/);
 });
+test('Text & links switches away from Explorer and its Files button restores folder browsing',async t=>{
+ const f=await fixture(t),dialog=f.d.getElementById('filesDialog');dialog.classList.add('workspacePage','pcrPage');
+ f.w.fetch=async(route,options={})=>{const data=await f.w.api(route,options);return{ok:data.status<400,json:async()=>data};};
+ for(const name of ['file-manager.js','explorer-workspace.js','device-links.js'])f.w.eval(await fs.readFile(path.join(__dirname,'../public',name),'utf8'));
+ f.d.getElementById('textTab').click();assert.equal(f.d.getElementById('filesPane').hidden,true);assert.equal(f.d.getElementById('textPane').hidden,false);assert.equal(dialog.classList.contains('filesTextActive'),true);assert.equal(f.d.getElementById('textTab').getAttribute('aria-selected'),'true');assert.ok(f.d.getElementById('deviceLinkUrl'));
+ f.d.getElementById('filesNote').value='Clipboard from the Text tab';f.d.getElementById('clipboardSend').click();await until(()=>f.clipboard==='Clipboard from the Text tab');
+ f.d.getElementById('filesTab').click();assert.equal(f.d.getElementById('filesPane').hidden,false);assert.equal(f.d.getElementById('textPane').hidden,true);assert.equal(dialog.classList.contains('filesTextActive'),false);assert.ok(f.d.querySelector('.explorerBody .explorerSidebar'));
+});
 test('folder batches preserve relative paths and completion notifications require explicit opt-in',async t=>{
   const f=await fixture(t);assert.equal(f.requested,0);const toggle=f.d.getElementById('filesNotify');toggle.click();await until(()=>f.requested===1);
   const first=new f.w.File(['one'],'same.txt',{lastModified:1}),second=new f.w.File(['two'],'same.txt',{lastModified:2});

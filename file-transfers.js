@@ -199,7 +199,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
           try{filename(entry.name);}catch{continue;}
           const name=folder?folder+'/'+entry.name:entry.name,item=await fsp.lstat(target(name));
           if(item.isSymbolicLink()||!item.isFile()&&!item.isDirectory())continue;
-          entries.push({name,label:entry.name,directory:item.isDirectory(),size:item.size,modified:item.mtimeMs,preview:item.isFile()?previewInfo(name):null});
+          entries.push({name,label:entry.name,directory:item.isDirectory(),size:item.size,modified:item.mtimeMs,added:item.birthtimeMs>0?item.birthtimeMs:item.mtimeMs,preview:item.isFile()?previewInfo(name):null});
           if(entries.length>=2000)break;
         }
         entries.sort((a,b)=>Number(b.directory)-Number(a.directory)||a.label.localeCompare(b.label));
@@ -207,7 +207,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
       }
       if(req.method==='GET'&&pathname==='/api/files/search'){
         const folder=url.searchParams.get('path')||'',query=(url.searchParams.get('q')||'').trim().toLocaleLowerCase();if(query.length<2||query.length>160)throw problem(400,'Enter at least two characters to search this folder.');
-        const found=[];let visited=0,truncated=false;const walk=async(prefix,depth)=>{if(req.destroyed||depth>12||visited>=4000||found.length>=300){truncated=true;return;}const directory=prefix?await safeTarget(prefix):root;for(const entry of await fsp.readdir(directory,{withFileTypes:true})){if(req.destroyed)return;if(++visited>4000||found.length>=300){truncated=true;return;}if(/^\.pcr-/i.test(entry.name)||entry.isSymbolicLink())continue;try{filename(entry.name);}catch{continue;}const name=prefix?prefix+'/'+entry.name:entry.name,stat=await fsp.lstat(target(name));if(stat.isSymbolicLink())continue;if(entry.name.toLocaleLowerCase().includes(query))found.push({name,label:entry.name,directory:stat.isDirectory(),size:stat.size,modified:stat.mtimeMs,preview:stat.isFile()?previewInfo(name):null});if(stat.isDirectory())await walk(name,depth+1);}};await walk(folder,0);respond(res,200,{ok:true,path:folder,entries:found,truncated});return true;
+        const found=[];let visited=0,truncated=false;const walk=async(prefix,depth)=>{if(req.destroyed||depth>12||visited>=4000||found.length>=300){truncated=true;return;}const directory=prefix?await safeTarget(prefix):root;for(const entry of await fsp.readdir(directory,{withFileTypes:true})){if(req.destroyed)return;if(++visited>4000||found.length>=300){truncated=true;return;}if(/^\.pcr-/i.test(entry.name)||entry.isSymbolicLink())continue;try{filename(entry.name);}catch{continue;}const name=prefix?prefix+'/'+entry.name:entry.name,stat=await fsp.lstat(target(name));if(stat.isSymbolicLink())continue;if(entry.name.toLocaleLowerCase().includes(query))found.push({name,label:entry.name,directory:stat.isDirectory(),size:stat.size,modified:stat.mtimeMs,added:stat.birthtimeMs>0?stat.birthtimeMs:stat.mtimeMs,preview:stat.isFile()?previewInfo(name):null});if(stat.isDirectory())await walk(name,depth+1);}};await walk(folder,0);respond(res,200,{ok:true,path:folder,entries:found,truncated});return true;
       }
       if(req.method==='POST'&&pathname==='/api/files/operate'){
         if(!allowLocations)throw problem(403,'Only the PC owner can rename or move files.');

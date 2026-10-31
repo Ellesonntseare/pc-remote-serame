@@ -17,7 +17,17 @@
   home.prepend(surface);
   const nav=document.createElement('nav');nav.className='ecNavigation';nav.setAttribute('aria-label','Main pages');
   nav.innerHTML='<svg class="ecNavSurface" viewBox="0 0 600 100" preserveAspectRatio="none" aria-hidden="true"><path d="M1 42C70 -9 104 15 170 27S270 47 330 29S490 12 599 35V99H1Z"/></svg><span class="ecNavCurrent" aria-hidden="true"></span>'+[['home','Home'],['remote','Remote'],['files','Files'],['audio','Audio'],['settings','Settings']].map(([id,label])=>action(id,label,id==='remote'?'screen':id==='files'?'file':id)).join('');app.append(nav);
-  let environment='home',lastPage='home',entrance=null;
+  const liquid=document.createElement('span');liquid.className='ecNavLiquid';liquid.innerHTML='<svg viewBox="0 0 120 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="ecLiquidOrange" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ff962f" stop-opacity=".82"/><stop offset=".5" stop-color="#f56622" stop-opacity=".5"/><stop offset="1" stop-color="#e74817" stop-opacity=".12"/></linearGradient></defs><path fill="url(#ecLiquidOrange)" d="M0 44C12 56 22 51 31 34C41 12 53 4 65 11C83 20 83 51 101 48C110 46 115 40 120 44V100H0Z"/><path class="ecNavCrest" d="M0 44C12 56 22 51 31 34C41 12 53 4 65 11C83 20 83 51 101 48C110 46 115 40 120 44"/></svg>';
+  const ripple=document.createElement('span');ripple.className='ecNavRipple';nav.querySelector('.ecNavCurrent').append(liquid,ripple);
+  let environment='home',lastPage='home',entrance=null,liquidIndex=null,liquidAnimations=[];
+  function moveLiquid(index,reduced){
+   for(const animation of liquidAnimations)animation.cancel();liquidAnimations=[];
+   const previous=liquidIndex;liquidIndex=index;
+   if(index===undefined||previous===null||previous===undefined||previous===index||reduced||!liquid.animate)return;
+   const direction=index>previous?1:-1;liquid.style.transformOrigin=direction>0?'25% 70%':'75% 70%';
+   liquidAnimations.push(liquid.animate([{transform:'scale(1,1) skewX(0deg)'},{transform:'scale(1.65,.68) skewX('+(-direction*14)+'deg)',offset:.32},{transform:'scale(.9,1.14) skewX('+(direction*6)+'deg)',offset:.72},{transform:'scale(1,1) skewX(0deg)'}],{duration:680,easing:'cubic-bezier(.22,.75,.25,1)'}));
+   liquidAnimations.push(ripple.animate([{opacity:0,transform:'scale(.45)'},{opacity:.6,transform:'scale(.8)',offset:.25},{opacity:0,transform:'scale(1.45)'}],{duration:500,delay:220,easing:'ease-out'}));
+  }
   const feature=name=>grid.querySelector('[data-dashboard-tile="'+name+'"]');
   function launch(name){const node=feature(name);if(!node||node.hidden||node.classList.contains('hide')||node.dataset.pcrDenied==='true'){window.msg?.('This control is unavailable for this connection.');return false;}node.click();return true;}
   function navigate(destination){
@@ -48,6 +58,7 @@
    const page=document.getElementById(id),target=id==='remoteOptions'?page?.querySelector('.remoteOptionsPanel'):page||app;
    if(target&&nav.parentElement!==target)target.append(nav);
    const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches||window.PCRAppearance?.light;
+   moveLiquid(index,reduced);
    entrance?.cancel();if(!reduced&&page&&id!=='rs'&&page.animate)entrance=page.querySelector('.pcrPageHeader,header')?.animate([{opacity:.2,transform:'translateY(9px)'},{opacity:1,transform:'translateY(0)'}],{duration:280,easing:'cubic-bezier(.2,.8,.2,1)'});
    if(id==='rs')window.dispatchEvent(new Event('resize'));
   }
@@ -66,8 +77,34 @@
    const mouseActions=document.createElement('div');mouseActions.className='ecMouseActions';mouseActions.innerHTML='<button type="button" data-ec-click="l">'+icon('mouse')+'Left click</button><button type="button" data-ec-click="r">'+icon('mouse')+'Right click</button>';dock.append(mouseActions);
    mouseActions.onclick=event=>{const button=event.target.closest('[data-ec-click]');if(button&&(!window.PCRCanAccess||window.PCRCanAccess('control'))&&(!window.PCRHoldControl||window.PCRHoldControl.can('pc')))window.qc?.('click '+button.dataset.ecClick);};
    const rail=document.createElement('div');rail.className='ecRemoteRail';rail.setAttribute('role','toolbar');rail.setAttribute('aria-label','Remote screen actions');
-   rail.innerHTML='<button type="button" data-ec-rail="mouse" aria-label="Show mouse controls">'+icon('mouse')+'</button><button type="button" data-ec-rail="keyboard" aria-label="Open keyboard">'+icon('keyboard')+'</button><button type="button" data-ec-rail="files" aria-label="Open Files">'+icon('file')+'</button><button type="button" data-ec-rail="tools" aria-label="Remote tools">'+icon('controls')+'</button>';remote.append(rail);
-   rail.onclick=event=>{const key=event.target.closest('[data-ec-rail]')?.dataset.ecRail;if(key==='mouse')setSnap(snap===2?0:2);if(key==='keyboard')document.getElementById('rsKeyboard')?.click();if(key==='files')navigate('files');if(key==='tools')document.querySelector('#remoteOptions>summary')?.click();};
+   const modes={mouse:['Mouse','mouse'],keyboard:['Keyboard','keyboard'],files:['Files','file'],tools:['Tools','controls']};
+   rail.innerHTML='<button type="button" class="ecRailCurrent" aria-controls="ecRailChoices" aria-expanded="false"></button><div id="ecRailChoices" class="ecRailChoices" hidden>'+Object.entries(modes).map(([key,[label,glyph]])=>'<button type="button" data-ec-rail="'+key+'" aria-label="'+label+'">'+icon(glyph)+'</button>').join('')+'</div>';remote.append(rail);
+   const current=rail.querySelector('.ecRailCurrent'),choices=rail.querySelector('.ecRailChoices');let mode='mouse',railDrag=null,ignoreClick=false,position=null;
+   try{const saved=JSON.parse(localStorage.getItem('elleson_remote_rail_v1'));if(Number.isFinite(saved?.x)&&Number.isFinite(saved?.y))position={x:Math.max(0,Math.min(1,saved.x)),y:Math.max(0,Math.min(1,saved.y))};}catch{}
+   function bounds(){
+    const rect=remote.getBoundingClientRect(),viewport=window.visualViewport;
+    const area={left:Math.max(8,(viewport?.offsetLeft||0)-rect.left+8),top:Math.max(62,(viewport?.offsetTop||0)-rect.top+8),right:Math.min(rect.width,(viewport?.offsetLeft||0)+(viewport?.width||innerWidth)-rect.left)-8,bottom:Math.min(rect.height,(viewport?.offsetTop||0)+(viewport?.height||innerHeight)-rect.top)-8};
+    const navigation=remote.querySelector('.ecNavigation')?.getBoundingClientRect();
+    if(navigation?.width&&navigation.height){if(navigation.width>navigation.height&&navigation.top>rect.top+rect.height/2)area.bottom=Math.min(area.bottom,navigation.top-rect.top-8);else if(navigation.height>navigation.width){if(navigation.left>rect.left+rect.width/2)area.right=Math.min(area.right,navigation.left-rect.left-8);else area.left=Math.max(area.left,navigation.right-rect.left+8);}}
+    return{...area,right:area.right-rail.offsetWidth,bottom:area.bottom-rail.offsetHeight};
+   }
+   function place(x,y){const b=bounds();if(!remote.clientWidth||!remote.clientHeight)return;const left=Math.max(b.left,Math.min(Math.max(b.left,b.right),x)),top=Math.max(b.top,Math.min(Math.max(b.top,b.bottom),y));rail.style.left=left+'px';rail.style.top=top+'px';rail.style.right='auto';rail.style.bottom='auto';}
+   function restore(){if(!remote.clientWidth||!remote.clientHeight)return;const b=bounds();place(position?b.left+position.x*Math.max(0,b.right-b.left):b.right,position?b.top+position.y*Math.max(0,b.bottom-b.top):b.top);}
+   function remember(){const b=bounds();position={x:(rail.offsetLeft-b.left)/Math.max(1,b.right-b.left),y:(rail.offsetTop-b.top)/Math.max(1,b.bottom-b.top)};try{localStorage.setItem('elleson_remote_rail_v1',JSON.stringify(position));}catch{}}
+   function expand(open){choices.hidden=!open;current.setAttribute('aria-expanded',String(open));if(remote.clientWidth)place(rail.offsetLeft,rail.offsetTop);}
+   function select(key){mode=key;rail.dataset.mode=key;current.innerHTML=icon(modes[key][1]);current.setAttribute('aria-label',modes[key][0]+' mode. Change mode or drag to move.');current.title=modes[key][0]+' · Tap to change, drag to move';for(const button of choices.children)button.hidden=button.dataset.ecRail===key;}
+   current.onclick=()=>{if(ignoreClick){ignoreClick=false;return;}expand(choices.hidden);};
+   choices.onclick=event=>{const key=event.target.closest('[data-ec-rail]')?.dataset.ecRail;if(!key)return;select(key);expand(false);if(key==='mouse'){window.rsTypeClose?.();setSnap(2);}if(key==='keyboard')document.getElementById('rsKeyboard')?.click();if(key==='files')navigate('files');if(key==='tools')document.querySelector('#remoteOptions>summary')?.click();};
+   current.onpointerdown=event=>{if(event.button>0)return;ignoreClick=false;railDrag={id:event.pointerId,x:event.clientX,y:event.clientY,left:rail.offsetLeft,top:rail.offsetTop,moved:false};current.setPointerCapture?.(event.pointerId);};
+   current.onpointermove=event=>{if(railDrag?.id!==event.pointerId)return;const dx=event.clientX-railDrag.x,dy=event.clientY-railDrag.y;if(Math.hypot(dx,dy)>7)railDrag.moved=true;if(!railDrag.moved)return;event.preventDefault();rail.classList.add('ecRailDragging');place(railDrag.left+dx,railDrag.top+dy);};
+   function endRailDrag(event){if(railDrag?.id!==event.pointerId)return;ignoreClick=railDrag.moved;if(railDrag.moved)remember();railDrag=null;rail.classList.remove('ecRailDragging');}
+   current.onpointerup=endRailDrag;current.onpointercancel=endRailDrag;current.onlostpointercapture=endRailDrag;
+   current.onkeydown=event=>{const directions={ArrowLeft:[-12,0],ArrowRight:[12,0],ArrowUp:[0,-12],ArrowDown:[0,12]};if(directions[event.key]){event.preventDefault();event.stopPropagation();const [x,y]=directions[event.key];place(rail.offsetLeft+x,rail.offsetTop+y);remember();}else if(event.key==='Enter'||event.key===' ')ignoreClick=false;};
+   rail.addEventListener('keydown',event=>{if(event.key==='Escape'&&!choices.hidden){event.preventDefault();event.stopPropagation();expand(false);current.focus();}});
+   document.addEventListener('pointerdown',event=>{if(!rail.contains(event.target))expand(false);},{passive:true});
+   new MutationObserver(()=>{if(remote.classList.contains('typing'))select('keyboard');else if(mode==='keyboard')select('mouse');}).observe(remote,{attributes:true,attributeFilter:['class']});
+   window.addEventListener('pcr:page',event=>{expand(false);if(event.detail?.id==='rs'){select(remote.classList.contains('typing')?'keyboard':'mouse');requestAnimationFrame(restore);}});
+   window.addEventListener('resize',restore);window.visualViewport?.addEventListener('resize',restore);select('mouse');requestAnimationFrame(restore);
    function setSnap(value){snap=Math.max(0,Math.min(2,value));dock.dataset.snap=String(snap);handle.setAttribute('aria-expanded',String(snap===2));handle.setAttribute('aria-label',snap===2?'Collapse remote controls':'Expand remote controls');dock.style.removeProperty('--ec-drag');remote.dataset.ecShelf=String(snap);}
    handle.onclick=()=>{if(!handle.wasDragged)setSnap((snap+1)%3);handle.wasDragged=false;};
    handle.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();handle.setPointerCapture?.(event.pointerId);drag={id:event.pointerId,y:event.clientY,last:event.clientY,at:performance.now(),velocity:0,dy:0};dock.classList.add('ecShelfDragging');};
@@ -75,20 +112,8 @@
    function release(event){if(drag?.id!==event.pointerId)return;const value=drag;drag=null;dock.classList.remove('ecShelfDragging');handle.wasDragged=Math.abs(value.dy)>6;setSnap(Math.abs(value.dy)>38||Math.abs(value.velocity)>.4?snap+(value.dy<0?1:-1):snap);}
    handle.onpointerup=release;handle.onpointercancel=event=>{if(drag?.id===event.pointerId){drag=null;dock.classList.remove('ecShelfDragging');setSnap(snap);}};setSnap(1);
   }
-  // Purpose-built Files header and location strip; real browser/queue nodes are
-  // moved intact instead of generating an ornamental file-manager mockup.
-  const files=document.getElementById('filesDialog'),manager=files?.querySelector('.fileManager');
-  if(files&&manager){
-   files.classList.remove('explorerFiles');files.classList.add('ecFiles');const heading=files.querySelector('.filesHeader');if(heading){heading.hidden=false;files.prepend(heading);const title=heading.querySelector('h2');if(title)title.textContent='Files';const text=heading.querySelector('p');if(text)text.textContent='Two devices. One workspace.';}
-   const location=manager.querySelector('.fmLocations');if(location)manager.prepend(location);
-   const destination=manager.querySelector('.fmSendBar');if(destination)manager.querySelector('[data-pc-files]').prepend(destination);
-   files.querySelector('.explorerSidebar')?.setAttribute('aria-label','PC folders');
-   const folderTabs=files.querySelector('.explorerFolderTabs');if(folderTabs)manager.querySelector('[data-pc-files]').prepend(folderTabs);
-   const search=files.querySelector('.fmSearch');if(search)for(const node of [...search.childNodes])if(node.nodeType===3)node.remove();
-   const sidebar=files.querySelector('.explorerSidebar');if(sidebar){const details=document.createElement('details');details.className='ecFileLocations';details.innerHTML='<summary>Locations '+icon('chevron')+'</summary>';sidebar.before(details);details.append(sidebar);if(matchMedia('(min-width:800px)').matches)details.open=true;}
-   let lastPath=window.PCRFileManager?.path||'';
-   window.addEventListener('pcr:files-state',event=>{const path=event.detail?.path;if(path===lastPath)return;lastPath=path;const content=files.querySelector('.explorerContent');if(content?.animate&&!window.PCRAppearance?.light&&!matchMedia('(prefers-reduced-motion:reduce)').matches)content.animate([{opacity:.25,transform:'translateX(10px)'},{opacity:1,transform:'translateX(0)'}],{duration:230,easing:'ease-out'});});
-  }
+  // Keep the existing Windows Explorer layout and its live file-manager nodes.
+  // explorer-workspace owns the tabs, command bar, sidebar and folder contents.
   const audio=document.getElementById('audioPage');if(audio){const sculpture=document.createElement('div');sculpture.className='ecAudioIdentity';sculpture.innerHTML='<div class="ecAudioDisc" aria-hidden="true">'+icon('audio')+'</div><span class="ecEyebrow">SOUND, WITHOUT DISTANCE</span><p>Your sound.<br><em>Where you need it.</em></p><span class="ecAudioState" role="status">Choose an audio route</span>';audio.querySelector('.audioRoutes').before(sculpture);function audioState(event){const state=event.detail?.state||'stopped';audio.dataset.ecAudioState=state;const label=sculpture.querySelector('.ecAudioState');label.textContent=state==='playing'||state==='streaming'?'Audio connected':state==='starting'||state==='connecting'?'Connecting audio…':state==='error'?'Audio needs attention':'Ready when you are';}window.addEventListener('pcr:audio-state',audioState);window.addEventListener('pcr:phone-audio-state',audioState);}
   window.EllesonFlow={navigate,get environment(){return environment;},get page(){return lastPage;},icon};window.PCRMission?.setView('workspace');signedIn();applyPage(window.PCRPages?.current||'home');
  }

@@ -10,7 +10,7 @@
     <AssemblyName>RemoteAgent</AssemblyName>
     <Product>Elleson Connect</Product>
     <Title>Elleson Connect Desktop Agent</Title>
-    <Version>2.3.0</Version>
+    <Version>2.3.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <Using Include="System.IO" />

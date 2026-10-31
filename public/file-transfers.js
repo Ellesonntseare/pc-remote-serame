@@ -140,7 +140,7 @@
   }
   function close(){const wasOpen=dialog.open;if(preview.open)closePreview();dialog.close();if(wasOpen&&window.PCRAuth?.signedIn)previousFocus?.focus?.({preventScroll:true});}
   el('filesClose').addEventListener('click',close);el('filesRefresh').addEventListener('click',refresh);el('filesSearch').addEventListener('input',render);
-  function tab(text){el('filesTab').setAttribute('aria-selected',String(!text));el('textTab').setAttribute('aria-selected',String(text));el('filesPane').hidden=text;el('textPane').hidden=!text;}
+  function tab(text){el('filesTab').setAttribute('aria-selected',String(!text));el('textTab').setAttribute('aria-selected',String(text));el('filesPane').hidden=text;el('textPane').hidden=!text;dialog.classList.toggle('filesTextActive',text);dialog.scrollTop=0;}
   el('filesTab').addEventListener('click',()=>tab(false));el('textTab').addEventListener('click',()=>tab(true));
   el('filesFolder').addEventListener('click',async()=>{try{const r=await api('/api/files/open-folder',{method:'POST',body:'{}'});status(r.ok?'Transfer folder opened on your PC. Add files there to download them here.':r.error,!r.ok);}catch{status('Could not open the folder. Its location is shown below the file list.',true);}});
   function chunk(upload,file,start,end,job){

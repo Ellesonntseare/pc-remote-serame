@@ -40,3 +40,8 @@
 #filesProgress[data-state=paused]{border-color:#8f7548}#filesProgress[data-state=paused] progress{accent-color:#e8bd70}.filesPendingRow button[hidden]{display:none!important}
 
 #filesDialog .filesBatchList li:has(button){flex-wrap:wrap}#filesDialog .filesBatchList li>button{min-height:40px;flex-basis:100%;max-width:180px}
+
+/* Hidden tab panels must override the Files layout, including its flex rule. */
+#filesDialog.workspacePage #filesPane[hidden],#filesDialog.workspacePage #textPane[hidden]{display:none!important}
+/* Keep transfers running without a separate queue panel. */
+.nativeTransfers,.mcTransfersCard,.filesBatchList{display:none!important}
