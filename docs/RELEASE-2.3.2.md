@@ -7,3 +7,5 @@ Removed the orange Keyboard shortcut beside Enter. Keyboard mode stays available
 Includes the 2.3.1 Windows Explorer appearance, newest-added file ordering, orange liquid navigation, Text & links fix and removal of visible transfer queues.
 
 Install the Windows host update and update Android over the existing personal app. The Android application ID and signing certificate are unchanged. The native Android behavior is unchanged from 2.3.1; the trackpad correction is served by the host.
+
+The lower Enter, Backspace and Files shortcuts are removed. Fullscreen sits beside Select all in the context row, and the generic Shortcuts label is removed.

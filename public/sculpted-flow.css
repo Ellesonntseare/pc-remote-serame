@@ -116,3 +116,5 @@ html[data-appearance=light].ecFlow :is(.ecNavLiquid,.ecNavRipple){display:none}
 .ecFlow #rs #remoteSwipeDock .remoteSwipeSurfaces{order:3!important}
 .ecFlow #rs #remoteSwipeDock .contextControls{order:4!important}
 .ecFlow #typePanel>.ecMouseActions{order:-1;flex-shrink:0;width:100%;grid-column:1/-1;margin:0 0 8px}
+
+.ecFlow #remoteSwipeDock .dockQuickKeys{display:none!important}

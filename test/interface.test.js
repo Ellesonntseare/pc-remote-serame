@@ -53,9 +53,9 @@ test('dashboard keyboard opens the remote editor directly and common keys stay w
   await until(()=>window.PCRPages.current==='rs');
   assert.equal(doc.activeElement,doc.getElementById('typeText'));
   assert.equal(doc.getElementById('typeText').readOnly,false);
-  for(const selector of ['#rsKeyboard','[data-remote-key="13"]','[data-remote-key="8"]','[data-files-button]','#rsFullscreen'])assert.ok(doc.querySelector('.dockQuickKeys').contains(doc.querySelector(selector)));
+  for(const selector of ['#rsKeyboard','[data-remote-key="13"]','[data-remote-key="8"]','[data-files-button]'])assert.ok(doc.querySelector('.dockQuickKeys').contains(doc.querySelector(selector)));
   for(const id of ['keyToggle','rsk'])assert.ok(doc.getElementById('remoteOptions').contains(doc.getElementById(id)));
-  assert.equal(doc.getElementById('remoteOptions').contains(doc.getElementById('rsKeyboard')),false);
+  assert.equal(doc.getElementById('remoteOptions').contains(doc.getElementById('rsKeyboard')),false);assert.ok(doc.querySelector('.contextControls').contains(doc.getElementById('rsFullscreen')));
   assert.equal(doc.getElementById('rsk').classList.contains('hide'),true,'first use keeps optional shortcuts collapsed');
   assert.ok(doc.getElementById('remoteScrollRail'));
 });
