@@ -66,7 +66,7 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/debug/android-debug.apk > apk-metadata.txt
           sed -n '1,8p' apk-metadata.txt
           grep -q "application-label:'Elleson Connect'" apk-metadata.txt
-          grep -q "name='za.co.pcremote.controller' versionCode='24' versionName='2.3.1'" apk-metadata.txt
+          grep -q "name='za.co.pcremote.controller' versionCode='25' versionName='2.3.2'" apk-metadata.txt
           grep -q "android.permission.CAMERA" apk-metadata.txt
           grep -q "android.permission.RECORD_AUDIO" apk-metadata.txt
           grep -q "android.permission.MODIFY_AUDIO_SETTINGS" apk-metadata.txt
@@ -87,7 +87,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view v2.3.1-preview || gh release create v2.3.1-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.1 Personal Preview" --notes-file docs/RELEASE-2.3.1.md
-          test "$(gh release view v2.3.1-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
-          cp android/build/outputs/apk/debug/android-debug.apk Elleson-Connect-Android-2.3.1.apk
-          gh release upload v2.3.1-preview Elleson-Connect-Android-2.3.1.apk --clobber
+          gh release view v2.3.2-preview || gh release create v2.3.2-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.2 Personal Preview" --notes-file docs/RELEASE-2.3.2.md
+          test "$(gh release view v2.3.2-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
+          cp android/build/outputs/apk/debug/android-debug.apk Elleson-Connect-Android-2.3.2.apk
+          gh release upload v2.3.2-preview Elleson-Connect-Android-2.3.2.apk --clobber

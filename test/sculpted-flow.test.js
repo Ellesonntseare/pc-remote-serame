@@ -27,7 +27,7 @@ test('Explorer keeps its Windows layout, live nodes and working folder navigatio
  assert.ok(f.d.querySelector('.explorerAddress [data-breadcrumb]'));assert.ok(f.d.querySelector('.explorerCommands .explorerViewMenu'));
 });
 test('floating mode button reveals only the other three actions and selecting one closes the choices',async t=>{
- const f=fixture(t);assert.equal(f.rail.dataset.mode,'mouse');assert.equal(f.choices.hidden,true);
+ const f=fixture(t);assert.equal(f.d.getElementById('remoteSwipeDock').dataset.snap,'2','Mouse mode starts with its trackpad visible');assert.equal(f.rail.dataset.mode,'mouse');assert.equal(f.choices.hidden,true);
  f.current.click();assert.equal(f.current.getAttribute('aria-expanded'),'true');assert.equal(f.calls.keyboard+f.calls.files+f.calls.tools,0);
  assert.deepEqual([...f.choices.children].filter(n=>!n.hidden).map(n=>n.dataset.ecRail),['keyboard','files','tools']);
  f.d.querySelector('[data-ec-rail=keyboard]').click();await tick();assert.equal(f.calls.keyboard,1);assert.equal(f.rail.dataset.mode,'keyboard');assert.equal(f.choices.hidden,true);
@@ -43,7 +43,7 @@ test('drag stays inside the phone viewport, persists its position and never open
 });
 test('outside tap dismisses choices, keyboard state follows typing, and arrow keys move the button',async t=>{
  const f=fixture(t);f.current.click();f.d.body.dispatchEvent(new f.w.Event('pointerdown',{bubbles:true}));assert.equal(f.choices.hidden,true);
- f.remote.classList.add('typing');await tick();assert.equal(f.rail.dataset.mode,'keyboard');f.remote.classList.remove('typing');await tick();assert.equal(f.rail.dataset.mode,'mouse');
+ f.remote.classList.add('typing');await tick();assert.equal(f.rail.dataset.mode,'keyboard');f.remote.classList.remove('typing');await tick();assert.equal(f.rail.dataset.mode,'mouse');assert.equal(f.d.getElementById('remoteSwipeDock').dataset.snap,'2','Closing the keyboard restores the trackpad');
  f.current.dispatchEvent(new f.w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true,cancelable:true}));assert.equal(f.rail.style.left,'314px');
  f.pointer('pointerdown',350,90);f.pointer('pointermove',250,190);f.pointer('pointercancel',250,190);assert.equal(f.rail.classList.contains('ecRailDragging'),false);
 });

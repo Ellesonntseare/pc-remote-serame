@@ -93,7 +93,7 @@
    function restore(){if(!remote.clientWidth||!remote.clientHeight)return;const b=bounds();place(position?b.left+position.x*Math.max(0,b.right-b.left):b.right,position?b.top+position.y*Math.max(0,b.bottom-b.top):b.top);}
    function remember(){const b=bounds();position={x:(rail.offsetLeft-b.left)/Math.max(1,b.right-b.left),y:(rail.offsetTop-b.top)/Math.max(1,b.bottom-b.top)};try{localStorage.setItem('elleson_remote_rail_v1',JSON.stringify(position));}catch{}}
    function expand(open){choices.hidden=!open;current.setAttribute('aria-expanded',String(open));if(remote.clientWidth)place(rail.offsetLeft,rail.offsetTop);}
-   function select(key){mode=key;rail.dataset.mode=key;current.innerHTML=icon(modes[key][1]);current.setAttribute('aria-label',modes[key][0]+' mode. Change mode or drag to move.');current.title=modes[key][0]+' · Tap to change, drag to move';for(const button of choices.children)button.hidden=button.dataset.ecRail===key;}
+   function select(key){mode=key;rail.dataset.mode=key;current.innerHTML=icon(modes[key][1]);current.setAttribute('aria-label',modes[key][0]+' mode. Change mode or drag to move.');current.title=modes[key][0]+' · Tap to change, drag to move';for(const button of choices.children)button.hidden=button.dataset.ecRail===key;if(key==='mouse')setSnap(2);}
    current.onclick=()=>{if(ignoreClick){ignoreClick=false;return;}expand(choices.hidden);};
    choices.onclick=event=>{const key=event.target.closest('[data-ec-rail]')?.dataset.ecRail;if(!key)return;select(key);expand(false);if(key==='mouse'){window.rsTypeClose?.();setSnap(2);}if(key==='keyboard')document.getElementById('rsKeyboard')?.click();if(key==='files')navigate('files');if(key==='tools')document.querySelector('#remoteOptions>summary')?.click();};
    current.onpointerdown=event=>{if(event.button>0)return;ignoreClick=false;railDrag={id:event.pointerId,x:event.clientX,y:event.clientY,left:rail.offsetLeft,top:rail.offsetTop,moved:false};current.setPointerCapture?.(event.pointerId);};
@@ -111,7 +111,7 @@
    handle.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();handle.setPointerCapture?.(event.pointerId);drag={id:event.pointerId,y:event.clientY,last:event.clientY,at:performance.now(),velocity:0,dy:0};dock.classList.add('ecShelfDragging');};
    handle.onpointermove=event=>{if(drag?.id!==event.pointerId)return;event.preventDefault();const now=performance.now();drag.velocity=(event.clientY-drag.last)/Math.max(1,now-drag.at);drag.last=event.clientY;drag.at=now;drag.dy=Math.max(-220,Math.min(220,event.clientY-drag.y));if(!dragFrame)dragFrame=requestAnimationFrame(()=>{dragFrame=0;if(drag)dock.style.setProperty('--ec-drag',drag.dy+'px');});};
    function release(event){if(drag?.id!==event.pointerId)return;const value=drag;drag=null;dock.classList.remove('ecShelfDragging');handle.wasDragged=Math.abs(value.dy)>6;setSnap(Math.abs(value.dy)>38||Math.abs(value.velocity)>.4?snap+(value.dy<0?1:-1):snap);}
-   handle.onpointerup=release;handle.onpointercancel=event=>{if(drag?.id===event.pointerId){drag=null;dock.classList.remove('ecShelfDragging');setSnap(snap);}};setSnap(1);
+   handle.onpointerup=release;handle.onpointercancel=event=>{if(drag?.id===event.pointerId){drag=null;dock.classList.remove('ecShelfDragging');setSnap(snap);}};setSnap(2);
   }
   // Keep the existing Windows Explorer layout and its live file-manager nodes.
   // explorer-workspace owns the tabs, command bar, sidebar and folder contents.
