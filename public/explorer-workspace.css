@@ -147,3 +147,30 @@
 #filesDialog.explorerFiles.filesTextActive #filesTab{display:flex!important;flex:1;min-width:80px}
 #filesDialog.explorerFiles.filesTextActive .explorerFolderTabs{display:none!important}
 #filesDialog.explorerFiles #textPane{box-sizing:border-box;width:100%;max-width:980px;margin:0 auto;padding:20px 16px 100px}
+
+/* The whole Explorer workspace fits a phone; only folder contents scroll. */
+@media(max-width:700px){
+ #filesDialog.explorerFiles[open]{display:flex!important;flex-direction:column;width:100%;max-width:100%;height:100dvh;max-height:100dvh;box-sizing:border-box;overflow:hidden!important;padding-bottom:calc(92px + env(safe-area-inset-bottom))!important}
+ #filesDialog.explorerFiles .filesTabs{flex-shrink:0;width:100%;box-sizing:border-box}
+ #filesDialog.explorerFiles #filesPane{flex:1;min-height:0;overflow:hidden;gap:0!important}
+ #filesDialog.explorerFiles .fileManager{display:flex;flex-direction:column;flex:1;min-height:0;width:100%;box-sizing:border-box}
+ #filesDialog.explorerFiles [data-pc-files]{flex:1;min-height:0;overflow:hidden}
+ #filesDialog.explorerFiles .explorerAddress,#filesDialog.explorerFiles .explorerCommands,#filesDialog.explorerFiles .explorerStatus{flex-shrink:0;box-sizing:border-box;max-width:100%}
+ #filesDialog.explorerFiles .explorerCommands{flex-wrap:wrap;overflow:visible;gap:3px 5px;padding:4px 6px}
+ #filesDialog.explorerFiles .explorerCommands .fmSendBar{flex-wrap:wrap;min-width:0;padding:0!important;border:0;gap:4px}
+ #filesDialog.explorerFiles .explorerBody{flex:1;min-height:80px;height:auto!important;grid-template-columns:clamp(86px,27vw,116px) minmax(0,1fr);overflow:hidden}
+ #filesDialog.explorerFiles .explorerSidebar,#filesDialog.explorerFiles .explorerContent{min-width:0;max-width:100%;min-height:0;overflow-x:hidden;overflow-y:auto}
+ #filesDialog.explorerFiles .explorerLocation{height:auto!important;min-height:34px!important;align-items:center}
+ #filesDialog.explorerFiles .explorerLocation>span:nth-child(2){white-space:normal;overflow-wrap:anywhere}
+ #filesDialog.explorerFiles .fileManager[data-view=details] [data-entries]{min-width:0!important;width:100%;box-sizing:border-box}
+ #filesDialog.explorerFiles .fmColumns{display:none!important}
+ #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile{grid-template-columns:18px 20px minmax(0,1fr);grid-template-rows:auto auto auto;gap:0 4px;padding:5px 2px;min-height:52px;box-sizing:border-box;width:100%}
+ #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmSelect{grid-column:1;grid-row:1/4;opacity:1;width:15px;height:15px}
+ #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmFileIcon{grid-column:2;grid-row:1/4;width:18px;height:22px}
+ #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmFileName{grid-column:3;grid-row:1;white-space:normal;overflow-wrap:anywhere;max-height:none;min-height:22px!important;padding:2px 0!important;text-align:left;font-size:12px!important;line-height:17px!important}
+ #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmModified{grid-column:3;grid-row:2;white-space:normal;padding:0;font-size:10px;line-height:15px}
+ #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmType{grid-column:3;grid-row:3;white-space:normal;overflow-wrap:anywhere;padding:0 48px 0 0;font-size:10px;line-height:15px}
+ #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile .fmFileSize{grid-column:3;grid-row:3;justify-self:end;padding:0;font-size:10px;line-height:15px}
+ #filesDialog.explorerFiles .explorerStatus{flex-wrap:wrap;gap:4px}
+ #filesDialog.explorerFiles #textPane{flex:1;min-height:0;overflow-y:auto;padding-bottom:20px}
+}
