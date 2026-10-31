@@ -11,6 +11,8 @@ Validation: the complete suite passed 396/396 after the initial Explorer/menu wo
 
 Final follow-ups: Mouse mode opens with the trackpad expanded and restores it after keyboard dismissal. Removed the duplicate orange Keyboard key and the lower Enter, Backspace and Files row. Left/right click controls appear above the trackpad and at the top of the typing panel. Fullscreen is next to Select all; the generic Shortcuts label is removed. The owner account preference is Details with newest-added ordering. Mobile Explorer commands, folder/drive rows and filenames fit the available width; browser checks observed no horizontal overflow in folder and drive contents.
 
+Post-release styling follow-up: Fullscreen beside Select all now shows only the four corner strokes at 16px in a transparent, borderless 32px control. Its visible label and brown button box are hidden while its accessible name and existing click handler remain. Verified computed styles with the complete stylesheet set and passed the existing dashboard/remote-controls integration check. Deployed the stylesheet to the installed host with a backup; public HTTPS stylesheet hashes and the page's bundled CSS confirm delivery. This web styling change does not require another APK build; reopen the Android app to load it. The published 2.3.2 installer remains unchanged.
+
 Release: https://github.com/Ellesonntseare/pc-remote-serame/releases/tag/v2.3.2-preview
 - Android signing/unit/build checks: https://github.com/Ellesonntseare/pc-remote-serame/actions/runs/41186289052
 - Windows and portable checks (all final JavaScript; final subsequent change is the mobile drive CSS): https://github.com/Ellesonntseare/pc-remote-serame/actions/runs/41186964956

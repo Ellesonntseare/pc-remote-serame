@@ -118,3 +118,8 @@ html[data-appearance=light].ecFlow :is(.ecNavLiquid,.ecNavRipple){display:none}
 .ecFlow #typePanel>.ecMouseActions{order:-1;flex-shrink:0;width:100%;grid-column:1/-1;margin:0 0 8px}
 
 .ecFlow #remoteSwipeDock .dockQuickKeys{display:none!important}
+
+/* Fullscreen is a small, unboxed corner icon beside Select all. */
+.ecFlow #rs #remoteSwipeDock .contextControls #rsFullscreen{display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;width:32px;min-width:32px;height:32px;min-height:32px;padding:6px;background:transparent!important;border:0!important;border-radius:0;box-shadow:none!important}
+.ecFlow #rs #remoteSwipeDock .contextControls #rsFullscreen>span{display:none}
+.ecFlow #rs #remoteSwipeDock .contextControls #rsFullscreen>svg{display:block;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
