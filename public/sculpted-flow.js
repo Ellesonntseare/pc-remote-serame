@@ -18,13 +18,14 @@
   const nav=document.createElement('nav');nav.className='ecNavigation';nav.setAttribute('aria-label','Main pages');
   nav.innerHTML='<svg class="ecNavSurface" viewBox="0 0 600 100" preserveAspectRatio="none" aria-hidden="true"><path d="M1 42C70 -9 104 15 170 27S270 47 330 29S490 12 599 35V99H1Z"/></svg><span class="ecNavCurrent" aria-hidden="true"></span>'+[['home','Home'],['remote','Remote'],['files','Files'],['audio','Audio'],['settings','Settings']].map(([id,label])=>action(id,label,id==='remote'?'screen':id==='files'?'file':id)).join('');app.append(nav);
   const liquid=document.createElement('span');liquid.className='ecNavLiquid';liquid.innerHTML='<svg viewBox="0 0 120 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="ecLiquidOrange" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ff962f" stop-opacity=".82"/><stop offset=".5" stop-color="#f56622" stop-opacity=".5"/><stop offset="1" stop-color="#e74817" stop-opacity=".12"/></linearGradient></defs><path fill="url(#ecLiquidOrange)" d="M0 44C12 56 22 51 31 34C41 12 53 4 65 11C83 20 83 51 101 48C110 46 115 40 120 44V100H0Z"/><path class="ecNavCrest" d="M0 44C12 56 22 51 31 34C41 12 53 4 65 11C83 20 83 51 101 48C110 46 115 40 120 44"/></svg>';
-  const ripple=document.createElement('span');ripple.className='ecNavRipple';nav.querySelector('.ecNavCurrent').append(liquid,ripple);
+  const ripple=document.createElement('span');ripple.className='ecNavRipple';const navCurrent=nav.querySelector('.ecNavCurrent');navCurrent.append(liquid,ripple);
   let environment='home',lastPage='home',entrance=null,liquidIndex=null,liquidAnimations=[];
   function moveLiquid(index,reduced){
    for(const animation of liquidAnimations)animation.cancel();liquidAnimations=[];
    const previous=liquidIndex;liquidIndex=index;
    if(index===undefined||previous===null||previous===undefined||previous===index||reduced||!liquid.animate)return;
    const direction=index>previous?1:-1;liquid.style.transformOrigin=direction>0?'25% 70%':'75% 70%';
+   liquidAnimations.push(navCurrent.animate([{transform:'translateX('+(previous*100)+'%)'},{transform:'translateX('+(index*100)+'%)'}],{duration:680,easing:'cubic-bezier(.22,.75,.25,1)'}));
    liquidAnimations.push(liquid.animate([{transform:'scale(1,1) skewX(0deg)'},{transform:'scale(1.65,.68) skewX('+(-direction*14)+'deg)',offset:.32},{transform:'scale(.9,1.14) skewX('+(direction*6)+'deg)',offset:.72},{transform:'scale(1,1) skewX(0deg)'}],{duration:680,easing:'cubic-bezier(.22,.75,.25,1)'}));
    liquidAnimations.push(ripple.animate([{opacity:0,transform:'scale(.45)'},{opacity:.6,transform:'scale(.8)',offset:.25},{opacity:0,transform:'scale(1.45)'}],{duration:500,delay:220,easing:'ease-out'}));
   }
