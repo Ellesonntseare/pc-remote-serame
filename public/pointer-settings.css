@@ -11,6 +11,7 @@
 .pointerSizeSettings :focus-visible{outline:2px solid #a2e4ff;outline-offset:3px}
 .remoteCursor{pointer-events:none;transform-origin:0 0}
 .remoteCursor>svg{display:block;max-width:none;max-height:none}
+.remoteCursorEmbedded #rsc{cursor:none}
 .remoteCursorReady.remoteCursorFallback #rsc{cursor:var(--remote-pointer-fallback,default)}
 .remoteCursorReady.remoteCursorFallback .remoteCursor{display:none!important}
 .screenPanning .remoteCursorReady.remoteCursorFallback #rsc{cursor:grab}

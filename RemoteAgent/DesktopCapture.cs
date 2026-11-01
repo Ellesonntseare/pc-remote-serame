@@ -13,6 +13,7 @@ internal sealed class DesktopCapture : IDisposable
     private bool retryGpu;
     private long nextRetry;
     public string Backend => privacyCapture is not null ? "wgc" : gpu is null ? "gdi" : "dxgi";
+    public bool CursorEmbedded => privacyCapture is null && gpu?.CursorEmbedded == true;
     public DesktopCapture(Rectangle bounds, bool preferGpu=true)
     {
         this.bounds=bounds;retryGpu=preferGpu;
@@ -55,6 +56,8 @@ internal sealed class GpuDesktopCapture : IDisposable
     private IDXGIOutputDuplication? duplication;
     private ID3D11Texture2D? staging;
     private bool havePixels;
+    private readonly CaptureCursorState cursor = new();
+    public bool CursorEmbedded => cursor.Embedded;
     private readonly int width,height;
     private GpuDesktopCapture(int width,int height){this.width=width;this.height=height;}
     public static GpuDesktopCapture Create(Rectangle bounds)
@@ -94,7 +97,8 @@ internal sealed class GpuDesktopCapture : IDisposable
         {
             using(resource)
             {
-                changed=!havePixels||information.LastPresentTime!=0;
+                bool pointerChanged=cursor.Observe(information.LastMouseUpdateTime,information.PointerPosition.Visible);
+                changed=!havePixels||information.LastPresentTime!=0||pointerChanged;
                 if(changed){using var texture=resource.QueryInterface<ID3D11Texture2D>();context!.CopyResource(staging!,texture);havePixels=true;}
                 if(changed||requirePixels)CopyTo(target);
                 return havePixels;

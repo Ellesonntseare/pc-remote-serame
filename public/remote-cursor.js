@@ -17,7 +17,7 @@
   const cursor=document.createElement('div');cursor.className='remoteCursor';cursor.hidden=true;
   cursor.setAttribute('aria-hidden','true');
   cursor.style.pointerEvents='none';
-  stage.append(cursor);let x=0,y=0,enabled=false,visible=false,lastPreview=-Infinity;
+  stage.append(cursor);let x=0,y=0,enabled=false,visible=false,lastPreview=-Infinity,sourceCursor='auto',embedded=false;
   let range=null,output=null,sizePreview=null,overlayPositioned=true;
   function checkOverlay(){
     // If the positioning stylesheet is unavailable, show a matching native
@@ -38,7 +38,9 @@
   }
   function resetSize(){return setSize(100);}
   function draw(){
-    cursor.hidden=!enabled||!visible||!rs.on||!rs.m||x<0||y<0||x>=rs.m.w||y>=rs.m.h;
+    const inPicture=sourceCursor==='embedded'||sourceCursor==='auto'&&embedded;
+    cursor.hidden=inPicture||!enabled||!visible||!rs.on||!rs.m||x<0||y<0||x>=rs.m.w||y>=rs.m.h;
+    stage.classList.toggle('remoteCursorEmbedded',!!(inPicture&&rs.on));
     stage.classList.toggle('remoteCursorReady',!cursor.hidden);
     stage.classList.toggle('remoteCursorFallback',!cursor.hidden&&!overlayPositioned);
     if(cursor.hidden)return;
@@ -47,6 +49,7 @@
   }
   function report(state){
     if(!Number.isFinite(state.x)||!Number.isFinite(state.y)||!rs.m)return;
+    embedded=state.embedded===true;
     enabled=true;
     if(performance.now()-lastPreview>150){x=state.x;y=state.y;visible=state.visible!==false;}
     draw();
@@ -61,7 +64,8 @@
     x=Math.max(0,Math.min(rs.m.w-1,x));y=Math.max(0,Math.min(rs.m.h-1,y));
     visible=true;lastPreview=performance.now();draw();
   }
-  function reset(){enabled=false;visible=false;lastPreview=-Infinity;draw();}
+  function reset(){enabled=false;visible=false;embedded=false;lastPreview=-Infinity;draw();}
+  function setSourceCursor(value){if(!['auto','embedded','overlay'].includes(value))return;sourceCursor=value;draw();}
   const settings=document.getElementById('rsSettings')?.querySelector('.controlSheet');
   if(settings){
     const group=document.createElement('section');group.className='pointerSizeSettings';
@@ -83,5 +87,5 @@
   }
   checkOverlay();setSize(size,false);
   if(typeof ResizeObserver==='function')new ResizeObserver(()=>{checkOverlay();draw();}).observe(canvas);
-  window.PCRCursor={report,preview,reset,setSize,resetSize,getSize:()=>size};
+  window.PCRCursor={report,preview,reset,setSourceCursor,setSize,resetSize,getSize:()=>size};
 })();

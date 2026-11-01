@@ -54,6 +54,9 @@ function cursorHarness(options={}){
 }
 
 function position(pointer){return [pointer.style.left,pointer.style.top];}
+test('a pointer already embedded in capture stays single during trackpad preview and returns when capture separates it',()=>{
+  const c=cursorHarness(),pointer=c.byClass('remoteCursor');c.api.report({x:900,y:300,visible:true,embedded:true});assert.equal(pointer.hidden,true);c.api.preview('mv 30 10');assert.equal(pointer.hidden,true,'trackpad movement cannot add an overlay on top of the captured pointer');c.advance(151);c.api.report({x:930,y:310,visible:true,embedded:false});assert.equal(pointer.hidden,false);c.api.setSourceCursor('embedded');c.api.preview('mv 12 0');c.api.report({x:950,y:310,visible:true});assert.equal(pointer.hidden,true,'browser video retains its own single cursor');c.api.setSourceCursor('auto');assert.equal(pointer.hidden,false);c.api.setSourceCursor('overlay');c.api.report({x:950,y:310,visible:true,embedded:true});assert.equal(pointer.hidden,false,'cursor-free video can override a separate control stream');
+});
 function near(actual,expected){assert.ok(Math.abs(parseFloat(actual)-expected)<1e-7,`${actual} should equal ${expected}`);}
 
 test('pointer size loads valid saved values and normalizes missing, invalid and out of range settings',()=>{

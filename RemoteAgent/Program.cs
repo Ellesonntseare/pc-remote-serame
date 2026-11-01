@@ -163,8 +163,8 @@ internal static class Program
                     bool regionMode = regions;
                     bool needsPixels=!regionMode||!wasRegions||compressionChanged||Volatile.Read(ref refreshRequested)!=0;
                     if(!desktopCapture.Capture(source,needsPixels,out bool pixelsChanged)){Send(stdout,4,"{}"u8);Thread.Sleep(msPerFrame);continue;}
-                    if (!regionMode) DrawCursor(capture);
-                    else SendCursor(stdout);
+                    if (!regionMode && !desktopCapture.CursorEmbedded) DrawCursor(capture);
+                    else if (regionMode) SendCursor(stdout,desktopCapture.CursorEmbedded);
                     if(regionMode&&!pixelsChanged&&!needsPixels){Send(stdout,4,"{}"u8);int idleRemaining=msPerFrame-(int)(Environment.TickCount64-start);if(idleRemaining>0)Thread.Sleep(idleRemaining);continue;}
                     Bitmap image = source;
                     if (outW != primary.Width || outH != primary.Height)
@@ -243,11 +243,11 @@ internal static class Program
         finally { g.ReleaseHdc(hdc); }
     }
 
-    private static void SendCursor(Stream output)
+    private static void SendCursor(Stream output,bool embedded)
     {
         var cursor = new Native.CURSORINFO { cbSize = Marshal.SizeOf<Native.CURSORINFO>() };
         if (Native.GetCursorInfo(ref cursor))
-            Send(output, 6, JsonSerializer.SerializeToUtf8Bytes(new { x = cursor.pt.X - primary.Left, y = cursor.pt.Y - primary.Top, visible = (cursor.flags & 1) != 0 }));
+            Send(output, 6, JsonSerializer.SerializeToUtf8Bytes(new { x = cursor.pt.X - primary.Left, y = cursor.pt.Y - primary.Top, visible = (cursor.flags & 1) != 0, embedded }));
     }
 
     private static void ProcessInput(Stream output)

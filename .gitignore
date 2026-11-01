@@ -59,3 +59,5 @@ test/PopupInputChecks/obj/
 .privacy-last-attempt.json
 test/PrivacyCaptureChecks/bin/
 test/PrivacyCaptureChecks/obj/
+test/CaptureCursorChecks/bin/
+test/CaptureCursorChecks/obj/

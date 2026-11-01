@@ -42,6 +42,7 @@ jobs:
       - run: npm test
       - run: dotnet build RemoteAgent/RemoteAgent.csproj -c Release -o RemoteAgent/bin --nologo
       - run: dotnet run --project test/FrameEncoderChecks/FrameEncoderChecks.csproj -c Release
+      - run: dotnet run --project test/CaptureCursorChecks/CaptureCursorChecks.csproj -c Release
       - run: dotnet run --project test/AudioCodecChecks/AudioCodecChecks.csproj -c Release
       - run: dotnet build HostTray/HostTray.csproj -c Release --nologo
       - run: dotnet run --project test/HostTrayChecks/HostTrayChecks.csproj -c Release
