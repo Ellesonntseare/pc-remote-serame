@@ -24,12 +24,12 @@ internal sealed class WindowCapture : IDisposable
     private int width, height;
     public Size Size => new(width, height);
 
-    public WindowCapture(IntPtr window)
+    public WindowCapture(IntPtr window, bool monitor = false)
     {
         try
         {
             if (!GraphicsCaptureSession.IsSupported()) throw new NotSupportedException("Window presentation needs Windows 10 version 1903 or newer.");
-            item = CreateItem(window);width = item.Size.Width;height = item.Size.Height;
+            item = CreateItem(window, monitor);width = item.Size.Width;height = item.Size.Height;
             if (width < 2 || height < 2 || width > 16384 || height > 16384) throw new InvalidOperationException("Restore this window before presenting it.");
             item.Closed += (_, _) => closed = true;
             D3D11.D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.BgraSupport,
@@ -76,7 +76,7 @@ internal sealed class WindowCapture : IDisposable
         havePixels=true;return true;
     }
 
-    private static GraphicsCaptureItem CreateItem(IntPtr window)
+    private static GraphicsCaptureItem CreateItem(IntPtr window, bool monitor)
     {
         const string name = "Windows.Graphics.Capture.GraphicsCaptureItem";
         Marshal.ThrowExceptionForHR(WindowsCreateString(name, name.Length, out var className));
@@ -86,7 +86,7 @@ internal sealed class WindowCapture : IDisposable
             var factoryId = typeof(IGraphicsCaptureItemInterop).GUID;
             Marshal.ThrowExceptionForHR(RoGetActivationFactory(className, ref factoryId, out factory));
             var interop = (IGraphicsCaptureItemInterop)Marshal.GetObjectForIUnknown(factory);
-            try { var itemId = new Guid("79C3F95B-31F7-4EC2-A464-632EF5D30760");interop.CreateForWindow(window, ref itemId, out item);return MarshalInterface<GraphicsCaptureItem>.FromAbi(item); }
+            try { var itemId = new Guid("79C3F95B-31F7-4EC2-A464-632EF5D30760");if(monitor)interop.CreateForMonitor(window, ref itemId, out item);else interop.CreateForWindow(window, ref itemId, out item);return MarshalInterface<GraphicsCaptureItem>.FromAbi(item); }
             finally { Marshal.ReleaseComObject(interop); }
         }
         finally { if (item != IntPtr.Zero) Marshal.Release(item);if (factory != IntPtr.Zero) Marshal.Release(factory);WindowsDeleteString(className); }

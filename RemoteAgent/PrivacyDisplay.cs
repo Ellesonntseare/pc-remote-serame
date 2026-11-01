@@ -11,9 +11,19 @@ internal static class PrivacyDisplay
     [DllImport("user32.dll")] private static extern bool UnregisterHotKey(IntPtr window, int id);
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr window, uint color, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(Point point);
+    private static readonly string CaptureSignal = @"Local\EllesonConnect.PrivacyCapture." + System.Diagnostics.Process.GetCurrentProcess().SessionId;
+    public static bool CaptureRequested { get { if(!Mutex.TryOpenExisting(CaptureSignal,out var signal))return false;using(signal)return true; } }
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr window, int command);
+    [DllImport("dwmapi.dll")] private static extern int DwmFlush();
+    private sealed class Probe : Form
+    {
+        public Probe(Rectangle bounds){StartPosition=FormStartPosition.Manual;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;BackColor=Color.Magenta;Bounds=new Rectangle(bounds.Left+bounds.Width/2-48,bounds.Top+bounds.Height/2-48,96,96);}
+        protected override bool ShowWithoutActivation => true;
+        protected override CreateParams CreateParams {get{var value=base.CreateParams;value.ExStyle|=0x08000000|0x80;return value;}}
+    }
     private sealed class Cover : Form
     {
-        public Cover(Rectangle bounds) { Bounds=bounds; StartPosition=FormStartPosition.Manual; FormBorderStyle=FormBorderStyle.None; BackColor=Color.Black; ShowInTaskbar=false; TopMost=true; }
+        public Cover(Rectangle bounds) { StartPosition=FormStartPosition.Manual; FormBorderStyle=FormBorderStyle.None; BackColor=Color.Black; ShowInTaskbar=false; TopMost=true; Bounds=bounds; }
         protected override bool ShowWithoutActivation => true;
         protected override CreateParams CreateParams { get { var value=base.CreateParams;value.ExStyle|=0x08000000|0x20|0x80|0x80000;return value;} }
         protected override void WndProc(ref Message message) { if(message.Msg==0x312)Application.ExitThread();base.WndProc(ref message); }
@@ -22,16 +32,18 @@ internal static class PrivacyDisplay
     public static void Run()
     {
         if(!OperatingSystem.IsWindowsVersionAtLeast(10,0,19041)) { Console.WriteLine("{\"ok\":false,\"error\":\"Privacy mode requires Windows 10 version 2004 or newer.\"}");return; }
-        var covers=new List<Cover>();long last=Environment.TickCount64;bool closing=false;
+        var covers=new List<Cover>();Mutex? captureSignal=null;Probe? probe=null;long last=Environment.TickCount64;bool closing=false;
         try
         {
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
             var bounds=Screen.PrimaryScreen?.Bounds??throw new InvalidOperationException("No physical display is available.");
-            using var before=new Bitmap(bounds.Width,bounds.Height,PixelFormat.Format32bppArgb);
-            using(var capture=new DesktopCapture(bounds)) { if(!capture.Capture(before,true,out _))throw new InvalidOperationException("The PC screen is unavailable."); }
+            // A known patch avoids rejecting dark desktops or changing video content.
+            // Explicit show also handles hosts launched with a hidden startup window.
+            probe=new Probe(bounds);probe.Show();ShowWindow(probe.Handle,4);probe.Refresh();DwmFlush();
+            captureSignal=new Mutex(false,CaptureSignal);
             foreach(var display in Screen.AllScreens)
             {
-                var cover=new Cover(display.Bounds);covers.Add(cover);cover.Show();
+                var cover=new Cover(display.Bounds);covers.Add(cover);cover.Show();ShowWindow(cover.Handle,4);
                 if(!SetLayeredWindowAttributes(cover.Handle,0,255,2))throw new InvalidOperationException("The privacy cover could not pass through PC input.");
                 if(!SetWindowDisplayAffinity(cover.Handle,0x11))throw new InvalidOperationException("Windows could not exclude the privacy cover from screen capture.");
             }
@@ -44,10 +56,22 @@ internal static class PrivacyDisplay
                 try
                 {
                     await Task.Delay(250);if(handles.Contains(WindowFromPoint(new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2))))throw new InvalidOperationException("The privacy cover would block PC input. Displays restored.");using var after=new Bitmap(bounds.Width,bounds.Height,PixelFormat.Format32bppArgb);using var capture=new DesktopCapture(bounds);
-                    bool pixels=false;for(int attempt=0;attempt<8&&!pixels;attempt++){pixels=capture.Capture(after,true,out _);if(!pixels)await Task.Delay(50);}
-                    int tested=0,matched=0;
-                    for(int y=1;y<12;y++)for(int x=1;x<16;x++){var a=before.GetPixel(x*bounds.Width/16,y*bounds.Height/12);if(a.R+a.G+a.B<75)continue;tested++;var b=after.GetPixel(x*bounds.Width/16,y*bounds.Height/12);if(Math.Abs(a.R-b.R)+Math.Abs(a.G-b.G)+Math.Abs(a.B-b.B)<100)matched++;}
-                    if(!pixels||tested<5||matched<tested*.55)throw new InvalidOperationException("This capture engine cannot keep the PC view visible in Privacy mode. Displays restored.");
+                    bool Verified(Color expected)
+                    {
+                        int matched=0;
+                        for(int y=-24;y<=24;y+=24)for(int x=-24;x<=24;x+=24){var pixel=after.GetPixel(bounds.Width/2+x,bounds.Height/2+y);if(Math.Abs(pixel.R-expected.R)+Math.Abs(pixel.G-expected.G)+Math.Abs(pixel.B-expected.B)<90)matched++;}
+                        return matched>=8;
+                    }
+                    async Task Verify(Color expected)
+                    {
+                        for(int attempt=0;attempt<40;attempt++){if(capture.Capture(after,true,out _)&&Verified(expected))return;await Task.Delay(50);}
+                        throw new InvalidOperationException("Windows could not capture the desktop behind the privacy cover. Displays restored.");
+                    }
+                    await Verify(Color.Magenta);
+                    // A second color proves frames are live, rather than a stale pre-cover image.
+                    first.Invoke((Action)(()=>{probe.BackColor=Color.Lime;probe.Refresh();}));
+                    await Verify(Color.Lime);
+                    first.Invoke((Action)(()=>{probe.Close();probe=null;}));
                     Console.WriteLine("{\"ok\":true,\"active\":true}");Console.Out.Flush();
                 }
                 catch(Exception error){Console.WriteLine(JsonSerializer.Serialize(new {ok=false,error=error.Message}));try{first.BeginInvoke((Action)Stop);}catch{}}
@@ -55,6 +79,6 @@ internal static class PrivacyDisplay
             Application.Run();UnregisterHotKey(restoreHandle,1);
         }
         catch(Exception error){Console.WriteLine(JsonSerializer.Serialize(new {ok=false,error=error.Message}));}
-        finally{foreach(var cover in covers)cover.Dispose();Console.WriteLine("{\"active\":false}");Console.Out.Flush();}
+        finally{foreach(var cover in covers)cover.Dispose();probe?.Dispose();captureSignal?.Dispose();Console.WriteLine("{\"active\":false}");Console.Out.Flush();}
     }
 }

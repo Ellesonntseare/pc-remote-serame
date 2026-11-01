@@ -7,14 +7,16 @@ using Vortice.DXGI;
 internal sealed class DesktopCapture : IDisposable
 {
     private GpuDesktopCapture? gpu;
+    private WindowCapture? privacyCapture;
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(Point point, uint flags);
     private readonly Rectangle bounds;
     private bool retryGpu;
     private long nextRetry;
-    public string Backend => gpu is null ? "gdi" : "dxgi";
+    public string Backend => privacyCapture is not null ? "wgc" : gpu is null ? "gdi" : "dxgi";
     public DesktopCapture(Rectangle bounds, bool preferGpu=true)
     {
         this.bounds=bounds;retryGpu=preferGpu;
-        if(preferGpu)TryGpu();
+        if(preferGpu&&!PrivacyDisplay.CaptureRequested)TryGpu();
     }
     private void TryGpu()
     {
@@ -24,6 +26,14 @@ internal sealed class DesktopCapture : IDisposable
     }
     public bool Capture(Bitmap target, bool requirePixels, out bool changed)
     {
+        if(PrivacyDisplay.CaptureRequested)
+        {
+            // Never fall back to a path that may include the physical privacy cover.
+            gpu?.Dispose();gpu=null;
+            privacyCapture ??= new WindowCapture(MonitorFromPoint(new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2),2),monitor:true);
+            changed=true;return privacyCapture.Capture(target);
+        }
+        if(privacyCapture is not null){privacyCapture.Dispose();privacyCapture=null;nextRetry=0;}
         if(gpu is null&&retryGpu&&Environment.TickCount64>=nextRetry)TryGpu();
         if(gpu is not null)
         {
@@ -32,7 +42,7 @@ internal sealed class DesktopCapture : IDisposable
         }
         using var graphics=Graphics.FromImage(target);graphics.CopyFromScreen(bounds.Left,bounds.Top,0,0,bounds.Size);changed=true;return true;
     }
-    public void Dispose(){gpu?.Dispose();gpu=null;retryGpu=false;}
+    public void Dispose(){privacyCapture?.Dispose();privacyCapture=null;gpu?.Dispose();gpu=null;retryGpu=false;}
 }
 
 internal sealed class GpuDesktopCapture : IDisposable
