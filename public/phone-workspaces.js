@@ -56,3 +56,38 @@
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();
+
+
+'use strict';
+(()=>{
+  const root=document.documentElement,viewport=window.visualViewport;
+  let baseline=0,lastWidth=0,frame=0;
+  const editable=element=>element?.matches('textarea,input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]),[contenteditable=true]');
+  function fit(){
+    frame=0;const width=viewport?.width||innerWidth,height=viewport?.height||innerHeight,scale=viewport?.scale||1;
+    if(Math.abs(scale-1)>.05)return; // Pinch zoom must remain under the user's control.
+    if(Math.abs(width-lastWidth)>40){baseline=height;lastWidth=width;}else baseline=Math.max(baseline,height);
+    const keyboard=!!editable(document.activeElement)&&baseline-height>140;
+    root.style.setProperty('--phone-viewport-height',height+'px');
+    root.style.setProperty('--phone-viewport-top',Math.max(0,viewport?.offsetTop||0)+'px');
+    root.classList.toggle('phoneKeyboardOpen',keyboard);
+    if(keyboard&&document.activeElement?.id!=='typeText')document.activeElement?.scrollIntoView?.({block:'nearest',inline:'nearest'});
+  }
+  function schedule(){if(!frame)frame=requestAnimationFrame(fit);}
+  viewport?.addEventListener('resize',schedule);viewport?.addEventListener('scroll',schedule);
+  window.addEventListener('resize',schedule);document.addEventListener('focusin',schedule);document.addEventListener('focusout',schedule);fit();
+  function mount(){
+    const files=document.getElementById('filesDialog'),commands=files?.querySelector('.explorerCommands'),sidebar=files?.querySelector('.explorerSidebar');
+    if(!commands||!sidebar||commands.querySelector('.phoneFoldersToggle'))return;
+    sidebar.id='phoneExplorerFolders';const toggle=document.createElement('button');toggle.type='button';toggle.className='phoneFoldersToggle';
+    toggle.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h7l2 3h9v12H3Z"/></svg><span>Folders</span>';
+    toggle.setAttribute('aria-controls',sidebar.id);toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Show folders');
+    function close(){files.classList.remove('phoneFoldersOpen');toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Show folders');}
+    toggle.onclick=()=>{const open=!files.classList.contains('phoneFoldersOpen');files.classList.toggle('phoneFoldersOpen',open);toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'Hide folders':'Show folders');};
+    commands.prepend(toggle);sidebar.addEventListener('click',event=>{if(event.target.closest('button'))close();});
+    files.addEventListener('keydown',event=>{if(event.key==='Escape'&&files.classList.contains('phoneFoldersOpen')){event.preventDefault();event.stopPropagation();close();toggle.focus();}});
+    files.querySelector('.explorerContent')?.addEventListener('click',close);files.addEventListener('close',close);
+    window.addEventListener('pcr:page',close);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
+})();
