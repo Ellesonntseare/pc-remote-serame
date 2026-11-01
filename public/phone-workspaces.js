@@ -1,5 +1,22 @@
 'use strict';
 (()=>{
+ function mountTransparency(){
+  const settings=document.getElementById('workspaceSettings');if(!settings||settings.querySelector('.remoteTransparencySettings'))return;
+  const card=document.createElement('section');card.className='workspaceSettingsCard remoteTransparencySettings';card.innerHTML='<h3>Floating Remote control</h3><label>Opacity <output data-opacity-value>100%</output><input type="range" min="40" max="100" step="5" value="100" data-overlay-opacity aria-label="Floating control opacity"></label><label class="remoteFadeChoice"><input type="checkbox" data-overlay-fade>Fade when idle</label><p>Fade the floating mode icon after three seconds without touching it. Touch it to restore your chosen opacity.</p>';
+  (settings.querySelector('[data-settings-section=appearance] .settingsGroupContent')||settings).append(card);
+  const root=document.documentElement,slider=card.querySelector('[data-overlay-opacity]'),fade=card.querySelector('[data-overlay-fade]'),output=card.querySelector('output');let timer=null,prefs={opacity:100,idleFade:false};
+  const key=()=> 'pcr_remote_overlay:'+location.origin+':'+(window.PCRAuth?.workspaceId||(window.PCRAuth?.role==='guest'?'guest:'+window.PCRAuth.guestId:'owner'));
+  function wake(){clearTimeout(timer);root.classList.remove('remoteOverlayIdle');if(!window.PCRAuth?.signedIn||!prefs.idleFade)return;timer=setTimeout(()=>{const rail=document.querySelector('.ecRemoteRail');if(!rail||!rail.getBoundingClientRect().width)return;if(rail.querySelector(':focus-visible')||rail.classList.contains('ecRailDragging')||rail.querySelector('[aria-expanded=true]')){wake();return;}root.classList.add('remoteOverlayIdle');},3000);}
+  function render(){root.style.setProperty('--remote-overlay-opacity',String(prefs.opacity/100));slider.value=String(prefs.opacity);output.value=prefs.opacity+'%';fade.checked=prefs.idleFade;card.hidden=!window.PCRAuth?.signedIn;wake();}
+  function load(){clearTimeout(timer);prefs={opacity:100,idleFade:false};if(window.PCRAuth?.signedIn)try{const saved=JSON.parse(localStorage.getItem(key())||'null');if(saved&&Number.isFinite(saved.opacity))prefs.opacity=Math.max(40,Math.min(100,saved.opacity));prefs.idleFade=saved?.idleFade===true;}catch{}render();}
+  function save(){if(!window.PCRAuth?.signedIn)return;try{localStorage.setItem(key(),JSON.stringify(prefs));}catch{}render();}
+  slider.oninput=()=>{prefs.opacity=Number(slider.value);save();};fade.onchange=()=>{prefs.idleFade=fade.checked;save();};
+  for(const type of ['pointerdown','pointermove','pointerenter','focusin'])document.addEventListener(type,event=>{if(event.target.closest?.('.ecRemoteRail'))wake();},true);
+  document.addEventListener('focusout',event=>{if(event.target.closest?.('.ecRemoteRail'))wake();});document.addEventListener('visibilitychange',wake);window.addEventListener('pcr:page',wake);window.addEventListener('pcr:auth',load);window.addEventListener('pagehide',()=>clearTimeout(timer));load();
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(mountTransparency,0),{once:true});else setTimeout(mountTransparency,0);
+})();
+(()=>{
  function mount(){
   if(window.PCRPhoneWorkspaces)return;
   const presentation=window.PCRWindowPresentation,page=document.getElementById('windowPresentation');
@@ -70,6 +87,8 @@
     const keyboard=!!editable(document.activeElement)&&baseline-height>140;
     root.style.setProperty('--phone-viewport-height',height+'px');
     root.style.setProperty('--phone-viewport-top',Math.max(0,viewport?.offsetTop||0)+'px');
+    const home=document.getElementById('ecHome'),navigation=document.querySelector('.ecNavigation[data-environment="home"]');
+    if(home&&navigation&&!navigation.hidden){const top=home.getBoundingClientRect().top,bottom=navigation.getBoundingClientRect().top;home.style.setProperty('--phone-home-height',Math.max(100,bottom-top-12)+'px');}
     root.classList.toggle('phoneKeyboardOpen',keyboard);
     if(keyboard&&document.activeElement?.id!=='typeText')document.activeElement?.scrollIntoView?.({block:'nearest',inline:'nearest'});
   }
@@ -77,6 +96,9 @@
   viewport?.addEventListener('resize',schedule);viewport?.addEventListener('scroll',schedule);
   window.addEventListener('resize',schedule);document.addEventListener('focusin',schedule);document.addEventListener('focusout',schedule);fit();
   function mount(){
+    const home=document.getElementById('ecHome'),footer=home?.querySelector('.ecHomeFoot');
+    if(home&&footer&&!home.querySelector('.phoneHomeContent')){const content=document.createElement('div');content.className='phoneHomeContent';while(home.firstElementChild&&home.firstElementChild!==footer)content.append(home.firstElementChild);home.prepend(content);}
+    const navigation=document.querySelector('.ecNavigation');if(navigation&&window.ResizeObserver)new ResizeObserver(schedule).observe(navigation);window.addEventListener('pcr:page',schedule);schedule();
     const files=document.getElementById('filesDialog'),commands=files?.querySelector('.explorerCommands'),sidebar=files?.querySelector('.explorerSidebar');
     if(!commands||!sidebar||commands.querySelector('.phoneFoldersToggle'))return;
     sidebar.id='phoneExplorerFolders';const toggle=document.createElement('button');toggle.type='button';toggle.className='phoneFoldersToggle';

@@ -20,3 +20,19 @@ test('cut clipboard survives navigation, sends original names to the destination
 test('copy is unavailable to guests and signing out clears an owner clipboard',async t=>{
  const {w,fm,controls}=fixture(t);await fm.refresh();fm.select(['report.txt']);controls.copy();assert.equal(controls.clipboard.count,1);w.PCRAuth={signedIn:false,role:'guest'};w.dispatchEvent(new w.Event('pcr:auth'));assert.equal(controls.clipboard,null);controls.copy();assert.equal(controls.clipboard,null);
 });
+
+test('Send to phone lists Android devices, captures the chosen file names and queues only to that phone',async t=>{
+ const f=fixture(t);await f.fm.refresh();f.fm.select(['report.txt']);const baseFetch=f.w.fetch;let delivery;
+ f.w.fetch=async(url,options={})=>url==='/api/sync/devices'?{ok:true,json:async()=>({devices:[{id:'phone-test-123456',name:'My phone',platform:'android',online:true},{id:'browser-test-1234',name:'PC browser',platform:'browser',online:true}]})}:url==='/api/phone/files'?(delivery=JSON.parse(options.body),{ok:true,json:async()=>({count:1,receiving:false})}):baseFetch(url,options);
+ await f.controls.openPhoneSend();const dialog=f.d.getElementById('phoneSendDialog'),select=dialog.querySelector('select');assert.equal(dialog.open,true);assert.equal(select.options.length,2);assert.equal(select.value,'phone-test-123456');f.fm.select([]);dialog.querySelector('[data-phone-send]').click();await tick();
+ assert.deepEqual(delivery.names,['report.txt']);assert.equal(delivery.target,'phone-test-123456');assert.match(delivery.group,/^[a-f0-9-]{36}$/);assert.match(dialog.textContent,/1 file queued for My phone/);assert.equal(dialog.querySelector('[data-phone-done]').hidden,false);assert.match(dialog.textContent,/save it automatically/);assert.equal(f.w.localStorage.getItem('pcr_send_phone:http://pc.test:owner'),'phone-test-123456');
+});
+
+test('multiple phones require a specific choice and guest accounts cannot open the sending dialog',async t=>{
+ const f=fixture(t);await f.fm.refresh();f.fm.select(['report.txt']);f.w.fetch=async()=>({ok:true,json:async()=>({devices:[{id:'phone-test-111111',name:'First',platform:'android'},{id:'phone-test-222222',name:'Second',platform:'android'}]})});await f.controls.openPhoneSend();const dialog=f.d.getElementById('phoneSendDialog');assert.equal(dialog.querySelector('select').value,'');assert.equal(dialog.querySelector('[data-phone-send]').disabled,true);assert.ok(![...dialog.querySelector('select').options].some(option=>option.value==='*'));
+ f.w.PCRAuth={signedIn:false,role:'guest'};f.w.dispatchEvent(new f.w.Event('pcr:auth'));assert.equal(dialog.open,false);await f.controls.openPhoneSend();assert.equal(dialog.open,false);assert.equal(f.d.querySelector('.explorerSendPhone').hidden,true);
+});
+
+test('Send to phone cancels pending discovery on sign-out and ignores its late response',async t=>{
+ const f=fixture(t);await f.fm.refresh();f.fm.select(['report.txt']);let release,signal;f.w.fetch=async(url,options)=>{signal=options.signal;return new Promise(resolve=>release=()=>resolve({ok:true,json:async()=>({devices:[{id:'phone-test-111111',name:'Private phone',platform:'android'}]})}));};const opened=f.controls.openPhoneSend();await tick();f.w.PCRAuth={signedIn:false};f.w.dispatchEvent(new f.w.Event('pcr:auth'));assert.equal(signal.aborted,true);release();await opened;assert.equal(f.d.getElementById('phoneSendDialog').open,false);assert.ok(!f.d.getElementById('phoneSendDialog').textContent.includes('Private phone'));
+});

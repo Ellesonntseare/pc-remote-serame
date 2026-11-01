@@ -24,6 +24,10 @@ PC-to-phone file deliveries also start automatically while the connected Android
 
 Only explicitly sent deliveries are collected automatically; browsing the PC's files does not download them all. Existing file permissions, original-name checks, duplicate handling, pause/resume and notification actions remain in use. The host inbox is acknowledged only after Android has saved the file. Browser clients retain a **Save to this device** link. Text and links remain available in Files or Connected devices.
 
+Uploads now open a progress screen with the filename, percentage, Pause/Resume and Cancel. **Saved on your PC** appears after the host confirms completion. Continuing in the background leaves native transfers running; browser uploads still need their browser tab to remain open. The existing Files progress badges remain available.
+
+You can also select files inside the PC web interface's Files view and choose **Send to phone** from the file commands or right-click menu. Choose the receiving phone and send. The app remembers your choice; a queued status means delivery is waiting for the connected phone to save it, not that saving is already complete. Windows Explorer's **Send to → Elleson Connect** and the tray's **Send to my phone…** use the same automatic receiving workflow, with a phone selector and a Refresh button. A folder should be sent as a ZIP.
+
 The tray's **PC folders and network shares** control adds locations without relocating their contents. Windows must already be able to open a network share; its normal Windows credentials and availability apply. Removing a location from Elleson Connect keeps its files.
 
 Nearby network discovery combines advertised Elleson Connect, SMB, web, printer and media services with Windows' recently seen network neighbours. A discovered device does not automatically expose all its data. Devices without Elleson Connect participate through supported services, such as a Windows-accessible shared folder. Browser access can provide app functionality without installing the APK, subject to browser capabilities. Network isolation and sleeping devices can limit discovery.

@@ -2,9 +2,40 @@
 
 .presentationStage video{display:block;width:100%;height:100%;object-fit:contain}.oneAppInteractive video{touch-action:none}
 
+/* Uploads use the dialog top layer so every app page stays underneath. */
+dialog.uploadProgressScreen{position:fixed!important;inset:var(--phone-viewport-top,0px) 0 auto!important;margin:0!important;width:100%!important;max-width:none!important;height:var(--phone-viewport-height,100dvh)!important;max-height:none!important;box-sizing:border-box;border:0!important;border-radius:0!important;padding:max(20px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left));background:radial-gradient(ellipse at 50% 30%,#472b1f 0, #1b1916 48%,#10100f 100%)!important;color:#f5eadb!important;overflow:auto;overscroll-behavior:contain;z-index:2147483647;font-family:system-ui,sans-serif}
+dialog.uploadProgressScreen[open]{display:flex!important;align-items:center;justify-content:center;opacity:1!important;animation:none!important;transform:none!important}
+.uploadProgressScreen::backdrop{background:#10100f}
+.uploadProgressCard{width:min(100%,430px);min-width:0;max-height:100%;margin:auto;display:flex;flex-direction:column;align-items:stretch;gap:14px;text-align:center}
+.uploadProgressEyebrow{font-size:10px;letter-spacing:3px;color:#c4ac90;font-weight:700}
+.uploadProgressRing{position:relative;align-self:center;width:150px;height:150px;margin:12px 0;color:#ffc38a;flex-shrink:0}
+.uploadProgressRing svg{width:100%;height:100%;overflow:visible;transform:rotate(-90deg)}
+.uploadProgressRing circle{fill:none;stroke-width:5}.uploadRingTrack{stroke:#66513d55}.uploadRingFill{stroke:#f59b47;stroke-linecap:round;stroke-dasharray:calc(var(--upload-progress,0)*3.267) 326.73;transition:stroke-dasharray .2s ease}
+.uploadProgressRing strong{position:absolute;inset:0;display:grid;place-items:center;font-size:30px;font-weight:600;font-variant-numeric:tabular-nums}
+.uploadProgressScreen[data-state=preparing] .uploadRingFill{stroke-dasharray:80 326.73;transform-origin:60px 60px;animation:uploadRingSpin 1.2s linear infinite}
+.uploadProgressScreen[data-state=complete] .uploadProgressRing{color:#a9e9bc}.uploadProgressScreen[data-state=complete] .uploadRingFill{stroke:#89d5a0}
+.uploadProgressScreen h2{margin:0;color:inherit;font-size:clamp(23px,6vw,30px);line-height:1.2;letter-spacing:-.6px}
+.uploadProgressScreen p{margin:0;overflow-wrap:anywhere;line-height:1.5}.uploadProgressScreen [data-upload-name]{font-size:16px;font-weight:600;color:#f3d4b0;max-height:4.5em;overflow:auto}
+.uploadProgressScreen #uploadProgressDetail{font-size:14px;color:#d2c2ae}.uploadProgressScreen .uploadProgressHint{font-size:13px;color:#ac9b87}
+.uploadProgressScreen progress{width:100%;height:7px;accent-color:#f59b47;border:0;border-radius:8px;overflow:hidden;background:#45392c}.uploadProgressScreen progress::-webkit-progress-bar{background:#45392c}.uploadProgressScreen progress::-webkit-progress-value{background:#f59b47;border-radius:8px}
+.uploadProgressActions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:10px}.uploadProgressScreen button{min-height:48px;border:1px solid #83603d;border-radius:14px;background:#32261d;color:#f5dfc4;font:600 14px system-ui;padding:12px 18px;cursor:pointer;max-width:100%;overflow-wrap:anywhere}.uploadProgressActions button{flex:1 1 120px}.uploadProgressScreen [data-upload-done]{background:#ef994d;color:#25190d;border-color:#ffc38a}.uploadProgressScreen .uploadProgressBackground{border-color:transparent;background:transparent;color:#c9b69d;font-weight:400}.uploadProgressScreen button:disabled{opacity:.45;cursor:default}.uploadProgressScreen button:focus-visible{outline:2px solid #ffc38a;outline-offset:3px}.uploadProgressScreen [hidden]{display:none!important}
+@keyframes uploadRingSpin{to{transform:rotate(360deg)}}
+@media(max-height:480px){.uploadProgressCard{gap:8px}.uploadProgressRing{width:72px;height:72px;margin:0}.uploadProgressRing strong{font-size:20px}.uploadProgressScreen h2{font-size:22px}.uploadProgressScreen .uploadProgressHint{display:none}.uploadProgressActions{margin-top:0}.uploadProgressScreen button{padding:9px 14px;min-height:44px}.uploadProgressScreen [data-upload-name]{max-height:3em}}
+@media(prefers-reduced-motion:reduce){.uploadProgressScreen .uploadRingFill{animation:none!important;transition:none}}
+
+dialog.phoneSendDialog{width:min(520px,calc(100% - 24px));max-width:calc(100% - 24px);max-height:calc(var(--phone-viewport-height,100dvh) - 24px);box-sizing:border-box;padding:22px;border:1px solid #d7dfe8;border-radius:18px;background:#fcfdff;color:#222b35;overflow:auto;font:14px/1.5 system-ui;box-shadow:0 18px 80px #0005}
+.phoneSendDialog::backdrop{background:#111a2580;backdrop-filter:blur(5px)}.phoneSendDialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}.phoneSendDialog h2{font-size:23px;line-height:1.2;margin:0}.phoneSendDialog p{color:#526171;overflow-wrap:anywhere}.phoneSendDialog ul{padding:10px 10px 10px 28px;max-height:160px;overflow:auto;background:#eef3f8;border-radius:10px}.phoneSendDialog li{overflow-wrap:anywhere;padding:3px 0}.phoneSendDialog label{display:grid;gap:7px;font-weight:600;margin:14px 0 8px}.phoneSendDialog select{width:100%;min-width:0;min-height:48px;padding:10px;border:1px solid #b9c8d7;border-radius:10px;background:#fff;color:#222b35;font:16px system-ui;box-sizing:border-box}.phoneSendDialog button{min-height:44px;padding:9px 14px;border:1px solid #c4d0dd;border-radius:10px;background:#eef3f8;color:#24364b;font:600 14px system-ui;cursor:pointer;max-width:100%}.phoneSendDialog button:disabled{opacity:.5;cursor:default}.phoneSendDialog [data-phone-close]{font-size:22px;min-width:44px;padding:2px}.phoneSendDialog footer{display:flex;justify-content:flex-end;margin-top:16px}.phoneSendDialog footer button{background:#dc7e32;color:#fff;border-color:#c96e29;min-width:150px}.phoneSendDialog progress{width:100%;accent-color:#df8a40;margin-top:16px}.phoneSendDialog [hidden]{display:none!important}.phoneSendDialog [data-phone-send-status]{min-height:3em}.phoneSendDialog :focus-visible{outline:2px solid #d78a47;outline-offset:3px}
+.ecFlow #filesDialog.explorerFiles .explorerSendPhone{width:auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12px;white-space:nowrap;padding:8px 10px}.ecFlow #filesDialog.explorerFiles .explorerSendPhone[hidden]{display:none!important}
+
 
 /* Compact artwork, comfortable hit areas, and one visible viewport per page. */
 .phoneFoldersToggle{display:none!important}
+.phoneHomeContent{display:contents}
+.ecFlow .ecRemoteRail{opacity:var(--remote-overlay-opacity,1);transition:opacity .25s ease}
+.ecFlow.remoteOverlayIdle .ecRemoteRail{opacity:max(.2,calc(var(--remote-overlay-opacity,1)*.4))}
+.ecFlow.remoteOverlayIdle .ecRemoteRail:is(:hover,:has(:focus-visible),.ecRailDragging){opacity:var(--remote-overlay-opacity,1)}
+.remoteTransparencySettings>label:first-of-type{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}.remoteTransparencySettings input[type=range]{grid-column:1/-1;width:100%;min-height:44px;accent-color:#ed984c}.remoteTransparencySettings output{font-variant-numeric:tabular-nums;color:#ffd3aa}.remoteTransparencySettings .remoteFadeChoice{display:flex;align-items:center;gap:10px;margin-top:12px;min-height:44px}.remoteTransparencySettings .remoteFadeChoice input{width:20px;height:20px;accent-color:#ed984c}
+@media(prefers-reduced-motion:reduce){.ecFlow .ecRemoteRail{transition:none}}
 @media(max-width:900px) and (any-pointer:coarse){
   html{scroll-padding-bottom:100px}
   .ecFlow .app.missionApp{padding-left:max(14px,env(safe-area-inset-left))!important;padding-right:max(14px,env(safe-area-inset-right))!important}
@@ -14,6 +45,9 @@
   .ecFlow .ecWorkspaceSculpture{min-height:0;padding:24px 20px 18px;border-radius:28px 28px 60px 24px}
   .ecFlow .ecHomeDestinations button{min-width:0;gap:8px;padding:10px 5px;font-size:13px}
   .ecFlow .ecHomeFoot{flex-wrap:wrap}
+  .ecFlow #ecHome{display:flex;flex-direction:column;height:var(--phone-home-height,calc(100dvh - 200px));max-height:var(--phone-home-height,calc(100dvh - 200px));min-height:0;overflow:hidden;animation:none}
+  .ecFlow #ecHome .phoneHomeContent{display:block;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding-bottom:8px;scrollbar-width:thin}
+  .ecFlow #ecHome .ecHomeFoot{flex:none;position:relative;padding-top:10px;min-height:50px;background:var(--ec-carbon)}
   .ecFlow .phoneWorkspaceLaunchers>*{min-width:0;overflow-wrap:anywhere;min-height:48px}
   .ecFlow .ecNavigation button{min-height:48px!important}
   .ecFlow .ecRemoteRail button{width:48px;height:48px;min-width:48px;min-height:48px}

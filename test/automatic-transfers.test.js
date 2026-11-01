@@ -22,6 +22,27 @@ test('Android shares start immediately in the PC transfer folder without a send 
  f.emit('pcr:share-inbox',{count:1});assert.equal(sent().length,2,'the next distinct share also starts automatically');
 });
 
+test('upload screen shows preparation, real progress and confirmation only after the PC completes the file',async t=>{
+ const f=await fixture(t),screen=f.d.getElementById('uploadProgressScreen'),queue=tasks=>f.emit('pcr:transfer-queue',{origin:f.w.location.origin,tasks});
+ queue([{id:'old',direction:'upload',state:'complete',name:'Old file',size:10,received:10}]);assert.equal(screen.open,false,'old completed transfers do not open a loading screen');
+ f.emit('pcr:share-inbox',{count:1});assert.equal(screen.open,true);assert.equal(screen.dataset.state,'preparing');
+ const task={id:'new',direction:'upload',state:'running',name:'Photo + résumé.png',size:200,received:100};queue([task]);assert.equal(screen.querySelector('[data-upload-percent]').textContent,'50%');assert.equal(screen.querySelector('[data-upload-name]').textContent,task.name);
+ queue([{...task,received:200}]);assert.equal(screen.querySelector('[data-upload-percent]').textContent,'99%');assert.match(screen.querySelector('h2').textContent,/Sending/);
+ queue([{...task,state:'complete',received:200}]);assert.equal(screen.dataset.state,'complete');assert.equal(screen.querySelector('progress').value,100);assert.equal(screen.querySelector('h2').textContent,'Saved on your PC');screen.querySelector('[data-upload-done]').click();assert.equal(screen.open,false);queue([{...task,state:'complete',received:200}]);assert.equal(screen.open,false);
+});
+
+test('upload screen controls target only this upload batch and hiding it does not cancel sending',async t=>{
+ const f=await fixture(t),screen=f.d.getElementById('uploadProgressScreen'),queue=tasks=>f.emit('pcr:transfer-queue',{origin:f.w.location.origin,tasks});
+ const task={id:'upload',direction:'upload',state:'running',name:'Photo.png',size:100,received:30},download={...task,id:'download',direction:'download'};queue([task,download]);screen.querySelector('[data-upload-pause]').click();assert.deepEqual(f.messages.at(-1),{type:'transfer-control',id:'upload',command:'pause'});
+ queue([{...task,state:'paused',message:'Connection interrupted.'},download]);assert.match(screen.textContent,/Connection interrupted/);screen.querySelector('[data-upload-pause]').click();assert.equal(f.messages.at(-1).command,'resume');screen.querySelector('[data-upload-cancel]').click();assert.equal(f.messages.at(-1).command,'cancel');
+ const count=f.messages.length;screen.querySelector('[data-upload-background]').click();assert.equal(screen.open,false);queue([task,download]);assert.equal(screen.open,false);assert.equal(f.messages.length,count,'continuing in background does not pause or cancel the service');
+ f.w.PCRAuth={signedIn:false};f.emit('pcr:auth');assert.equal(screen.open,false);
+});
+
+test('incoming downloads alone do not show an upload screen',async t=>{
+ const f=await fixture(t);f.emit('pcr:transfer-queue',{origin:f.w.location.origin,tasks:[{id:'phone',direction:'download',state:'running',name:'Received.png',size:100,received:50}]});assert.equal(f.d.getElementById('uploadProgressScreen').open,false);
+});
+
 test('phone shares wait for connection and bridge failures retain an explicit retry',async t=>{
  const f=await fixture(t,{signedIn:false});f.emit('pcr:share-inbox',{count:1});assert.equal(f.messages.length,0);
  f.w.PCRAuth={signedIn:true,role:'owner'};f.emit('pcr:auth');assert.ok(f.messages.some(row=>row.type==='transfer-ready'));
