@@ -86,7 +86,7 @@ internal static class AppWindows
         catch { return null; } // Closed/protected windows are simply omitted.
     }
 
-    private static void Focus(IntPtr window)
+    internal static void Focus(IntPtr window)
     {
         uint own = GetCurrentThreadId(), foreground = GetWindowThreadProcessId(GetForegroundWindow(), out _), target = GetWindowThreadProcessId(window, out _);
         bool attachedForeground = false, attachedTarget = false;

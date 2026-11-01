@@ -72,6 +72,9 @@ const PWA_ASSETS = new Map([
   ...['workspace-settings','device-links','device-input','typing-controls','home-panels','native-window','window-presentation','touch-trail','explorer-workspace','account-workspace'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/screen-packets.js', ['screen-packets.js', 'text/javascript; charset=utf-8']],
   ['/hold-repeat.js', ['hold-repeat.js', 'text/javascript; charset=utf-8']],
+  ['/fullscreen-gestures.js', ['fullscreen-gestures.js', 'text/javascript; charset=utf-8']],
+  ['/phone-workspaces.js', ['phone-workspaces.js', 'text/javascript; charset=utf-8']],
+  ['/phone-workspaces.css', ['phone-workspaces.css', 'text/css; charset=utf-8']],
   ['/privacy-mode.js', ['privacy-mode.js', 'text/javascript; charset=utf-8']],
   ['/native-video.js',['native-video.js','text/javascript; charset=utf-8']],
   ['/session-admin.js',['session-admin.js','text/javascript; charset=utf-8']],
@@ -777,6 +780,11 @@ function createApp(options={}) {
         if(!requiresHeader(req)||!permits(token,'apps'))return respond(res,403,{error:'App controls were not approved.'});
         try{return respond(res,200,await nativeFeatures.currentApp());}catch{return respond(res,503,{error:'Active app detection is unavailable.'});}
       }
+      if(req.method==='POST'&&pathname==='/api/apps/control'){
+        if(sessions.get(token)?.role!=='owner'||!permits(token,'apps')||!permits(token,'control'))return respond(res,403,{error:'Owner app control is required.'});
+        if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
+        try{const body=await jsonBody(req,16384);return respond(res,200,await nativeFeatures.controlApp(body.id,body));}catch(e){return respond(res,e.status||503,{error:e.message});}
+      }
       if(req.method==='POST'&&pathname==='/api/apps/focus'){
         if(!permits(token,'apps'))return respond(res,403,{error:'App switching was not approved.'});
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
@@ -958,7 +966,7 @@ function createApp(options={}) {
       ws.on('error',()=>{});
       // Protocol ping/pong detects a vanished browser and releases held input.
       let alive=true;
-      ws.on('pong',()=>{alive=true;});
+      ws.on('pong',()=>{alive=true;if(auth(req)===token)displayPrivacy.heartbeat(token);});
       const heartbeat=setInterval(()=>{if(!alive){ws.terminate();return;}alive=false;ws.ping();},15000);heartbeat.unref();
       ws.on('message',(data,binary)=>{
         if(ws.readyState!==WebSocket.OPEN)return;

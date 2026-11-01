@@ -62,6 +62,16 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     prune();if(typeof id!=='string'||!/^[A-Za-z0-9_-]{24}$/.test(id)||!appTokens.has(id)){const error=Error('This window selection expired. Choose the window again.');error.status=400;throw error;}
     const entry=appTokens.get(id);entry.until=now()+6*60*60*1000;const {handle,pid,startTicks}=entry;return {handle,pid,startTicks};
   }
+  async function controlApp(id,input){
+    const fail=()=>{const error=Error('Invalid app input.');error.status=400;throw error;};
+    if(!input||!['tap','right','double','wheel','drag','text','key'].includes(input.action))fail();
+    const point=p=>p&&[p.x,p.y].every(n=>Number.isFinite(n)&&n>=0&&n<=1);let command={action:input.action};
+    if(input.action==='text'){if(typeof input.text!=='string'||input.text.length>2000||input.text.includes('\0'))fail();command.text=input.text;}
+    else if(input.action==='key'){if(![8,9,13,27,37,38,39,40,46].includes(input.key))fail();command.key=input.key;}
+    else if(input.action==='drag'){if(!Array.isArray(input.points)||input.points.length<2||input.points.length>32||!input.points.every(point))fail();command.points=input.points.map(({x,y})=>({x,y}));}
+    else{if(!point(input))fail();Object.assign(command,{x:input.x,y:input.y});if(input.action==='wheel'){if(!Number.isInteger(input.delta)||Math.abs(input.delta)>1200)fail();command.delta=input.delta;}}
+    const selection=presentationApp(id);return request('--app-control',{selection,...command});
+  }
   function openAudio({onMetadata=()=>{},onPcm=()=>{},onError=()=>{},onClose=()=>{}}={}){
     let child,format=null,stopped=false,ended=false,failed=false;
     const timer=setTimeout(()=>fail(Error('PC audio did not start. Check the PC output device.')),10000);timer.unref?.();
@@ -138,6 +148,6 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
   }
   let currentAppPending=null,currentAppValue=null,currentAppAt=0;
   async function currentApp(){if(currentAppValue&&now()-currentAppAt<1500)return currentAppValue;if(currentAppPending)return currentAppPending;currentAppPending=request('--app-current').then(value=>{currentAppValue=value;currentAppAt=now();return value;}).finally(()=>currentAppPending=null);return currentAppPending;}
-  return {openPhoneInput,openSecondScreen,secondScreenProbe:()=>request('--second-screen-probe'),fileLocations:()=>request('--file-locations'),fileThumbnail:file=>request('--file-thumbnail',{path:file}),listApps,currentApp,focusApp,presentationApp,sendMedia,openLink,openAudio,openAudioOutput,audioDevices:()=>request('--audio-devices'),close};
+  return {openPhoneInput,openSecondScreen,secondScreenProbe:()=>request('--second-screen-probe'),fileLocations:()=>request('--file-locations'),fileThumbnail:file=>request('--file-thumbnail',{path:file}),listApps,currentApp,focusApp,presentationApp,controlApp,sendMedia,openLink,openAudio,openAudioOutput,audioDevices:()=>request('--audio-devices'),close};
 }
 module.exports={createNativeFeatures,AudioPacketReader,validFormat};

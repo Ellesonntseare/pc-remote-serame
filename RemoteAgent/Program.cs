@@ -30,6 +30,7 @@ internal static class Program
         if(args.Length==1&&args[0]=="--second-screen"){SecondScreen.Run();return;}
         if(args.Length==1&&args[0]=="--second-screen-probe"){SecondScreen.Probe();return;}
         if(args.Length==1&&args[0]=="--video-frames"){var video=new Thread(VideoFrames.Run);video.SetApartmentState(ApartmentState.MTA);video.Start();video.Join();return;}
+        if(args.Length==1&&args[0]=="--app-control"){WindowControl.Run();return;}
         if(args.Length==1&&args[0]=="--privacy-display"){PrivacyDisplay.Run();return;}
         if(args.Length==1&&args[0]=="--open-link")
         {

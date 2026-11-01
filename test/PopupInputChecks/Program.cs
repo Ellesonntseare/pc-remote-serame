@@ -7,6 +7,8 @@ using System.Windows.Forms;
 internal static class Checks
 {
     [DllImport("user32.dll")] static extern bool GetCursorPos(out Point point);
+    [StructLayout(LayoutKind.Sequential)] struct Rect{public int Left,Top,Right,Bottom;}
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr w,int attr,out Rect rect,int size);
     [STAThread] static void Main(string[] args)
     {
         if(args.Length!=1)throw new ArgumentException("Pass the RemoteAgent.exe path. This check opens disposable test windows.");
@@ -33,7 +35,18 @@ internal static class Checks
         }
         main.Shown+=async(_,_)=>{
             try{
+                await Task.Delay(2000);
                 await Check(main,button,"Main window");
+                int appClicks=0;button.Click+=(_,_)=>appClicks++;
+                var target=button.PointToScreen(new Point(button.Width/2,button.Height/2));
+                using(var own=Process.GetCurrentProcess())using(var control=new Process{StartInfo=new ProcessStartInfo(args[0],"--app-control"){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true}}){
+                    control.Start();var selection=new{handle=main.Handle.ToInt64().ToString("x"),pid=own.Id,startTicks=own.StartTime.ToUniversalTime().Ticks.ToString()};
+                    // DWM excludes the invisible resize border from window capture.
+                    DwmGetWindowAttribute(main.Handle,9,out var r,16);
+                    await control.StandardInput.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new{selection,action="tap",x=(target.X-r.Left)/(double)(r.Right-r.Left-1),y=(target.Y-r.Top)/(double)(r.Bottom-r.Top-1)}));control.StandardInput.Close();
+                    string result=await control.StandardOutput.ReadToEndAsync();await control.WaitForExitAsync();await Task.Delay(150);
+                    if(!result.Contains("\"ok\":true")||appClicks!=1)throw new Exception("Selected-app tap failed: "+result);Console.WriteLine("Selected app: exact process identity, window-relative coordinates and button click PASS");
+                }
                 using var popup=new Form{Text="Modal popup test",StartPosition=FormStartPosition.Manual,Bounds=new Rectangle(180,180,450,280)};
                 var popupButton=new Button{Text="Popup target",Bounds=new Rectangle(90,70,160,60)};popup.Controls.Add(popupButton);
                 popup.Shown+=async(_,_)=>{try{await Check(popup,popupButton,"Popup over main window");using var nested=new Form{Text="Nested popup test",StartPosition=FormStartPosition.Manual,Bounds=new Rectangle(220,220,380,230)};var nestedButton=new Button{Text="Nested target",Bounds=new Rectangle(70,60,160,60)};nested.Controls.Add(nestedButton);nested.Shown+=async(_,_)=>{try{await Check(nested,nestedButton,"Popup over another popup");}catch(Exception ex){failure=ex;}finally{nested.Close();}};nested.ShowDialog(popup);}catch(Exception ex){failure=ex;}finally{popup.Close();}};

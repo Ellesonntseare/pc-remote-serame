@@ -72,3 +72,10 @@ test('malformed or premature PCM terminates its capture instead of reaching play
 test('service shutdown stops all captures and rejects new work',async()=>{
   const f=fixture();let closed=0;f.service.openAudio({onClose:()=>closed++});f.service.openAudio({onClose:()=>closed++});f.service.close();for(const call of f.calls){assert.equal(call.child.stdin.writableEnded,true);call.child.emit('close',0);}assert.equal(closed,2);await assert.rejects(f.service.listApps(),/stopping/);
 });
+
+test('selected-app input validates actions before starting a helper and sends the exact window identity',async()=>{
+ const f=fixture(),listing=f.service.listApps();f.calls[0].child.stdout.end(JSON.stringify({ok:true,apps:[{handle:'123abc',pid:42,startTicks:'638750000000000000',title:'Test app',processName:'Test'}]}));f.calls[0].child.emit('close',0);const id=(await listing).apps[0].id;
+ for(const bad of [{action:'tap',x:-1,y:0},{action:'text',text:'x'.repeat(2001)},{action:'key',key:91},{action:'drag',points:[]},{action:'shutdown'}])await assert.rejects(f.service.controlApp(id,bad),/Invalid/);
+ assert.equal(f.calls.length,1);await assert.rejects(f.service.controlApp('123abc',{action:'tap',x:.5,y:.5}),/expired/);
+ const pending=f.service.controlApp(id,{action:'tap',x:.25,y:.75,handle:'malicious'}),call=f.calls[1];assert.deepEqual(call.args,['--app-control']);const chunks=[];for await(const chunk of call.child.stdin)chunks.push(chunk);assert.deepEqual(JSON.parse(Buffer.concat(chunks)),{selection:{handle:'123abc',pid:42,startTicks:'638750000000000000'},action:'tap',x:.25,y:.75});call.child.stdout.end('{"ok":true}');call.child.emit('close',0);assert.equal((await pending).ok,true);f.service.close();
+});

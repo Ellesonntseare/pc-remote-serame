@@ -41,6 +41,14 @@ internal static class PrivacyDisplay
             // Explicit show also handles hosts launched with a hidden startup window.
             probe=new Probe(bounds);probe.Show();ShowWindow(probe.Handle,4);probe.Refresh();DwmFlush();
             captureSignal=new Mutex(false,CaptureSignal);
+            // Warm the compositor capture while the desktop is still visible.
+            // Starting WGC after an opaque cover is shown can leave the underlying
+            // windows occlusion-throttled before the first captured frame.
+            using var after=new Bitmap(bounds.Width,bounds.Height,PixelFormat.Format32bppArgb);
+            using var capture=new DesktopCapture(bounds);
+            bool ready=false;
+            for(int attempt=0;attempt<60&&!ready;attempt++){Application.DoEvents();ready=capture.Capture(after,true,out _);if(!ready)Thread.Sleep(25);}
+            if(!ready)throw new InvalidOperationException("Windows capture did not become ready. Displays restored.");
             foreach(var display in Screen.AllScreens)
             {
                 var cover=new Cover(display.Bounds);covers.Add(cover);cover.Show();ShowWindow(cover.Handle,4);
@@ -55,7 +63,7 @@ internal static class PrivacyDisplay
             {
                 try
                 {
-                    await Task.Delay(250);if(handles.Contains(WindowFromPoint(new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2))))throw new InvalidOperationException("The privacy cover would block PC input. Displays restored.");using var after=new Bitmap(bounds.Width,bounds.Height,PixelFormat.Format32bppArgb);using var capture=new DesktopCapture(bounds);
+                    await Task.Delay(250);if(handles.Contains(WindowFromPoint(new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2))))throw new InvalidOperationException("The privacy cover would block PC input. Displays restored.");
                     bool Verified(Color expected)
                     {
                         int matched=0;
@@ -64,12 +72,12 @@ internal static class PrivacyDisplay
                     }
                     async Task Verify(Color expected)
                     {
-                        for(int attempt=0;attempt<40;attempt++){if(capture.Capture(after,true,out _)&&Verified(expected))return;await Task.Delay(50);}
+                        for(int attempt=0;attempt<100;attempt++){if(capture.Capture(after,true,out _)&&Verified(expected))return;await Task.Delay(50);}
                         throw new InvalidOperationException("Windows could not capture the desktop behind the privacy cover. Displays restored.");
                     }
                     await Verify(Color.Magenta);
                     // A second color proves frames are live, rather than a stale pre-cover image.
-                    first.Invoke((Action)(()=>{probe.BackColor=Color.Lime;probe.Refresh();}));
+                    first.Invoke((Action)(()=>{probe.BackColor=Color.Lime;probe.Invalidate();probe.Refresh();DwmFlush();}));
                     await Verify(Color.Lime);
                     first.Invoke((Action)(()=>{probe.Close();probe=null;}));
                     Console.WriteLine("{\"ok\":true,\"active\":true}");Console.Out.Flush();

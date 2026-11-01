@@ -27,12 +27,13 @@ test('acknowledged screen taps return Windows field detection through HTTP and t
 });
 
 test('privacy requires owner authentication, a request header and an open remote screen, then stops on sign-out',async t=>{
-  let active=false,revoked=0,closed=0;const privacy={status:()=>({ok:true,available:true,active,owned:active}),start:async()=>{active=true;return privacy.status();},heartbeat:()=>true,stop:()=>{active=false;},revoke:()=>{active=false;revoked++;},close:()=>{active=false;closed++;}};
+  let active=false,revoked=0,closed=0,renewed=0;const privacy={status:()=>({ok:true,available:true,active,owned:active}),start:async()=>{active=true;return privacy.status();},heartbeat:()=>{renewed++;return true;},stop:()=>{active=false;},revoke:()=>{active=false;revoked++;},close:()=>{active=false;closed++;}};
   const f=await fixture({displayPrivacy:privacy});t.after(()=>f.close());
   assert.equal((await request(f.port,'/api/privacy')).status,401);
   assert.equal((await request(f.port,'/api/privacy','GET',undefined,{Cookie:f.cookie,'X-PCR':'0'})).status,403);
   assert.equal((await request(f.port,'/api/privacy','POST',{action:'start'},{Cookie:f.cookie})).status,409);
   await f.openScreen();assert.equal((await request(f.port,'/api/privacy','POST',{action:'start'},{Cookie:f.cookie})).body.active,true);
+  const {ws}=await f.connect();ws.pong();await until(()=>renewed>0);
   assert.equal((await request(f.port,'/api/privacy','POST',{action:'unexpected'},{Cookie:f.cookie})).status,400);
   await request(f.port,'/api/unpair','POST',{}, {Cookie:f.cookie});assert.equal(active,false);assert.equal(revoked,1);f.app.stop();assert.ok(closed>0);
 });
@@ -79,6 +80,13 @@ async function fixture(options={}){
     packets(target=screen){const data=Buffer.concat(target.chunks),packets=[];let offset=0;while(offset+5<=data.length){const size=data.readUInt32BE(offset+1);if(offset+5+size>data.length)break;const type=data[offset],payload=data.subarray(offset+5,offset+5+size);packets.push({type,data:type===5?{keyframe:payload[0]===1,base:payload.readUInt32BE(1)}:JSON.parse(payload.toString())});offset+=5+size;}return packets;}
   };
 }
+
+test('selected-app input requires an authenticated owner and the request header',async t=>{
+ const calls=[],f=await fixture({nativeFeatures:{controlApp:async(id,body)=>{calls.push({id,body});return{ok:true};},close(){}}});t.after(()=>f.close());const body={id:'a'.repeat(24),action:'tap',x:.5,y:.5};
+ assert.equal((await request(f.port,'/api/apps/control','POST',body)).status,401);
+ assert.equal((await request(f.port,'/api/apps/control','POST',body,{Cookie:f.cookie,'X-PCR':'0'})).status,403);assert.equal(calls.length,0);
+ assert.equal((await request(f.port,'/api/apps/control','POST',body,{Cookie:f.cookie})).status,200);assert.equal(calls.length,1);assert.equal(calls[0].id,body.id);
+});
 
 test('input stream requires authenticated same-origin host and an active screen',async t=>{
   const f=await fixture();t.after(()=>f.close());

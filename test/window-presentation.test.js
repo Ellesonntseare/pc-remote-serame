@@ -19,3 +19,11 @@ test('window search and quality changes retain the selected app; changing window
 test('closing the presentation cancels a pending app listing and ignores its late response',async t=>{
   const f=await fixture(t);f.w.PCRWindowPresentation.open();f.page.close();assert.equal(f.requests[0].options.signal.aborted,true);f.requests[0].reply([app]);await settle();assert.equal(f.starts.length,0);assert.equal(f.page.querySelectorAll('.presentationWindow').length,0);
 });
+
+test('Control one app sends text and keys only to the chosen window and stops input when paused',async t=>{
+ const f=await fixture(t),w=f.w,commands=[],listing=w.fetch;w.PCRAuth={signedIn:true,role:'owner',workspaceId:'test'};
+ w.fetch=(url,options)=>url==='/api/apps/control'?(commands.push(JSON.parse(options.body)),Promise.resolve({ok:true,json:async()=>({ok:true})})):listing(url,options);
+ w.eval(fs.readFileSync(path.join(__dirname,'../public/phone-workspaces.js'),'utf8'));await settle();w.PCRWindowPresentation.openControl();f.requests[0].reply([app]);await settle();f.page.querySelector('.presentationWindow').click();await settle();const controls=f.page.querySelector('.oneAppControls');assert.equal(controls.hidden,false);
+ const input=controls.querySelector('input');input.value='A message';controls.querySelector('form').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();assert.deepEqual(commands[0],{id:app.id,action:'text',text:'A message'});assert.equal(input.value,'');controls.querySelector('[data-keys] button').click();await settle();assert.equal(commands[1].key,27);
+ f.page.querySelector('[data-pause]').click();controls.querySelector('[data-keys] button').click();await settle();assert.equal(commands.length,2);f.page.close();
+});

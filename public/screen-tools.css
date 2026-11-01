@@ -31,3 +31,5 @@ body.screenCleanActive>.msg{display:none!important}
 .fullscreenScroll{position:absolute;right:max(2px,env(safe-area-inset-right));top:calc(50% - 80px);width:40px;height:160px;display:grid;place-items:center;pointer-events:auto;touch-action:none;border-radius:22px;background:linear-gradient(90deg,transparent,#03141b50);outline-offset:-3px}
 .fullscreenScroll>span{display:block;width:4px;height:78px;border-radius:6px;background:linear-gradient(transparent,#a6e6e2a8,transparent);box-shadow:0 0 9px #3bd4cb25;pointer-events:none}
 .fullscreenScroll.active{background:linear-gradient(90deg,transparent,#0c494e88)}.fullscreenScroll.active>span{background:linear-gradient(transparent,#83f1e9,transparent)}
+
+/* One-finger scrolling remains available on the right in fullscreen. */
