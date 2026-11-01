@@ -24,7 +24,7 @@ internal sealed class WindowCapture : IDisposable
     private int width, height;
     public Size Size => new(width, height);
 
-    public WindowCapture(IntPtr window, bool monitor = false)
+    public WindowCapture(IntPtr window, bool monitor = false, bool captureCursor = true)
     {
         try
         {
@@ -40,7 +40,9 @@ internal sealed class WindowCapture : IDisposable
             try { runtimeDevice = MarshalInterface<IDirect3DDevice>.FromAbi(pointer); }
             finally { Marshal.Release(pointer); }
             pool = Direct3D11CaptureFramePool.CreateFreeThreaded(runtimeDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, item.Size);
-            session = pool.CreateCaptureSession(item);session.StartCapture();
+            session = pool.CreateCaptureSession(item);
+            if (OperatingSystem.IsWindowsVersionAtLeast(10,0,19041)) session.IsCursorCaptureEnabled = captureCursor;
+            session.StartCapture();
         }
         catch { Dispose();throw; }
     }

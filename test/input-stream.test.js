@@ -37,6 +37,13 @@ test('privacy requires owner authentication, a request header and an open remote
   assert.equal((await request(f.port,'/api/privacy','POST',{action:'unexpected'},{Cookie:f.cookie})).status,400);
   await request(f.port,'/api/unpair','POST',{}, {Cookie:f.cookie});assert.equal(active,false);assert.equal(revoked,1);f.app.stop();assert.ok(closed>0);
 });
+test('privacy API delivers native failure details to the owner for the error popup',async t=>{
+  const diagnostic={stage:'live-update',matched:0,required:8,samples:9,restarts:1,displayRestored:true};
+  const privacy={start:async()=>{throw Object.assign(Error('Windows could not verify live updates'),{diagnostic});},revoke(){},close(){}};
+  const f=await fixture({displayPrivacy:privacy});t.after(()=>f.close());await f.openScreen();
+  const result=await request(f.port,'/api/privacy','POST',{action:'start'},{Cookie:f.cookie});
+  assert.equal(result.status,503);assert.deepEqual(result.body.diagnostic,diagnostic);assert.match(result.body.error,/live updates/);
+});
 async function fixture(options={}){
   const written=[],clients=new Set(),timers=new Set(),screens=[];let screen,activeAgent;
   const app=createApp({port:0,disableActions:true,...options,agentFactory:()=>{

@@ -56,3 +56,6 @@ test/PhoneDeskChecks/obj/
 
 test/PopupInputChecks/bin/
 test/PopupInputChecks/obj/
+.privacy-last-attempt.json
+test/PrivacyCaptureChecks/bin/
+test/PrivacyCaptureChecks/obj/

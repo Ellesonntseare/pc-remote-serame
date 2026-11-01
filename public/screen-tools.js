@@ -23,7 +23,7 @@
   const cleanRail=cleanControls.querySelector('.fullscreenScroll');let cleanPointer=null;
   function fitScreen(){typingPoint=null;setZoom(1);view.scrollLeft=view.scrollTop=0;}
   cleanControls.querySelector('[data-fit]').onclick=fitScreen;cleanControls.querySelector('[data-controls]').onclick=restoreControls;
-  cleanRail.addEventListener('pointerdown',event=>{if(!rsCanPoint()||event.button>0)return;event.preventDefault();event.stopPropagation();cleanRail.setPointerCapture(event.pointerId);cleanPointer={id:event.pointerId,y:event.clientY,remainder:0};cleanRail.classList.add('active');});
+  cleanRail.addEventListener('pointerdown',event=>{if(event.pointerType==='touch'||!rsCanPoint()||event.button>0)return;event.preventDefault();event.stopPropagation();cleanRail.setPointerCapture?.(event.pointerId);cleanPointer={id:event.pointerId,y:event.clientY,remainder:0};cleanRail.classList.add('active');});
   cleanRail.addEventListener('pointermove',event=>{if(cleanPointer?.id!==event.pointerId)return;event.preventDefault();event.stopPropagation();if(!rsCanPoint())return;cleanPointer.remainder+=(event.clientY-cleanPointer.y)*4;cleanPointer.y=event.clientY;const delta=Math.trunc(cleanPointer.remainder);cleanPointer.remainder-=delta;if(delta)qc('wheel '+delta);});
   for(const name of ['pointerup','pointercancel','lostpointercapture'])cleanRail.addEventListener(name,()=>{cleanPointer=null;cleanRail.classList.remove('active');});
   cleanRail.addEventListener('keydown',event=>{const delta={ArrowUp:120,ArrowDown:-120,PageUp:600,PageDown:-600}[event.key];if(delta&&rsCanPoint()){event.preventDefault();qc('wheel '+delta);}});

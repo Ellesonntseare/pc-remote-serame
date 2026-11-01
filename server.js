@@ -765,7 +765,7 @@ function createApp(options={}) {
           if(body.action!=='start')return respond(res,400,{error:'Invalid privacy action.'});
           if(!Array.from(viewers).some(viewer=>viewer.token===token))return respond(res,409,{error:'Open the remote screen before enabling Privacy mode.'});
           const result=await displayPrivacy.start(token);record(ip,'Privacy mode on',undefined,token);return respond(res,200,result);
-        }catch(error){return respond(res,503,{error:error.message});}
+        }catch(error){return respond(res,503,{error:error.message,...error.diagnostic&&{diagnostic:error.diagnostic}});}
       }
       if(req.method==='GET'&&pathname==='/api/camera/config'){
         if(!requiresHeader(req)||sessions.get(token)?.role==='guest')return respond(res,403,{error:'Sign in as the owner on both devices to share a camera.'});
