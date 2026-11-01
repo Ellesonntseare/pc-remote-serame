@@ -1,0 +1,76 @@
+'use strict';
+(()=>{
+ function mount(){
+  const fm=window.PCRFileManager,dialog=document.getElementById('filesDialog'),manager=dialog?.querySelector('.fileManager');if(!fm||!manager)return;
+  const q=s=>manager.querySelector(s),commands=q('.explorerCommands'),address=q('.explorerAddress'),crumbs=q('.explorerCrumbs'),content=q('.explorerContent');
+  const paths={cut:'m8 8 11 11M8 16 19 5M5 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',copy:'M8 4H4v14h12v-4M8 2h12v12H8Z',paste:'M8 5H5v16h14V5h-3M9 2h6v5H9Z',rename:'M4 7h16v12H4ZM12 3v18M9 3h6M9 21h6',folder:'M3 5h7l2 3h9v12H3Z',download:'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5',more:'M5 12h.1M12 12h.1M19 12h.1',properties:'M12 10v8M12 6h.1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',back:'m14 5-7 7 7 7',forward:'m10 5 7 7-7 7',up:'m5 11 7-7 7 7M12 4v16',refresh:'M20 8a8 8 0 1 0 0 8M20 3v5h-5',pin:'m9 3 6 0-1 5 4 4H6l4-4ZM12 12v9'};
+  const svg=key=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+paths[key]+'"/></svg>';
+  function button(label,key,fn){const b=document.createElement('button');b.type='button';b.className='explorerIconCommand';b.innerHTML=svg(key);b.title=label;b.setAttribute('aria-label',label);b.onclick=fn;return b;}
+  for(const [selector,key,label]of [['[data-explorer-back]','back','Back (Alt+Left)'],['[data-explorer-forward]','forward','Forward (Alt+Right)'],['[data-up]','up','Up one folder (Alt+Up)'],['[data-refresh]','refresh','Refresh (F5)']]){const node=q(selector);node.innerHTML=svg(key);node.title=label;}
+  q('[data-new]').innerHTML=svg('folder')+'<span>New</span><small>⌄</small>';
+  let clipboard=null,busy=false;
+  const owner=()=>window.PCRAuth?.signedIn&&window.PCRAuth.role==='owner',virtual=()=>['@home','@this-pc','@network'].includes(fm.path);
+  function take(mode){if(!owner()||!fm.selection.length)return;clipboard={mode,names:[...fm.selection]};fm.notice(clipboard.names.length+' item(s) '+(mode==='cut'?'ready to move. Open the destination and choose Paste.':'copied. Open the destination and choose Paste.'));draw();}
+  async function paste(){if(!owner()||!clipboard||virtual()||busy)return;busy=true;draw();const pending=clipboard,result=await fm.operate({action:pending.mode==='cut'?'move':'copy',names:pending.names,destination:fm.path});if(result&&clipboard===pending&&pending.mode==='cut')clipboard=null;busy=false;draw();}
+  const cut=button('Cut (Ctrl+X)','cut',()=>take('cut')),copy=button('Copy (Ctrl+C)','copy',()=>take('copy')),pasteButton=button('Paste (Ctrl+V)','paste',()=>void paste()),rename=button('Rename (F2)','rename',()=>q('[data-rename]').click());
+  const more=document.createElement('details');more.className='explorerMore';more.innerHTML='<summary aria-label="More file commands" title="More">'+svg('more')+'</summary><div class="explorerMorePanel"></div>';
+  const folders=q('.phoneFoldersToggle');if(folders)crumbs.prepend(folders);
+  const panel=more.firstElementChild.nextElementSibling,sort=q('.explorerSort'),views=q('.explorerViewMenu'),selection=q('.fmSelection'),send=q('.fmSendBar'),download=q('.explorerDownload'),favourite=q('[data-favourite]'),create=q('[data-new]');
+  download.innerHTML=svg('download')+'<span>Download to phone</span>';favourite.innerHTML=svg('pin')+'<span>Pin / unpin folder</span>';
+  const propertyButton=button('Properties','properties',()=>properties());propertyButton.append(document.createTextNode(' Properties'));
+  const detailsButton=button('Show file details','properties',()=>properties());detailsButton.classList.add('explorerDetailsToggle');
+  const addressCommand=button('Enter folder address','folder',()=>{more.open=false;showAddress();});addressCommand.append(document.createTextNode(' Go to folder…'));
+  panel.append(selection,download,send,favourite,propertyButton,addressCommand);commands.replaceChildren(create,cut,copy,pasteButton,rename,sort,views,more,detailsButton);
+  // Keep the actual picker, sort and view handlers when commands move into More.
+  const narrow=matchMedia('(max-width:600px)');function arrange(){if(narrow.matches){panel.prepend(sort,views);}else{commands.insertBefore(sort,more);commands.insertBefore(views,more);}}narrow.addEventListener?.('change',arrange);arrange();
+  function placePopup(node,anchor){const box=anchor.getBoundingClientRect(),v=window.visualViewport,left=v?.offsetLeft||0,top=v?.offsetTop||0,width=v?.width||innerWidth,height=v?.height||innerHeight;node.style.maxHeight=Math.max(80,height-24)+'px';node.style.width=Math.min(260,width-16)+'px';const h=Math.min(node.scrollHeight,height-24);node.style.left=Math.max(left+8,Math.min(left+width-node.offsetWidth-8,box.right-node.offsetWidth))+'px';node.style.top=Math.max(top+8,Math.min(top+height-h-8,box.bottom+4))+'px';}
+  more.addEventListener('toggle',()=>{if(more.open)placePopup(panel,more.firstElementChild);});document.addEventListener('pointerdown',e=>{if(!more.contains(e.target))more.open=false;},{passive:true});
+  // Breadcrumbs remain clickable; Ctrl+L or the path-edit control enters a path.
+  const edit=button('Edit address (Ctrl+L)','folder',showAddress);edit.classList.add('explorerEditAddress');crumbs.append(edit);
+  const form=document.createElement('form');form.className='explorerAddressEntry';form.hidden=true;form.innerHTML='<input aria-label="Folder address" placeholder="Downloads or This PC" autocomplete="off" spellcheck="false"><button type="submit" aria-label="Go to folder">→</button>';crumbs.append(form);const entry=form.firstElementChild,breadcrumb=q('[data-breadcrumb]');
+  function labelPath(){const parts=fm.path.split('/'),root=fm.state.locations.find(l=>l.id===parts[0]);return ['@home','@this-pc','@network'].includes(fm.path)?({'@home':'Home','@this-pc':'This PC','@network':'Network'}[fm.path]):root?[root.label,...parts.slice(1)].join('\\'):['Transfers',...parts.filter(Boolean)].join('\\');}
+  function showAddress(){dialog.classList.add('explorerAddressEditing');form.hidden=false;breadcrumb.hidden=true;edit.hidden=true;entry.value=labelPath();entry.removeAttribute('aria-invalid');entry.focus();entry.select();}
+  function closeAddress(){dialog.classList.remove('explorerAddressEditing');form.hidden=true;breadcrumb.hidden=false;edit.hidden=false;}
+  function resolveAddress(value){
+   const typed=value.trim().replaceAll('\\','/').replace(/\/+$/,'');const text=typed.toLocaleLowerCase();if(['home','this pc','network'].includes(text))return {'home':'@home','this pc':'@this-pc','network':'@network'}[text];
+   const aliases=[{alias:'Transfers',id:''},...fm.state.locations.flatMap(l=>[{alias:l.id,id:l.id},{alias:l.label,id:l.id},...(l.kind==='drive'&&/([a-z]:)/i.test(l.label)?[{alias:l.label.match(/([a-z]:)/i)[1],id:l.id}]:[])])].sort((a,b)=>b.alias.length-a.alias.length);
+   const found=aliases.find(a=>text===a.alias.toLocaleLowerCase()||text.startsWith(a.alias.toLocaleLowerCase()+'/'));if(!found)throw Error('Choose Home, This PC, or a folder shown in the navigation pane.');
+   const parts=typed.slice(found.alias.length).split('/').filter(Boolean);if(parts.some(p=>p==='..'||p==='.'||/[<>:"|?*\x00-\x1f]/.test(p)))throw Error('Use a folder address without parent shortcuts or reserved characters.');return [found.id,...parts].filter(Boolean).join('/');
+  }
+  form.onsubmit=e=>{e.preventDefault();try{fm.go(resolveAddress(entry.value));closeAddress();}catch(error){entry.setAttribute('aria-invalid','true');fm.notice(error.message);}};
+  form.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeAddress();edit.focus();}};
+  crumbs.addEventListener('dblclick',e=>{if(!e.target.closest('button,input'))showAddress();});
+  const details=document.createElement('aside');details.className='explorerProperties';details.hidden=true;details.setAttribute('aria-label','File properties');q('.explorerBody').append(details);
+  function properties(){const items=fm.state.entries.filter(e=>fm.selection.includes(e.name));if(!items.length){fm.notice('Select a file or folder to see its details.');return;}more.open=false;details.replaceChildren();const close=button('Close details','more',()=>details.hidden=true);close.textContent='×';details.append(close);const heading=document.createElement('h3');heading.textContent=items.length===1?items[0].label:items.length+' items';details.append(heading);const fields=items.length===1?[['Type',items[0].directory?'Folder':items[0].label.split('.').at(-1).toUpperCase()+' file'],['Location',labelPath()],...!items[0].directory?[['Size',new Intl.NumberFormat().format(items[0].size||0)+' bytes']]:[],['Date modified',items[0].modified?new Date(items[0].modified).toLocaleString():'—']]:[['Files',String(items.filter(i=>!i.directory).length)],['Folders',String(items.filter(i=>i.directory).length)]];for(const [label,value]of fields){const p=document.createElement('p'),strong=document.createElement('strong');strong.textContent=label;const span=document.createElement('span');span.textContent=value;p.append(strong,span);details.append(p);}details.hidden=false;close.focus();}
+  const context=document.createElement('div');context.className='explorerContextMenu';context.hidden=true;context.setAttribute('role','menu');dialog.append(context);
+  function closeContext(){context.hidden=true;}
+  function contextMenu(event){const row=event.target.closest('.fmFile');if(!row||!dialog.open)return;event.preventDefault();if(!fm.selection.includes(row.dataset.file))fm.select([row.dataset.file]);context.replaceChildren();const items=[['Open',()=>row.querySelector('.fmFileName').click(),false],...fm.state.entries.find(item=>item.name===row.dataset.file)?.directory?[['Open in new tab',()=>fm.addTab(row.dataset.file),false]]:[],['Cut',()=>take('cut'),!owner()],['Copy',()=>take('copy'),!owner()],['Paste',()=>void paste(),!owner()||!clipboard||virtual()],['Rename',()=>q('[data-rename]').click(),!owner()||fm.selection.length!==1],['Move to…',()=>q('[data-move]').click(),!owner()],['Download to phone',()=>download.click(),false],['Properties',properties,false]];
+   for(const [label,fn,disabled]of items){const b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.textContent=label;b.disabled=disabled;b.onclick=()=>{closeContext();fn();};context.append(b);}context.hidden=false;const rect=row.getBoundingClientRect(),anchor={getBoundingClientRect:()=>({right:event.clientX||rect.left+100,bottom:event.clientY||rect.top})};placePopup(context,anchor);context.querySelector('button:not(:disabled)')?.focus();
+  }
+  content.addEventListener('contextmenu',contextMenu);dialog.addEventListener('pointerdown',e=>{if(!context.contains(e.target))closeContext();},{passive:true});
+  context.onkeydown=e=>{const buttons=[...context.querySelectorAll('button:not(:disabled)')],at=buttons.indexOf(document.activeElement);if(e.key==='Escape'){e.preventDefault();closeContext();content.focus();}else if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:(at+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}};
+  dialog.addEventListener('keydown',e=>{
+   const key=e.key.toLowerCase(),ctrl=e.ctrlKey||e.metaKey;if(ctrl&&key==='l'){e.preventDefault();showAddress();return;}
+   if(e.target.closest('input:not([type=checkbox]),textarea,select,[contenteditable=true]'))return;
+   if(ctrl&&['c','x','v','a','l'].includes(key)){e.preventDefault();if(key==='c')take('copy');if(key==='x')take('cut');if(key==='v')void paste();if(key==='a')q('[data-select-all]').click();if(key==='l')showAddress();}
+   else if(e.altKey&&['ArrowLeft','ArrowRight','ArrowUp'].includes(e.key)){e.preventDefault();if(e.key==='ArrowLeft')fm.back();else if(e.key==='ArrowRight')fm.forward();else q('[data-up]').click();}
+   else if(e.key==='F2'){e.preventDefault();if(owner())q('[data-rename]').click();}else if(e.key==='F5'){e.preventDefault();fm.refresh();}
+   else if(ctrl&&e.shiftKey&&key==='n'){e.preventDefault();if(!virtual())create.click();}
+  });
+  content.addEventListener('click',e=>{const row=e.target.closest('.fmFile');if(!row||e.target.closest('button,input,a'))return;if(e.ctrlKey||e.metaKey){const names=new Set(fm.selection);names.has(row.dataset.file)?names.delete(row.dataset.file):names.add(row.dataset.file);fm.select([...names]);}else fm.select([row.dataset.file]);});
+  let anchor=null;
+  content.addEventListener('click',e=>{
+   const row=e.target.closest('.fmFile');if(!row||e.target.closest('input,a'))return;
+   const name=e.target.closest('.fmFileName'),desktop=!matchMedia('(any-pointer:coarse)').matches;
+   if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!(name&&desktop&&e.detail===1))return;
+   e.preventDefault();e.stopImmediatePropagation();const selected=new Set(fm.selection);
+   if(e.shiftKey&&anchor){const rows=[...content.querySelectorAll('.fmFile:not([hidden])')].map(r=>r.dataset.file),a=rows.indexOf(anchor),b=rows.indexOf(row.dataset.file);fm.select(a>=0&&b>=0?rows.slice(Math.min(a,b),Math.max(a,b)+1):[row.dataset.file]);}
+   else if(e.ctrlKey||e.metaKey){selected.has(row.dataset.file)?selected.delete(row.dataset.file):selected.add(row.dataset.file);fm.select([...selected]);anchor=row.dataset.file;}
+   else{fm.select([row.dataset.file]);anchor=row.dataset.file;}
+  },true);
+  function draw(){const selected=fm.selection.length;cut.disabled=copy.disabled=!owner()||!selected;rename.disabled=!owner()||selected!==1;pasteButton.disabled=!owner()||!clipboard||virtual()||busy;create.disabled=virtual();detailsButton.disabled=!selected;for(const row of manager.querySelectorAll('.fmFile'))row.classList.toggle('explorerCut',!!clipboard&&clipboard.mode==='cut'&&clipboard.names.includes(row.dataset.file));const star=q('[data-favourite]');if(star&&!star.querySelector('svg'))star.innerHTML=svg('pin')+'<span>Pin / unpin folder</span>';}
+  window.addEventListener('pcr:files-state',draw);window.addEventListener('pcr:files-render',draw);window.addEventListener('pcr:auth',()=>{clipboard=null;closeContext();closeAddress();details.hidden=true;draw();});dialog.addEventListener('close',()=>{closeContext();closeAddress();more.open=false;details.hidden=true;});window.addEventListener('resize',()=>{closeContext();more.open=false;});
+  window.PCRExplorerControls={resolveAddress,showAddress,copy:()=>take('copy'),cut:()=>take('cut'),paste,get clipboard(){return clipboard?{mode:clipboard.mode,count:clipboard.names.length}:null;}};draw();
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
+})();

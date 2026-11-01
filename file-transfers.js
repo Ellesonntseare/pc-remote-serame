@@ -210,11 +210,36 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
         const found=[];let visited=0,truncated=false;const walk=async(prefix,depth)=>{if(req.destroyed||depth>12||visited>=4000||found.length>=300){truncated=true;return;}const directory=prefix?await safeTarget(prefix):root;for(const entry of await fsp.readdir(directory,{withFileTypes:true})){if(req.destroyed)return;if(++visited>4000||found.length>=300){truncated=true;return;}if(/^\.pcr-/i.test(entry.name)||entry.isSymbolicLink())continue;try{filename(entry.name);}catch{continue;}const name=prefix?prefix+'/'+entry.name:entry.name,stat=await fsp.lstat(target(name));if(stat.isSymbolicLink())continue;if(entry.name.toLocaleLowerCase().includes(query))found.push({name,label:entry.name,directory:stat.isDirectory(),size:stat.size,modified:stat.mtimeMs,added:stat.birthtimeMs>0?stat.birthtimeMs:stat.mtimeMs,preview:stat.isFile()?previewInfo(name):null});if(stat.isDirectory())await walk(name,depth+1);}};await walk(folder,0);respond(res,200,{ok:true,path:folder,entries:found,truncated});return true;
       }
       if(req.method==='POST'&&pathname==='/api/files/operate'){
-        if(!allowLocations)throw problem(403,'Only the PC owner can rename or move files.');
-        const body=await readJson(req,128*1024);if(!['rename','move'].includes(body.action)||!Array.isArray(body.names)||!body.names.length||body.names.length>100)throw problem(400,'Select up to 100 files or folders.');
+        if(!allowLocations)throw problem(403,'Only the PC owner can rename, move or copy files.');
+        const body=await readJson(req,128*1024);if(!['rename','move','copy'].includes(body.action)||!Array.isArray(body.names)||!body.names.length||body.names.length>100)throw problem(400,'Select up to 100 files or folders.');
         const names=[...new Set(body.names.map(relativePath))];if(body.action==='rename'&&names.length!==1)throw problem(400,'Select one item to rename.');
         const destination=body.destination||'';if(destination)relativePath(destination);const destDir=destination?await safeTarget(destination):root;if(!(await fsp.lstat(destDir)).isDirectory())throw problem(400,'Choose a destination folder.');
-        const plans=[];for(const name of names){if(roots.has(name))throw problem(400,'PC locations cannot be renamed or moved.');const source=await safeTarget(name),stat=await fsp.lstat(source);if(stat.isSymbolicLink())throw problem(400,'Folder links cannot be moved.');const label=body.action==='rename'?filename(body.name):name.split('/').at(-1),parent=body.action==='rename'?name.split('/').slice(0,-1).join('/'):destination,next=(parent?parent+'/':'')+label;if(next===name)continue;if(next.startsWith(name+'/'))throw problem(400,'A folder cannot be moved inside itself.');if(names.some(other=>other!==name&&name.startsWith(other+'/')))throw problem(400,'Select the parent folder without its children.');const out=await safeTarget(next);try{await fsp.lstat(out);throw problem(409,'An item named '+label+' already exists. Choose another name or folder.');}catch(error){if(error.code!=='ENOENT')throw error;}plans.push({source,out,next,stat});}
+        const plans=[];
+        for(const name of names){
+          if(roots.has(name))throw problem(400,'PC locations cannot be renamed, moved or copied.');
+          const source=await safeTarget(name),stat=await fsp.lstat(source);if(stat.isSymbolicLink())throw problem(400,'Folder links cannot be moved or copied.');
+          let label=body.action==='rename'?filename(body.name):name.split('/').at(-1);
+          const parent=body.action==='rename'?name.split('/').slice(0,-1).join('/'):destination;
+          let next=(parent?parent+'/':'')+label;
+          if(next===name){
+            if(body.action!=='copy')continue;
+            const extension=stat.isFile()?path.extname(label):'',stem=extension?label.slice(0,-extension.length):label;let found=false;
+            for(let number=1;number<=100;number++){
+              const suffix=' - Copy'+(number>1?' ('+number+')':'');let base=stem.slice(0,255-extension.length-suffix.length);while(base&&!base.isWellFormed())base=base.slice(0,-1);
+              label=filename(base+suffix+extension);next=(parent?parent+'/':'')+label;
+              try{await fsp.lstat(await safeTarget(next));}catch(error){if(error.code!=='ENOENT')throw error;found=true;break;}
+            }
+            if(!found)throw problem(409,'Too many copies already exist. Rename this item first.');
+          }
+          if(next.startsWith(name+'/'))throw problem(400,'A folder cannot be placed inside itself.');
+          if(names.some(other=>other!==name&&name.startsWith(other+'/')))throw problem(400,'Select the parent folder without its children.');
+          const out=await safeTarget(next),key=value=>process.platform==='win32'?value.toLocaleLowerCase():value;
+          const relation=path.relative(key(source),key(out));if(stat.isDirectory()&&(relation===''||!relation.startsWith('..'+path.sep)&&relation!=='..'&&!path.isAbsolute(relation)))throw problem(400,'A folder cannot be placed inside itself through another PC location.');
+          if(plans.some(plan=>key(plan.out)===key(out)))throw problem(409,'Two selected items use the same destination name. Copy or move them separately.');
+          try{await fsp.lstat(out);throw problem(409,'An item named '+label+' already exists. Choose another name or folder.');}catch(error){if(error.code!=='ENOENT')throw error;}
+          plans.push({source,out,next,stat});
+        }
+        if(body.action==='copy'){const copied=await require('./file-copy').copyPlans(plans,{maxBytes});activity(activityContext,{type:'files',action:'files.copied',label:'Copied '+copied.length+' item(s)',payload:{names:copied.slice(0,20),count:copied.length}});respond(res,200,{ok:true,names:copied});return true;}
         const moved=[];for(const plan of plans){try{if(plan.stat.isFile()){try{await fsp.link(plan.source,plan.out);}catch(error){if(!['EXDEV','EPERM','ENOTSUP'].includes(error.code))throw error;await fsp.copyFile(plan.source,plan.out,fs.constants.COPYFILE_EXCL);}await fsp.unlink(plan.source);}else await fsp.rename(plan.source,plan.out);moved.push(plan.next);}catch(error){throw problem(error.code==='EEXIST'?409:400,'Moved '+moved.length+' item(s). '+(error.code==='EXDEV'?'Folders must be moved within the same drive.':'This item changed or could not be moved. Refresh the folder.'));}}
         activity(activityContext,{type:'files',action:body.action==='rename'?'files.renamed':'files.moved',label:(body.action==='rename'?'Renamed ':'Moved ')+moved.length+' item(s)',payload:{names:moved.slice(0,20),count:moved.length}});respond(res,200,{ok:true,names:moved});return true;
       }

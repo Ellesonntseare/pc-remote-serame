@@ -1,0 +1,123 @@
+/* Matched to the owner's Windows 11 Home, This PC and Downloads references. */
+.ecFlow #filesDialog.explorerFiles{--ex-bg:#fff;--ex-panel:#f3f6fa;--ex-line:#dce1e6;--ex-select:#ddecfa;--ex-hover:#f0f5fa;--ex-text:#202124;--ex-muted:#5d636b;--ex-accent:#28639b;background:#fff!important;color:#202124!important;color-scheme:light;font-family:'Segoe UI',system-ui,sans-serif}
+.ecFlow #filesDialog.explorerFiles[open]{display:flex!important;flex-direction:column;height:100dvh;max-height:100dvh;overflow:hidden!important}
+.ecFlow #filesDialog.explorerFiles .filesTabs{flex-shrink:0}
+.ecFlow #filesDialog.explorerFiles #filesPane,.ecFlow #filesDialog.explorerFiles .fileManager{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.ecFlow #filesDialog.explorerFiles #filesPane[hidden]{display:none!important}
+.ecFlow #filesDialog.explorerFiles [data-pc-files]{flex:1;min-height:0;overflow:hidden}
+.ecFlow #filesDialog.explorerFiles .explorerBody{flex:1;min-height:0;height:auto!important;overflow:hidden}
+.ecFlow #filesDialog.explorerFiles :is(.explorerSidebar,.explorerContent){min-height:0;overflow-y:auto}
+.ecFlow #filesDialog.explorerFiles :is(.explorerAddress,.explorerCommands,.explorerStatus){flex-shrink:0}
+.ecFlow #filesDialog.explorerFiles .fileManager button{background:transparent!important;color:var(--ex-text)!important;box-shadow:none!important}
+.ecFlow #filesDialog.explorerFiles .filesTabs{background:#dce5ef!important;padding:4px 8px 0!important;gap:4px;min-height:40px;align-items:end}
+.ecFlow #filesDialog.explorerFiles .explorerFolderTabs{background:transparent!important;gap:4px;height:36px;min-height:36px}
+.ecFlow #filesDialog.explorerFiles .explorerFolderTabs>div{background:#e8eef5;min-width:130px;max-width:220px;border-radius:8px 8px 0 0}
+.ecFlow #filesDialog.explorerFiles .explorerFolderTabs button{color:#263340!important;font-size:12px;min-height:36px!important;height:36px}
+.ecFlow #filesDialog.explorerFiles .explorerFolderTabs button[aria-current=true]{background:#f5f8fc!important;color:#1e2933!important}
+.ecFlow #filesDialog.explorerFiles :is(#filesClose,#textTab){color:#243546!important;background:transparent!important;border:0!important}
+.ecFlow #filesDialog.explorerFiles .explorerAddress{background:#f5f8fc;border-bottom:1px solid #e2e6eb;padding:6px 8px;gap:4px;grid-template-columns:repeat(4,40px) minmax(100px,1fr) minmax(160px,.5fr);height:auto;min-height:52px}
+.ecFlow #filesDialog.explorerFiles .explorerAddress>button{color:#414f5c;background:transparent!important;border:0!important;min-height:40px;min-width:40px;width:40px;padding:10px!important;border-radius:4px}
+.ecFlow #filesDialog.explorerFiles .explorerAddress>button{color:#414f5c!important}
+.ecFlow #filesDialog.explorerFiles :is(.explorerAddress button,.explorerCommands button):disabled{opacity:.35}
+.ecFlow #filesDialog.explorerFiles svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ecFlow #filesDialog.explorerFiles .fmFileIcon svg{width:100%;height:100%;stroke:none}
+.ecFlow #filesDialog.explorerFiles .explorerCrumbs{display:flex;align-items:center;gap:4px;min-width:0;min-height:36px;padding:0 4px;background:#fff;border:1px solid #e8ecf0;border-radius:5px;overflow:hidden}
+.ecFlow #filesDialog.explorerFiles [data-breadcrumb]{display:flex;gap:5px;align-items:center;min-width:0;flex:1;overflow-x:auto;white-space:nowrap;scrollbar-width:none;color:#8a929b}
+.ecFlow #filesDialog.explorerFiles [data-breadcrumb] button{border:0!important;background:transparent!important;color:#283541!important;white-space:nowrap;flex-shrink:0;min-height:36px;padding:5px 7px!important;font-size:12px}
+.ecFlow #filesDialog.explorerFiles .explorerEditAddress{display:grid;place-items:center;flex:0 0 36px;width:36px;min-height:36px;border:0;background:transparent;color:#5a7186}
+.ecFlow #filesDialog.explorerFiles .explorerEditAddress svg{width:17px;height:17px}
+.ecFlow #filesDialog.explorerFiles .explorerAddressEntry{display:flex;align-items:center;gap:4px;min-width:0;flex:1;margin:0}
+.ecFlow #filesDialog.explorerFiles .explorerAddressEntry[hidden]{display:none!important}
+.ecFlow #filesDialog.explorerFiles .explorerAddressEntry input{width:100%;min-width:0;border:0;background:white;color:#202124;font:13px 'Segoe UI',system-ui;min-height:36px;padding:5px}
+.ecFlow #filesDialog.explorerFiles .explorerAddressEntry button{flex:0 0 36px;min-height:36px;border:0;background:#eef4fb;color:#204d7b}
+.ecFlow #filesDialog.explorerFiles .explorerSearch{background:#fff;border:1px solid #e8ecf0;border-radius:5px;color:#5d636b;min-width:0}
+.ecFlow #filesDialog.explorerFiles .explorerSearch input{background:transparent!important;color:#303944!important;border:0!important;width:100%}
+.ecFlow #filesDialog.explorerFiles .explorerSearch input,.ecFlow #filesDialog.explorerFiles .explorerSort select{box-shadow:none!important;color:#34465b!important;background:transparent!important;border-radius:0!important}
+.ecFlow #filesDialog.explorerFiles .explorerCommands{background:#fff;border-bottom:1px solid #d7dde4;display:flex;flex-wrap:nowrap;align-items:center;gap:6px;padding:3px 8px;height:auto!important;min-height:48px;overflow:visible!important}
+.ecFlow #filesDialog.explorerFiles .explorerCommands>*{grid-area:auto!important;order:0!important}
+.ecFlow #filesDialog.explorerFiles .explorerCommands>[data-new]>span{font-size:12px!important;color:inherit}
+.ecFlow #filesDialog.explorerFiles .explorerCommands>button,.ecFlow #filesDialog.explorerFiles .explorerCommands>details>summary{display:flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;min-height:40px!important;min-width:40px;border:0!important;border-radius:4px;background:transparent!important;color:#385b78!important;padding:8px!important;cursor:pointer}
+.ecFlow #filesDialog.explorerFiles .explorerCommands>[data-new]{color:#27333e!important;border-right:1px solid #e0e5ea!important;padding-right:12px!important;margin:0}
+.ecFlow #filesDialog.explorerFiles .explorerCommands>[data-new] svg{color:#267aab}
+.ecFlow #filesDialog.explorerFiles .explorerCommands>:is(.explorerSort,.explorerViewMenu){margin-left:6px;border-left:1px solid #e0e5ea;padding-left:8px;color:#303c46}
+.ecFlow #filesDialog.explorerFiles .explorerCommands :is(button,summary):hover{background:#edf2f7!important}
+.ecFlow #filesDialog.explorerFiles .explorerDetailsToggle{margin-left:auto}
+.ecFlow #filesDialog.explorerFiles .explorerMore{position:relative;flex-shrink:0}
+.ecFlow #filesDialog.explorerFiles .explorerMore>summary{list-style:none}
+.ecFlow #filesDialog.explorerFiles .explorerMore>summary::-webkit-details-marker{display:none}
+.ecFlow #filesDialog.explorerFiles :is(.explorerMorePanel,.explorerContextMenu){position:fixed;z-index:460;padding:6px;border:1px solid #d6dce3;border-radius:8px;background:#fbfcfe;color:#202124;box-shadow:0 8px 28px #19324b2b;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box}
+.ecFlow #filesDialog.explorerFiles .explorerMorePanel{display:none}
+.ecFlow #filesDialog.explorerFiles .explorerMore[open]>.explorerMorePanel{display:flex;flex-direction:column;align-items:stretch;gap:4px}
+.ecFlow #filesDialog.explorerFiles :is(.explorerMorePanel,.explorerContextMenu) button{display:flex;align-items:center;justify-content:flex-start;gap:8px;text-align:left;width:100%;min-height:40px!important;border:0!important;background:transparent!important;color:#273848!important;padding:8px!important;font-size:12px}
+.ecFlow #filesDialog.explorerFiles .explorerMorePanel .fmSelection{flex-direction:column;align-items:stretch!important;width:100%}
+.ecFlow #filesDialog.explorerFiles .explorerMorePanel .explorerDownload>span{display:inline!important}
+.ecFlow #filesDialog.explorerFiles .fmSelect{accent-color:#397ab8}
+.ecFlow #filesDialog.explorerFiles .explorerMorePanel .fmSendBar{display:flex!important;flex-direction:column;align-items:stretch;margin:0!important;padding:0!important;gap:4px;background:transparent;border:0}
+.ecFlow #filesDialog.explorerFiles .explorerMorePanel .explorerSort{display:flex;justify-content:space-between;min-height:40px}
+.ecFlow #filesDialog.explorerFiles .explorerMorePanel :is(.explorerViewMenu,.filesPickers){flex-direction:column;align-items:stretch!important}
+.ecFlow #filesDialog.explorerFiles .explorerMorePanel .explorerViewMenu{display:flex}
+.ecFlow #filesDialog.explorerFiles .explorerMorePanel .filesPickerSlot{width:100%;min-height:40px}
+.ecFlow #filesDialog.explorerFiles .explorerContextMenu[hidden]{display:none!important}
+.ecFlow #filesDialog.explorerFiles .explorerSidebar{background:#fff;border-color:#e0e5ea;scrollbar-color:#bcc6d0 transparent}
+.ecFlow #filesDialog.explorerFiles .explorerLocation{color:#253543!important;min-height:32px;padding:5px 10px!important;gap:10px}
+.ecFlow #filesDialog.explorerFiles .explorerLocation[aria-current=true]{background:#d8e8f7!important;border-color:transparent!important;border-radius:0}
+.ecFlow #filesDialog.explorerFiles .explorerLocation>small{color:#8d9ba9}
+.ecFlow #filesDialog.explorerFiles .explorerContent{background:#fff;color:#202124;padding:0 8px 12px}
+.ecFlow #filesDialog.explorerFiles .fmColumns{background:#fff;border-color:#dce2e8}
+.ecFlow #filesDialog.explorerFiles .fmColumns>span{color:#53677a;font-size:11px}
+.ecFlow #filesDialog.explorerFiles .fmFile{color:#252b31;border-radius:3px}
+.ecFlow #filesDialog.explorerFiles .fmFileName{color:#1d2934!important;background:transparent!important;font-weight:400!important}
+.ecFlow #filesDialog.explorerFiles .fmFile :is(.fmModified,.fmType,.fmFileSize){color:#66717e!important}
+.ecFlow #filesDialog.explorerFiles .fmFile.fmSelected{background:#e2effc!important;border-color:#a5c8e9!important}
+.ecFlow #filesDialog.explorerFiles .fmFile:hover{background:#f1f6fc}
+.ecFlow #filesDialog.explorerFiles .fmFile.explorerCut{opacity:.5}
+.ecFlow #filesDialog.explorerFiles .explorerGroup{color:#325f8f!important;font-size:13px}
+.ecFlow #filesDialog.explorerFiles .explorerStatus{background:#fff;color:#53606c;border-top:1px solid #e0e5ea;padding:4px 8px;min-height:28px}
+.ecFlow #filesDialog.explorerFiles .explorerStatus button{background:#f2f6fa!important;color:#365774!important;border-color:#dce4ec!important;border-radius:4px;min-height:32px}
+.ecFlow #filesDialog.explorerFiles .explorerStatus .localFilesShortcut{background:#f0f7fd!important;color:#32628d!important;border-color:#dce4ec!important}
+.ecFlow #filesDialog.explorerFiles .explorerProperties{position:absolute;right:0;top:0;bottom:0;width:min(280px,100%);z-index:6;padding:14px;background:#fff;border-left:1px solid #d5dee8;box-shadow:-8px 0 20px #23415a16;overflow:auto;box-sizing:border-box}
+.ecFlow #filesDialog.explorerFiles .explorerProperties>button{float:right;min-height:40px;min-width:40px;border:0;background:#f0f5fa;color:#344d64;font-size:22px}
+.ecFlow #filesDialog.explorerFiles .explorerProperties h3{font-size:15px;overflow-wrap:anywhere}
+.ecFlow #filesDialog.explorerFiles .explorerProperties p{display:grid;gap:5px;font-size:12px;overflow-wrap:anywhere;margin:16px 0}
+.ecFlow #filesDialog.explorerFiles .explorerProperties strong{font-weight:500;color:#536a7f}
+.ecFlow #filesDialog.explorerFiles .explorerBody{position:relative}
+.ecFlow #filesDialog.explorerFiles :is(.filesNotify,#filesStatus){color:#64717e}
+.ecFlow #filesDialog.explorerFiles .filesNotify{padding:2px 8px;background:#fff}
+.ecFlow #filesDialog.explorerFiles .filesNotify input{accent-color:#367bb8}
+@media(min-width:1000px){
+ .ecFlow #filesDialog.explorerFiles[open]{padding-right:96px!important;padding-bottom:8px!important}
+ .ecFlow #filesDialog.explorerFiles .ecNavigation{top:50%;bottom:auto;left:auto;right:12px;translate:0 -50%}
+}
+@media(max-width:600px) and (any-pointer:coarse){
+ .ecFlow #filesDialog.explorerFiles .filesTabs{min-height:40px}
+ .ecFlow #filesDialog.explorerFiles .explorerFolderTabs button{min-height:40px!important;height:40px}
+ .ecFlow #filesDialog.explorerFiles .explorerAddress{grid-template-columns:repeat(4,36px) minmax(0,1fr);gap:2px;padding:4px;min-height:96px}
+ .ecFlow #filesDialog.explorerFiles .explorerAddress>button{width:36px;min-width:36px;min-height:44px;padding:8px!important}
+ .ecFlow #filesDialog.explorerFiles .explorerCrumbs{min-height:44px;padding:0 2px;gap:0}
+ .ecFlow #filesDialog.explorerFiles .explorerCrumbs .phoneFoldersToggle{display:grid!important;place-items:center;flex:0 0 32px;min-width:32px;min-height:44px;padding:6px!important;border:0;background:transparent;color:#436987}
+ .ecFlow #filesDialog.explorerFiles .phoneFoldersToggle span{display:none}
+ .ecFlow #filesDialog.explorerFiles .explorerEditAddress{display:none}
+ .ecFlow #filesDialog.explorerFiles [data-breadcrumb] button{min-height:44px;padding:4px!important;font-size:11px}
+ .ecFlow #filesDialog.explorerFiles .explorerCrumbs [data-breadcrumb]{gap:2px}
+ .ecFlow #filesDialog.explorerFiles .explorerSearch{grid-column:1/-1!important;min-height:40px;padding:0 8px}
+ .ecFlow #filesDialog.explorerFiles .explorerCommands{display:grid;grid-template-columns:minmax(56px,1fr) repeat(5,minmax(36px,1fr));gap:2px;padding:2px 5px;min-height:48px}
+ .ecFlow #filesDialog.explorerFiles .explorerCommands>button,.ecFlow #filesDialog.explorerFiles .explorerCommands>details>summary{min-width:0;width:100%;min-height:44px!important;padding:8px!important}
+ .ecFlow #filesDialog.explorerFiles .explorerCommands>.explorerDetailsToggle{display:none}
+ .ecFlow #filesDialog.explorerFiles .explorerMorePanel :is(button,summary){min-height:44px!important}
+ .ecFlow #filesDialog.explorerFiles .explorerLocation{min-height:44px!important}
+ .ecFlow #filesDialog.explorerFiles .fileManager[data-view=details] .fmFile{grid-template-columns:32px 20px minmax(0,1fr) auto;grid-template-rows:auto auto;gap:0 5px;min-height:46px;padding:4px 3px}
+ .ecFlow #filesDialog.explorerFiles .fileManager[data-view=details] .fmFileIcon{grid-column:2;grid-row:1/3;width:18px;height:22px}
+ .ecFlow #filesDialog.explorerFiles .fileManager[data-view=details] .fmSelect{grid-column:1;grid-row:1/3;width:32px!important;min-height:44px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect x='2' y='2' width='16' height='16' rx='2' fill='white' stroke='%2390a1b2'/%3E%3C/svg%3E")}
+ .ecFlow #filesDialog.explorerFiles .fileManager[data-view=details] .fmSelect:checked{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect x='2' y='2' width='16' height='16' rx='2' fill='%23397ab8'/%3E%3Cpath d='m5 10 3 3 7-7' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E")}
+ .ecFlow #filesDialog.explorerFiles .fileManager[data-view=details] .fmFileName{grid-column:3/5;grid-row:1;white-space:normal;overflow-wrap:anywhere;min-height:24px!important;font-size:12px!important;line-height:17px!important}
+ .ecFlow #filesDialog.explorerFiles .fileManager[data-view=details] .fmFileName::after{left:64px}
+ .ecFlow #filesDialog.explorerFiles .fileManager[data-view=details] .fmModified{grid-column:3;grid-row:2;font-size:10px;line-height:16px}
+ .ecFlow #filesDialog.explorerFiles .fileManager[data-view=details] .fmType{display:none}
+ .ecFlow #filesDialog.explorerFiles .fileManager[data-view=details] .fmFileSize{grid-column:4;grid-row:2;font-size:10px;line-height:16px;white-space:nowrap;align-self:end}
+ .ecFlow #filesDialog.explorerFiles .explorerStatus{flex-wrap:nowrap;gap:4px;min-height:36px}
+ .ecFlow #filesDialog.explorerFiles .explorerStatus .fmLocations button{min-width:40px;padding:5px!important}
+ .ecFlow.phoneKeyboardOpen #filesDialog.explorerFiles .explorerAddress{grid-template-columns:1fr;min-height:44px}
+ .ecFlow.phoneKeyboardOpen #filesDialog.explorerFiles .explorerAddress>.explorerCrumbs{display:none!important}
+ .ecFlow.phoneKeyboardOpen #filesDialog.explorerFiles.explorerAddressEditing .explorerAddress>.explorerCrumbs{display:flex!important;grid-column:1/-1}
+ .ecFlow.phoneKeyboardOpen #filesDialog.explorerFiles.explorerAddressEditing .explorerAddress>.explorerSearch{display:none!important}
+}
