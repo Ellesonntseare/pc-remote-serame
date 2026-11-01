@@ -16,7 +16,13 @@ PC file changes and supported Android provider notifications trigger checks whil
 
 ## Windows sending and network folders
 
-The Windows installer adds **Send to → Elleson Connect** in Explorer. The tray menu also opens a Send to my phone window that accepts dropped files, links and text. Choose a receiving device or all your devices. Deliveries remain queued while the receiving app is disconnected. Open Files or Connected devices to collect them.
+The Windows installer adds **Send to → Elleson Connect** in Explorer. The tray menu also opens a Send to my phone window that accepts dropped files, links and text. Choose a receiving device or all your devices. Deliveries remain queued while the receiving app is disconnected.
+
+On Android, shared files start sending as soon as you choose Elleson Connect and the phone connects to its paired PC. There is no second Send button. They save directly as ordinary files in the PC's **Downloads\PC Remote Transfers** folder, independently of the Explorer folder currently being browsed. The PC host must be running, but you do not need to open the PC interface, sign in there, or download the file a second time. Choosing files inside the app still uses the destination you selected.
+
+PC-to-phone file deliveries also start automatically while the connected Android app is open, from any app page. They use the existing native background transfer service and save to the chosen incoming folder, or **Downloads/Elleson Connect** with dated delivery subfolders on Android 10 or later. Android 8/9 requires choosing an incoming folder once. A transfer that has started can continue after switching apps. A delivery sent while the app is closed waits for the next connection; background collection during active phone screen sharing remains available. Settings/clipboard sync does not need to be enabled for automatic file collection.
+
+Only explicitly sent deliveries are collected automatically; browsing the PC's files does not download them all. Existing file permissions, original-name checks, duplicate handling, pause/resume and notification actions remain in use. The host inbox is acknowledged only after Android has saved the file. Browser clients retain a **Save to this device** link. Text and links remain available in Files or Connected devices.
 
 The tray's **PC folders and network shares** control adds locations without relocating their contents. Windows must already be able to open a network share; its normal Windows credentials and availability apply. Removing a location from Elleson Connect keeps its files.
 
