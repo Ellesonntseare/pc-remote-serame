@@ -89,7 +89,8 @@ html.ecFlow body #ecControlsPage .quick[data-pcr-denied=true],html.ecFlow body #
 .ecFlow .app.pageArrive{animation:none!important;transform:none!important}.ecFlow #audioPage .ecAudioIdentity{min-height:200px;padding-top:0}.ecFlow #audioPage .audioHubNotice:empty{display:none!important}.ecFlow #audioPage .nativeDialogHint{margin:0 0 16px!important}
 
 /* One movable mode button; the other modes appear only on request. */
-.ecRemoteRail{padding:5px;gap:0;max-width:calc(100% - 16px);z-index:26}
+/* Above remote tools (90), typing panels and bottom navigation (130). */
+.ecRemoteRail{padding:5px;gap:0;max-width:calc(100% - 16px);z-index:140;isolation:isolate}
 .ecRemoteRail button{width:44px;height:44px;min-width:44px;min-height:44px;cursor:pointer}
 .ecRemoteRail .ecRailCurrent{touch-action:none;cursor:grab}
 .ecRemoteRail.ecRailDragging .ecRailCurrent{cursor:grabbing}

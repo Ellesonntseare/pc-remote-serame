@@ -107,7 +107,7 @@
    document.addEventListener('pointerdown',event=>{if(!rail.contains(event.target))expand(false);},{passive:true});
    new MutationObserver(()=>{if(remote.classList.contains('typing'))select('keyboard');else if(mode==='keyboard')select('mouse');placeMouseActions();}).observe(remote,{attributes:true,attributeFilter:['class']});
    window.addEventListener('pcr:page',event=>{expand(false);if(event.detail?.id==='rs'){select(remote.classList.contains('typing')?'keyboard':'mouse');requestAnimationFrame(restore);}});
-   window.addEventListener('resize',restore);window.visualViewport?.addEventListener('resize',restore);select('mouse');requestAnimationFrame(restore);
+   window.addEventListener('resize',restore);window.visualViewport?.addEventListener('resize',restore);window.visualViewport?.addEventListener('scroll',restore);select('mouse');requestAnimationFrame(restore);
    function setSnap(value){snap=Math.max(0,Math.min(2,value));dock.dataset.snap=String(snap);handle.setAttribute('aria-expanded',String(snap===2));handle.setAttribute('aria-label',snap===2?'Collapse remote controls':'Expand remote controls');dock.style.removeProperty('--ec-drag');remote.dataset.ecShelf=String(snap);}
    handle.onclick=()=>{if(!handle.wasDragged)setSnap((snap+1)%3);handle.wasDragged=false;};
    handle.onpointerdown=event=>{if(event.button>0)return;event.preventDefault();handle.setPointerCapture?.(event.pointerId);drag={id:event.pointerId,y:event.clientY,last:event.clientY,at:performance.now(),velocity:0,dy:0};dock.classList.add('ecShelfDragging');};

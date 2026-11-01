@@ -330,17 +330,22 @@ internal static class Program
                 break;
             case "mv":
                 if (words.Length != 2) return;
-                if (Native.GetCursorPos(out var pos))
-                    Native.SetCursorPos(pos.X + Number(words[0]), pos.Y + Number(words[1]));
+                // Queue real relative motion; reading then warping the cursor can
+                // reuse an old position while a foreground dialog processes input.
+                SendMouse(0x0001, Number(words[0]), Number(words[1]));
                 break;
             case "abs":
                 if (words.Length != 2) return;
-                Native.SetCursorPos(primary.Left + Math.Clamp(Number(words[0]), 0, primary.Width - 1),
-                    primary.Top + Math.Clamp(Number(words[1]), 0, primary.Height - 1));
+                var desktop = SystemInformation.VirtualScreen;
+                int px=primary.Left+Math.Clamp(Number(words[0]),0,primary.Width-1);
+                int py=primary.Top+Math.Clamp(Number(words[1]),0,primary.Height-1);
+                SendMouse(0x0001|0x8000|0x4000,
+                    (int)Math.Clamp(((long)(px-desktop.Left)*65536+32768)/desktop.Width,0,65535),
+                    (int)Math.Clamp(((long)(py-desktop.Top)*65536+32768)/desktop.Height,0,65535));
                 break;
             case "wheel": case "hwheel":
                 if (words.Length != 1) return;
-                Native.mouse_event(parts[0]=="hwheel"?0x1000u:0x0800u, 0, 0, Number(words[0]), UIntPtr.Zero);
+                SendMouse(parts[0]=="hwheel"?0x1000u:0x0800u, data:unchecked((uint)Number(words[0])));
                 break;
             case "click": case "down": case "up":
                 if (words.Length != 1 || words[0].Length != 1) return;
@@ -396,6 +401,13 @@ internal static class Program
         }
     }
 
+    private static void SendMouse(uint flags,int x=0,int y=0,uint data=0)
+    {
+        var inputs=new[]{new Native.INPUT{type=0,U=new Native.INPUTUNION{mi=new Native.MOUSEINPUT{dx=x,dy=y,mouseData=data,dwFlags=flags}}}};
+        if(Native.SendInput(1,inputs,Marshal.SizeOf<Native.INPUT>())!=1)
+            throw new InvalidOperationException("Windows blocked mouse input. Check whether the foreground window requires administrator access or is a Windows security prompt.");
+    }
+
     private static void PressMouse(char button, string kind)
     {
         (uint down, uint up) = button switch
@@ -406,8 +418,8 @@ internal static class Program
         if (down == 0) return;
         lock (HeldInputLock)
         {
-            if (kind != "up") { HeldMouseButtons.Add(button); Native.mouse_event(down, 0, 0, 0, UIntPtr.Zero); }
-            if (kind != "down") { Native.mouse_event(up, 0, 0, 0, UIntPtr.Zero); HeldMouseButtons.Remove(button); }
+            if (kind != "up") { SendMouse(down); HeldMouseButtons.Add(button); }
+            if (kind != "down") { SendMouse(up); HeldMouseButtons.Remove(button); }
         }
     }
     private static void PressKey(int value, string kind)

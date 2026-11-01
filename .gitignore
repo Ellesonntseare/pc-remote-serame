@@ -53,3 +53,6 @@ test/HostTrayChecks/obj/
 
 test/PhoneDeskChecks/bin/
 test/PhoneDeskChecks/obj/
+
+test/PopupInputChecks/bin/
+test/PopupInputChecks/obj/
