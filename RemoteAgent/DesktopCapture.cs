@@ -30,7 +30,10 @@ internal sealed class DesktopCapture : IDisposable
         {
             // Never fall back to a path that may include the physical privacy cover.
             gpu?.Dispose();gpu=null;
-            privacyCapture ??= new WindowCapture(MonitorFromPoint(new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2),2),monitor:true);
+            // Remote streams already supply the pointer separately: region/video
+            // viewers draw the client overlay; legacy JPEG draws it once below.
+            // Baking WGC's pointer into these pixels produces a second cursor.
+            privacyCapture ??= new WindowCapture(MonitorFromPoint(new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2),2),monitor:true,captureCursor:false);
             changed=true;return privacyCapture.Capture(target);
         }
         if(privacyCapture is not null){privacyCapture.Dispose();privacyCapture=null;nextRetry=0;}
