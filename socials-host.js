@@ -29,6 +29,6 @@ function createSocialsIntegration({directory,dataDirectory}={}){
    return await app.handle(req,res,{principal:{id:'connect:'+scope,email:session.identity?.email||session.account?.email||'owner@elleson.local',admin:session.role==='owner'&&scope==='owner'},origin});
   }catch(error){console.error('Socials host failed',error?.name);respond(res,503,{error:'Elleson Socials could not start. Check the project installation.'});return true;}
  }
- return {handle,close(){closed=true;instance?.close();}};
+ return {handle,start:async()=>{if(available())await open();},close(){closed=true;instance?.close();}};
 }
 module.exports={createSocialsIntegration};

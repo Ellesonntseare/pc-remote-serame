@@ -5,8 +5,9 @@
   const button=document.createElement('button');button.id='projectsButton';button.type='button';button.className='quick wide homeShortcut';button.dataset.dashboardTile='projects';button.style.order='8.5';button.innerHTML='<span class="dashboardTileIcon"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="11" height="11" rx="2"/><rect x="18" y="3" width="11" height="11" rx="2"/><rect x="3" y="18" width="11" height="11" rx="2"/><rect x="18" y="18" width="11" height="11" rx="2"/></svg></span><span class="dashboardTileCopy"><strong>Projects</strong><small>Open your apps</small></span>';grid.append(button);
   const dialog=document.createElement('dialog');dialog.id='projectsPage';dialog.innerHTML='<header><h2>Projects</h2><button type="button" data-close aria-label="Back">Back</button></header><div class="projectsGrid" role="status"></div>';document.body.append(dialog);
   dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+  const requested=new URLSearchParams(location.search).get('project');if(requested==='socials')try{sessionStorage.setItem('elleson-open-project','socials');}catch{}
   function permitted(){return !!window.PCRAuth?.signedIn&&window.PCRAuth.role!=='guest';}
-  function update(){button.hidden=!permitted();if(!permitted()&&dialog.open)dialog.close();}
+  function update(){if(permitted())try{if(sessionStorage.getItem('elleson-open-project')==='socials'){sessionStorage.removeItem('elleson-open-project');location.assign('/socials/');return;}}catch{}button.hidden=!permitted();if(!permitted()&&dialog.open)dialog.close();}
   button.onclick=async()=>{
    if(!permitted())return;dialog.showModal();const list=dialog.querySelector('.projectsGrid');list.textContent='Loading…';
    try{

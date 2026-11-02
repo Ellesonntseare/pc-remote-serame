@@ -193,6 +193,7 @@ function validInput(c) {
 }
 function createApp(options={}) {
   const socials=createSocialsIntegration({directory:options.socialsDirectory,dataDirectory:options.socialsDataDirectory||path.join(ROOT,'.socials-data')});
+  if(options.socialsDirectory)void socials.start().catch(error=>console.error('Socials scheduler startup failed',error?.name));
   const assets=createAssetCache();
   const bundles=createAssetBundles({allowed:PWA_ASSETS,read:route=>route==='/index.html'?assets.get(path.join(ROOT,'index.html'),'text/html'):assets.get(path.join(ROOT,'public',PWA_ASSETS.get(route)[0]),PWA_ASSETS.get(route)[1])});
   const rtcServers=iceServers(options.webRtcIceServers);

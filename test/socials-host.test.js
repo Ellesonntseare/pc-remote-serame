@@ -12,6 +12,7 @@ test('Projects and Socials use Connect authentication and the same HTTP server',
   const paired=await call(port,'/api/pair','POST',{pin:'12345678'}),cookie=paired.headers['set-cookie'][0].split(';')[0];
   const projects=await call(port,'/api/projects','GET',undefined,cookie);assert.equal(projects.status,200);assert.equal(projects.data.projects[0].available,true);
   const session=await call(port,'/socials/api/session','GET',undefined,cookie);assert.equal(session.status,200,JSON.stringify(session.data));assert.equal(session.data.user.role,'admin');
+  const queue=await call(port,'/socials/api/queue','GET',undefined,cookie);assert.equal(queue.status,200);assert.equal(queue.data.scheduler.enabled,true);assert.ok(Array.isArray(queue.data.jobs));
   const posts=await call(port,'/socials/api/posts','GET',undefined,cookie);assert.equal(posts.data.length,65);
   const page=await call(port,'/socials/','GET',undefined,cookie);assert.equal(page.status,200);assert.match(page.data,/name="api-base" content="\/socials\/api\/"/);
   assert.equal((await call(port,'/socials/api/activity','GET',undefined,cookie)).data.length,100);
