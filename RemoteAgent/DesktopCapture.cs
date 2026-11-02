@@ -8,16 +8,19 @@ internal sealed class DesktopCapture : IDisposable
 {
     private GpuDesktopCapture? gpu;
     private WindowCapture? privacyCapture;
+    private WindowCapture? cursorFreeCapture;
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(Point point, uint flags);
     private readonly Rectangle bounds;
+    private readonly bool preferCursorFree;
+    private long cursorFreeRetry,cursorFreeStarted;
     private bool retryGpu;
     private long nextRetry;
-    public string Backend => privacyCapture is not null ? "wgc" : gpu is null ? "gdi" : "dxgi";
-    public bool CursorEmbedded => privacyCapture is null && gpu?.CursorEmbedded == true;
+    public string Backend => privacyCapture is not null || cursorFreeCapture is not null ? "wgc" : gpu is null ? "gdi" : "dxgi";
+    public bool CursorEmbedded => privacyCapture is null && cursorFreeCapture is null && gpu?.CursorEmbedded == true;
     public DesktopCapture(Rectangle bounds, bool preferGpu=true)
     {
-        this.bounds=bounds;retryGpu=preferGpu;
-        if(preferGpu&&!PrivacyDisplay.CaptureRequested)TryGpu();
+        this.bounds=bounds;preferCursorFree=preferGpu&&OperatingSystem.IsWindowsVersionAtLeast(10,0,19041);retryGpu=preferGpu&&!preferCursorFree;
+        if(retryGpu&&!PrivacyDisplay.CaptureRequested)TryGpu();
     }
     private void TryGpu()
     {
@@ -30,6 +33,7 @@ internal sealed class DesktopCapture : IDisposable
         if(PrivacyDisplay.CaptureRequested)
         {
             // Never fall back to a path that may include the physical privacy cover.
+            cursorFreeCapture?.Dispose();cursorFreeCapture=null;cursorFreeRetry=0;
             gpu?.Dispose();gpu=null;
             // Remote streams already supply the pointer separately: region/video
             // viewers draw the client overlay; legacy JPEG draws it once below.
@@ -38,6 +42,35 @@ internal sealed class DesktopCapture : IDisposable
             changed=true;return privacyCapture.Capture(target);
         }
         if(privacyCapture is not null){privacyCapture.Dispose();privacyCapture=null;nextRetry=0;}
+        if(preferCursorFree)
+        {
+            // Some normal desktop frames contain a Windows pointer even when
+            // DXGI's mouse metadata does not report a separate cursor update.
+            // Explicit exclusion makes the stream cursor-free before the phone
+            // draws its responsive pointer, including while the trackpad is held.
+            if(cursorFreeCapture is null&&Environment.TickCount64>=cursorFreeRetry)
+            {
+                cursorFreeRetry=Environment.TickCount64+10000;
+                try
+                {
+                    cursorFreeCapture=new WindowCapture(MonitorFromPoint(new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2),2),monitor:true,captureCursor:false);
+                    cursorFreeStarted=Environment.TickCount64;
+                    Console.Error.WriteLine("Capture: Windows Graphics Capture with cursor excluded.");
+                }
+                catch{cursorFreeCapture?.Dispose();cursorFreeCapture=null;}
+            }
+            if(cursorFreeCapture is not null)
+            {
+                try
+                {
+                    changed=false;if(cursorFreeCapture.Capture(target)){changed=cursorFreeCapture.FrameChanged;return true;}
+                    if(Environment.TickCount64-cursorFreeStarted<2000)return false;
+                }
+                catch{}
+                cursorFreeCapture.Dispose();cursorFreeCapture=null;cursorFreeRetry=Environment.TickCount64+10000;
+                Console.Error.WriteLine("Capture: cursor-free capture reset; using standard capture until ready.");
+            }
+        }
         if(gpu is null&&retryGpu&&Environment.TickCount64>=nextRetry)TryGpu();
         if(gpu is not null)
         {
@@ -46,7 +79,7 @@ internal sealed class DesktopCapture : IDisposable
         }
         using var graphics=Graphics.FromImage(target);graphics.CopyFromScreen(bounds.Left,bounds.Top,0,0,bounds.Size);changed=true;return true;
     }
-    public void Dispose(){privacyCapture?.Dispose();privacyCapture=null;gpu?.Dispose();gpu=null;retryGpu=false;}
+    public void Dispose(){privacyCapture?.Dispose();privacyCapture=null;cursorFreeCapture?.Dispose();cursorFreeCapture=null;gpu?.Dispose();gpu=null;retryGpu=false;}
 }
 
 internal sealed class GpuDesktopCapture : IDisposable

@@ -61,3 +61,5 @@ test/PrivacyCaptureChecks/bin/
 test/PrivacyCaptureChecks/obj/
 test/CaptureCursorChecks/bin/
 test/CaptureCursorChecks/obj/
+test/CursorFreeCaptureChecks/bin/
+test/CursorFreeCaptureChecks/obj/

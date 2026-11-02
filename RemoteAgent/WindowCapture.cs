@@ -23,6 +23,7 @@ internal sealed class WindowCapture : IDisposable
     private bool havePixels;
     private int width, height;
     public Size Size => new(width, height);
+    public bool FrameChanged { get; private set; }
 
     public WindowCapture(IntPtr window, bool monitor = false, bool captureCursor = true)
     {
@@ -49,12 +50,13 @@ internal sealed class WindowCapture : IDisposable
 
     public bool Capture(Bitmap target)
     {
+        FrameChanged=false;
         if (closed) throw new InvalidOperationException("The presentation window closed. Choose another window.");
-        using var frame = pool!.TryGetNextFrame();if (frame == null) return havePixels;
+        using var frame = pool!.TryGetNextFrame();if (frame == null){if(havePixels)CopyTo(target);return havePixels;}
         var size = frame.ContentSize;if (size.Width != width || size.Height != height)
         {
             if(size.Width<2||size.Height<2||size.Width>16384||size.Height>16384)return false;
-            frame.Dispose();width=size.Width;height=size.Height;staging?.Dispose();staging=null;
+            frame.Dispose();width=size.Width;height=size.Height;staging?.Dispose();staging=null;havePixels=false;
             pool.Recreate(runtimeDevice,DirectXPixelFormat.B8G8R8A8UIntNormalized,2,size);return false;
         }
         var access = frame.Surface.As<IDirect3DDxgiInterfaceAccess>();
@@ -64,7 +66,12 @@ internal sealed class WindowCapture : IDisposable
         staging ??= device!.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)width, (uint)height,
             mipLevels: 1, bindFlags: BindFlags.None, usage: ResourceUsage.Staging, cpuAccessFlags: CpuAccessFlags.Read));
         context!.CopyResource(staging, texture);
-        var mapped = context.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
+        CopyTo(target);havePixels=true;FrameChanged=true;return true;
+    }
+
+    private void CopyTo(Bitmap target)
+    {
+        var mapped = context!.Map(staging!, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
         try
         {
             using var source = new Bitmap(width, height, checked((int)mapped.RowPitch), PixelFormat.Format32bppArgb, mapped.DataPointer);
@@ -75,7 +82,6 @@ internal sealed class WindowCapture : IDisposable
             graphics.DrawImage(source, new Rectangle((target.Width-w)/2, (target.Height-h)/2, w, h), 0, 0, width, height, GraphicsUnit.Pixel);
         }
         finally { context.Unmap(staging, 0); }
-        havePixels=true;return true;
     }
 
     private static GraphicsCaptureItem CreateItem(IntPtr window, bool monitor)
