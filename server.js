@@ -93,7 +93,7 @@ const PWA_ASSETS = new Map([
   ['/file-manager.css',['file-manager.css','text/css; charset=utf-8']],
   ['/brand.svg', ['brand.svg', 'image/svg+xml']],
   ['/app-refinements.css', ['app-refinements.css', 'text/css; charset=utf-8']],
-  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','phone-input.js','phone-drop.js','guest-screen.js','workspace-ui.js','page-navigation.js','projects.js','app-updates.js','mse-video.js','second-screen-policy.js','second-screen.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
+  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','phone-input.js','phone-drop.js','guest-screen.js','workspace-ui.js','page-navigation.js','projects.js','socials-return.js','app-updates.js','mse-video.js','second-screen-policy.js','second-screen.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
   ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css','workspace-ui.css','page-navigation.css','projects.css','second-screen.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
   ['/input-transport.js', ['input-transport.js', 'text/javascript; charset=utf-8']],
   ['/pwa.js', ['pwa.js', 'text/javascript; charset=utf-8']],
@@ -504,6 +504,10 @@ function createApp(options={}) {
     let pathname;
     try{pathname=new URL(req.url,'http://localhost').pathname;}catch{return respond(res,400,{error:'Bad URL'});}
     try{
+      if(req.method==='GET'&&/^\/socials\/connect\/(facebook|instagram|youtube|google|linkedin|tiktok|pinterest|x|threads)$/.test(pathname)){
+        const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect account · Elleson Socials</title><style>body{margin:0;background:#f3f6f1;color:#214734;font:15px/1.8 system-ui;min-height:100dvh;display:grid;place-items:center}main{padding:32px;max-width:480px}h1{font-size:30px;letter-spacing:-1px}a{color:#315e43}</style><script src="/socials-return.js" defer></script></head><body><main><h1>Connecting your account</h1><p id="connectionStatus" role="status">Finishing your sign-in…</p><a href="/socials/#channels">Back to Accounts</a></main></body></html>';
+        res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});return res.end(html);
+      }
       if(req.method==='GET'&&(pathname==='/'||pathname==='/index.html')){
         const page=await bundles.page(req.headers['accept-encoding']);
         res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Vary':'Accept-Encoding',...page.encoding&&{'Content-Encoding':page.encoding},'Content-Length':page.body.length,'Content-Security-Policy':`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' ws://${req.headers.host} wss://${req.headers.host}; worker-src 'self'; media-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'`,'X-Content-Type-Options':'nosniff'});

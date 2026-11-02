@@ -7,6 +7,7 @@ test('Projects and Socials use Connect authentication and the same HTTP server',
  const data=fs.mkdtempSync(path.join(os.tmpdir(),'connect-socials-'));
  const app=createApp({port:0,pin:'12345678',disableAgent:true,disableActions:true,socialsDirectory:directory,socialsDataDirectory:data});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const port=app.server.address().port;
  try{
+  const back=await call(port,'/socials/connect/facebook?code=not-a-token&state=untrusted');assert.equal(back.status,200);assert.match(back.data,/socials-return.js/);assert.ok(!back.data.includes('not-a-token'));assert.equal(back.headers['referrer-policy'],'no-referrer');
   assert.equal((await call(port,'/api/projects')).status,401);assert.equal((await call(port,'/socials/api/posts')).status,401);
   const paired=await call(port,'/api/pair','POST',{pin:'12345678'}),cookie=paired.headers['set-cookie'][0].split(';')[0];
   const projects=await call(port,'/api/projects','GET',undefined,cookie);assert.equal(projects.status,200);assert.equal(projects.data.projects[0].available,true);
