@@ -89,14 +89,7 @@
   }
   function imageBox(){
     const rect=canvas.getBoundingClientRect();
-    let x=rect.left,y=rect.top,w=rect.width,h=rect.height;
-    // Android's mini view uses object-fit:contain. The canvas element includes
-    // black margins there; only the fitted image represents desktop pixels.
-    if(window.getComputedStyle(canvas).objectFit==='contain'&&canvas.width>0&&canvas.height>0){
-      const scale=Math.min(w/canvas.width,h/canvas.height),imageW=canvas.width*scale,imageH=canvas.height*scale;
-      x+=(w-imageW)/2;y+=(h-imageH)/2;w=imageW;h=imageH;
-    }
-    return {x,y,w,h};
+    return {x:rect.left,y:rect.top,w:rect.width,h:rect.height};
   }
   function connecting(){
     announce('Connecting…','connecting');

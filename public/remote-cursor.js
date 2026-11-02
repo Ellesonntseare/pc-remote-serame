@@ -44,16 +44,8 @@
     stage.classList.toggle('remoteCursorReady',!cursor.hidden);
     stage.classList.toggle('remoteCursorFallback',!cursor.hidden&&!overlayPositioned);
     if(cursor.hidden)return;
-    const image=window.PCRScreenTools?.imageBox?.(),origin=stage.getBoundingClientRect?.();
-    const scaleX=origin?.width&&stage.offsetWidth?origin.width/stage.offsetWidth:1;
-    const scaleY=origin?.height&&stage.offsetHeight?origin.height/stage.offsetHeight:1;
-    const left=image&&origin?(image.x-origin.left)/scaleX:canvas.offsetLeft;
-    const top=image&&origin?(image.y-origin.top)/scaleY:canvas.offsetTop;
-    const width=image?image.w/scaleX:canvas.clientWidth,height=image?image.h/scaleY:canvas.clientHeight;
-    // Invert the same pixel-endpoint mapping used by direct touch. Reading the
-    // actual image rectangle also preserves fractional sizes and fitted margins.
-    cursor.style.left=(left+x/Math.max(1,rs.m.w-1)*width)+'px';
-    cursor.style.top=(top+y/Math.max(1,rs.m.h-1)*height)+'px';
+    cursor.style.left=(canvas.offsetLeft+x/rs.m.w*canvas.clientWidth)+'px';
+    cursor.style.top=(canvas.offsetTop+y/rs.m.h*canvas.clientHeight)+'px';
   }
   function report(state){
     if(!Number.isFinite(state.x)||!Number.isFinite(state.y)||!rs.m)return;
@@ -94,6 +86,6 @@
     if(sensitivity?.parentElement===settings)sensitivity.after(group);else settings.append(group);
   }
   checkOverlay();setSize(size,false);
-  if(typeof ResizeObserver==='function'){const observer=new ResizeObserver(()=>{checkOverlay();draw();});observer.observe(canvas);observer.observe(stage);}
+  if(typeof ResizeObserver==='function')new ResizeObserver(()=>{checkOverlay();draw();}).observe(canvas);
   window.PCRCursor={report,preview,reset,setSourceCursor,setSize,resetSize,getSize:()=>size};
 })();
