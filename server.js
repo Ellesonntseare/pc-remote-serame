@@ -385,7 +385,12 @@ function createApp(options={}) {
           return;
         } else if(pkt[0]===4){captureRequested=false;requestVideoFrame();return;}
         else if(pkt[0]===6){
-          for(const v of viewers)if(v.regions&&v.res.writable&&!v.busy)v.busy=!v.res.write(pkt);
+          for(const v of viewers)if(v.regions){
+            const ws=v.feedbackSocket;
+            if(ws?.cursorReports&&ws.readyState===WebSocket.OPEN){
+              if(ws.bufferedAmount<4096)ws.send('{"type":"cursor","state":'+pkt.subarray(5).toString('utf8')+'}');
+            }else if(v.res.writable&&!v.busy)v.busy=!v.res.write(pkt);
+          }
           return;
         }else if(pkt[0]!==0&&pkt[0]!==5) return;
         if(pkt[0]===1){applySmartQuality();for(const v of viewers)if(v.res.writable)v.res.write(viewerMetadata(v));return;}
@@ -969,6 +974,7 @@ function createApp(options={}) {
     if(screenId&&!viewer)return rejectUpgrade(socket,409,'Screen session changed');
     inputStream.handleUpgrade(req,socket,head,ws=>{
       const entry={ws,token};inputSockets.add(entry);
+      ws.cursorReports=new URL(req.url,'http://localhost').searchParams.get('cursor')==='1';
       if(viewer){viewer.feedbackSocket=ws;viewer.inFlight.clear();updateVideoDemand();}
       const expiry=sessionExpiry(()=>sessions.get(token)?.until||0,()=>disconnectInput(ws,1008,'Session expired'));
       const activeIds=new Set();
