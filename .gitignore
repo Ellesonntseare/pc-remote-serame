@@ -63,3 +63,5 @@ test/CaptureCursorChecks/bin/
 test/CaptureCursorChecks/obj/
 test/CursorFreeCaptureChecks/bin/
 test/CursorFreeCaptureChecks/obj/
+
+.socials-data/

@@ -14,6 +14,7 @@ const {createSyncHub}=require('./sync-hub');
 const {createAccountWorkspace}=require('./account-workspace');
 const {createAccountAPI}=require('./account-api');
 const {accountScope}=require('./account-scope');
+const {createSocialsIntegration}=require('./socials-host');
 const {createClipboardWatch}=require('./clipboard-watch');
 const {createSharedClipboard}=require('./shared-clipboard');
 const {createDeviceCompanions}=require('./device-companions');
@@ -92,8 +93,8 @@ const PWA_ASSETS = new Map([
   ['/file-manager.css',['file-manager.css','text/css; charset=utf-8']],
   ['/brand.svg', ['brand.svg', 'image/svg+xml']],
   ['/app-refinements.css', ['app-refinements.css', 'text/css; charset=utf-8']],
-  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','phone-input.js','phone-drop.js','guest-screen.js','workspace-ui.js','page-navigation.js','app-updates.js','mse-video.js','second-screen-policy.js','second-screen.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
-  ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css','workspace-ui.css','page-navigation.css','second-screen.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
+  ...['audio-worklet.js','pc-audio.js','app-switcher.js','precision-lens.js','guest-access.js','phone-mouse.js','phone-input.js','phone-drop.js','guest-screen.js','workspace-ui.js','page-navigation.js','projects.js','app-updates.js','mse-video.js','second-screen-policy.js','second-screen.js'].map(name=>['/'+name,[name,'text/javascript; charset=utf-8']]),
+  ...['native-features.css','precision-lens.css','pointer-settings.css','guest-access.css','guest-screen.css','workspace-ui.css','page-navigation.css','projects.css','second-screen.css'].map(name=>['/'+name,[name,'text/css; charset=utf-8']]),
   ['/input-transport.js', ['input-transport.js', 'text/javascript; charset=utf-8']],
   ['/pwa.js', ['pwa.js', 'text/javascript; charset=utf-8']],
   ['/pwa.css', ['pwa.css', 'text/css; charset=utf-8']],
@@ -191,6 +192,7 @@ function validInput(c) {
   return false;
 }
 function createApp(options={}) {
+  const socials=createSocialsIntegration({directory:options.socialsDirectory,dataDirectory:options.socialsDataDirectory||path.join(ROOT,'.socials-data')});
   const assets=createAssetCache();
   const bundles=createAssetBundles({allowed:PWA_ASSETS,read:route=>route==='/index.html'?assets.get(path.join(ROOT,'index.html'),'text/html'):assets.get(path.join(ROOT,'public',PWA_ASSETS.get(route)[0]),PWA_ASSETS.get(route)[1])});
   const rtcServers=iceServers(options.webRtcIceServers);
@@ -608,6 +610,7 @@ function createApp(options={}) {
       }
       const token=auth(req);
       if(!token)return respond(res,401,{error:'Pair your phone first'});
+      if(await socials.handle(req,res,{pathname,session:sessions.get(token),scope:workspaceScope(token),origin:(viaTunnel?'https://':'http://')+req.headers.host,respond}))return;
       if(pathname==='/api/local-route-key'&&req.method==='GET'){
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required to choose a faster connection.'});
         return respond(res,200,{ok:true,...localRouteProof.key(),persistent:!!sessions.get(token)?.persistent,expiresAt:sessions.get(token).until});
@@ -1005,7 +1008,7 @@ function createApp(options={}) {
     });
   });
   function stop(){stopping=true;appUpdates.close();secondScreen.revoke();accountAPI.close();clipboardObserver?.close();clipboardObserver=null;server.closeIdleConnections?.();displayPrivacy.close();endViewers();closeAudioSockets();guestScreens.revoke();webRtcVideo.revoke();nativeVideo.revoke();cameraRevoke();collaboration.revoke();companions.revoke();}
-  server.on('close',()=>{sessionAdmin.close();google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();secondScreen.close();webRtcVideo.close();nativeVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();companions.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
+  server.on('close',()=>{socials.close();sessionAdmin.close();google.clear();systemMetrics.close();clearInterval(cpuClock);clearInterval(smartClock);guestRequests.clear();bundles.clear();assets.clear();stop();inputStream.close();audioStream.close();guestScreens.close();secondScreen.close();webRtcVideo.close();nativeVideo.close();for(const channel of cameraChannels.values())channel.close();phoneAudio.close();collaboration.close();companions.close();deviceLinks.close();handoffs.clear();nativeFeatures.close();void fileTransfers.close();});
   if(options.discovery===true)discovery=require('./local-discovery').advertise(server,{name:hostname,identity:hostIdentity,enabled:allowLan});
   server.once('close',()=>{networkDevices.close();clipboardObserver?.close();clipboardObserver=null;void syncHub.close();void sharedClipboard.close().finally(()=>accountData.close());});
   function clipboardPreferences(){
@@ -1033,7 +1036,7 @@ if(require.main===module){
   catch(e) { if(e.code!=='ENOENT'){console.error('Cannot load config.json:',e.message);process.exit(1);} }
   const allowLan=config.allowLan!==false;
   if(typeof config.password!=='string'||!config.password||['serame','admin'].includes(config.password)){console.error('Set your owner password in local config.json, or use the Windows host setup. The old default sign-ins are disabled.');process.exit(1);}
-  const app=createApp({workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),sharedClipboardDirectory:path.join(ROOT,'.shared-clipboard'),observeClipboard:true,useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
+  const app=createApp({socialsDirectory:config.socialsDirectory,socialsDataDirectory:config.socialsDataDirectory,workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),sharedClipboardDirectory:path.join(ROOT,'.shared-clipboard'),observeClipboard:true,useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
   app.server.listen(app.port,allowLan?'0.0.0.0':'127.0.0.1',()=>{
     const actual=app.server.address().port;
     const ip=app.addresses.find(a=>a.startsWith('192.168.'))||app.addresses[0]||'127.0.0.1';

@@ -175,3 +175,12 @@ Stop from the notification, the app panel, Android's sharing indicator, or by en
 The native bridge is restricted to the main frame of the selected private PC origin or the exact HTTPS website. Cookies stay in the app and authenticate its native sharing socket. Other origins cannot invoke capture. Origin unit tests run in the Android build.
 
 The website/PWA on an ordinary phone browser cannot capture the entire Android screen; the updated Android app is required. Android System WebView must support origin-scoped web messages. If Android reports that the existing debug app has an incompatible signature, remove that earlier debug installation before installing this build; debug signing keys can differ between CI runners. A real-device permission/background/rotation test remains necessary. Phone control requires the separate Accessibility setup and local approval described above.
+
+
+### Projects and Elleson Socials
+
+Projects opens the standalone Elleson Socials module through this same authenticated server at `/socials/`. Socials remains in its own repository: https://github.com/Ellesonntseare/Elleson-Socials . Set `socialsDirectory` in the host's existing `config.json` to a deployed Socials checkout/build that contains `server/node-host.mjs`, `lib`, `drizzle` and `public`. Set `socialsDataDirectory` to a separate persistent folder. Without an installed module the Projects screen reports “Not installed”.
+
+Connect verifies the session and account scope before passing identity to Socials. Guests cannot open project records. Socials uses the same stable Connect account scope for posts, files, connection tokens and activity, retaining them across server restarts and code updates. Use the same Google account on each device; a password-paired PC owner uses the owner workspace. The existing hosted Socials database is a separate deployment; transfer existing work through an explicit workspace backup. Do not copy cookies or guess identities between hosts.
+
+Keep the data folder and its encryption key in backups. Social login return addresses must match the server's stable HTTPS origin.
