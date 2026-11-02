@@ -196,3 +196,10 @@ Source changes go directly into this project folder. No source ZIP is prepared.
 - [x] Control glow animation uses transforms; hidden login motion stays paused
 - [x] Host restart confirmed; public site and updated assets verified live on 22 October 2026
 - [ ] Real Android control and mobile-data responsiveness verification
+
+
+### 2026-11-02 — Projects and shared Socials server
+
+Added Projects and mounted the standalone Socials module at `/socials/` on the same authenticated host. Deployed backed-up server/UI changes to the installed host and configured a separate persistent Socials data folder. Verified 65 drafts and 65 PNG files on that running server, with server-generated account-scoped history. Existing Google owner and password owner resolve to the same stable owner workspace. Socials remains a separate GitHub repository.
+
+Validation: full Connect suite 445/445 passed; focused Projects UI and installed Socials module checks passed. No physical Android or browser screenshot verification for this integration; local browser control was disabled in Work settings. The old hosted Socials Site is a separate deployment and has not received these draft records.
