@@ -21,7 +21,8 @@ internal static class CaptureCheck
    var previous=bitmap.GetPixel(0,0);bitmap.SetPixel(0,0,System.Drawing.Color.FromArgb(255-previous.R,255-previous.G,255-previous.B));object[] values=[bitmap,true,false];if(!(bool)method.Invoke(capture,values)!)continue;
    bool fresh=(bool)window.GetType().GetProperty("FrameChanged")!.GetValue(window)!;if(!fresh)cachedRestored=bitmap.GetPixel(0,0).ToArgb()==previous.ToArgb();
   }
-  Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{frames,backend,cursorEmbedded=embedded,cachedTargetRestored=cachedRestored,elapsedMs=Environment.TickCount64-start}));
+  var captureSize=window?.GetType().GetProperty("Size")?.GetValue(window);
+  Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{frames,backend,cursorEmbedded=embedded,cachedTargetRestored=cachedRestored,desktopWidth=bounds.Width,desktopHeight=bounds.Height,captureSize,elapsedMs=Environment.TickCount64-start}));
   return frames==3&&backend=="wgc"&&!embedded&&cachedRestored?0:1;
  }
 }

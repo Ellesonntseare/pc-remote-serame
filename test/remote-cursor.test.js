@@ -48,6 +48,7 @@ function cursorHarness(options={}){
     querySelector(selector){if(selector==='#rsSettings .controlSheet')return sheet;return selector[0]==='#'?this.getElementById(selector.slice(1)):nodes.find(value=>selector[0]==='.'?value.classList.contains(selector.slice(1)):value.tagName===selector.toUpperCase())||null;}};
   const storage={getItem(key){if(options.readFails)throw new Error('Storage unavailable');return saved.get(key)??null;},setItem(key,value){if(options.writeFails)throw new Error('Storage unavailable');saved.set(key,String(value));},removeItem(key){if(options.writeFails)throw new Error('Storage unavailable');saved.delete(key);}};
   const window={localStorage:storage,getComputedStyle:()=>({position:options.cursorPosition||'absolute'})},rs={on:true,m:{w:1920,h:1080}};
+  if(options.image){window.PCRScreenTools={imageBox:()=>options.image};stage.getBoundingClientRect=()=>({left:5,top:10,width:600,height:400});Object.assign(stage,{offsetWidth:300,offsetHeight:200});}
   vm.runInNewContext(source,{window,document,rs,localStorage:storage,performance:{now:()=>now},ResizeObserver:class{constructor(fn){resizeCallbacks.push(fn);}observe(){}}});
   return {api:window.PCRCursor,stage,canvas,settings,sheet,saved,rs,document,byClass:name=>nodes.find(value=>value.classList.contains(name)),
     resize(){resizeCallbacks.forEach(fn=>fn());},advance(ms){now+=ms;}};
@@ -108,7 +109,7 @@ test('size API clamps and rounds settings and remains usable when storage is blo
 test('changing pointer size preserves its reported hotspot and local movement prediction',()=>{
   const c=cursorHarness(),pointer=c.byClass('remoteCursor');
   c.api.report({x:1000,y:500,visible:true});const initial=position(pointer);
-  assert.equal(pointer.hidden,false);near(initial[0],17+1000/1920*800);near(initial[1],23+500/1080*450);
+  assert.equal(pointer.hidden,false);near(initial[0],17+1000/1919*800);near(initial[1],23+500/1079*450);
   c.api.setSize(250);assert.deepEqual(position(pointer),initial);
   c.api.preview('mv 120 -100');const predicted=position(pointer);
   c.api.setSize(50);assert.deepEqual(position(pointer),predicted);
@@ -120,9 +121,17 @@ test('zoom and pan resize the pointer position independently of its visual size'
   const c=cursorHarness(),pointer=c.byClass('remoteCursor');
   c.api.report({x:720,y:300,visible:true});c.api.setSize(190);
   Object.assign(c.canvas,{offsetLeft:-310,offsetTop:-160,clientWidth:1600,clientHeight:900});c.resize();
-  near(pointer.style.left,-310+720/1920*1600);near(pointer.style.top,-160+300/1080*900);
+  near(pointer.style.left,-310+720/1919*1600);near(pointer.style.top,-160+300/1079*900);
   const zoomed=position(pointer);c.api.resetSize();assert.deepEqual(position(pointer),zoomed);
   c.api.preview('abs 0 0');assert.deepEqual(position(pointer),['-310px','-160px'],'the top left hotspot remains at the screen origin');
+});
+
+test('the arrow inverts direct taps against the fitted image including stage scaling and fractional margins',()=>{
+  const image={x:15.25,y:90.5,w:570.75,h:320.25},c=cursorHarness({image}),pointer=c.byClass('remoteCursor');
+  c.api.report({x:1919,y:1079,visible:true});
+  near(pointer.style.left,(image.x-5+image.w)/2);near(pointer.style.top,(image.y-10+image.h)/2);
+  c.api.preview('abs 0 0');near(pointer.style.left,(image.x-5)/2);near(pointer.style.top,(image.y-10)/2);
+  image.y+=30.25;c.resize();near(pointer.style.top,(image.y-10)/2);
 });
 
 test('visibility and stream reset retain pointer size without displaying a stale pointer',()=>{
