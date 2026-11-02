@@ -105,15 +105,32 @@ test('size API clamps and rounds settings and remains usable when storage is blo
   assert.doesNotThrow(()=>c.api.resetSize());assert.equal(c.api.getSize(),100);
 });
 
-test('changing pointer size preserves its reported hotspot and local movement prediction',()=>{
+test('continuous trackpad movement follows Windows acceleration without hiding authoritative reports',()=>{
+  const c=cursorHarness(),pointer=c.byClass('remoteCursor');
+  c.api.report({x:500,y:200,visible:true});const initial=position(pointer);
+  c.api.preview('mv 20 0');assert.deepEqual(position(pointer),initial,'raw input is not a Windows pointer position');
+  for(const [x,y]of [[550,200],[604,207],[662,212]]){
+    c.advance(16);c.api.report({x,y,visible:true});
+    near(pointer.style.left,17+x/1920*800);near(pointer.style.top,23+y/1080*450);
+    const reported=position(pointer);c.api.preview('mv 20 3');assert.deepEqual(position(pointer),reported);
+  }
+});
+
+test('unaccepted absolute input cannot display a pointer at a position Windows never reached',()=>{
+  const c=cursorHarness(),pointer=c.byClass('remoteCursor');c.api.report({x:500,y:200,visible:true});const initial=position(pointer);
+  c.api.preview('abs 1600 900');assert.deepEqual(position(pointer),initial);
+  c.api.report({x:500,y:200,visible:true});assert.deepEqual(position(pointer),initial);
+  c.api.report({x:1600,y:900,visible:true});near(pointer.style.left,17+1600/1920*800);near(pointer.style.top,23+900/1080*450);
+});
+
+test('changing pointer size preserves its confirmed Windows hotspot',()=>{
   const c=cursorHarness(),pointer=c.byClass('remoteCursor');
   c.api.report({x:1000,y:500,visible:true});const initial=position(pointer);
   assert.equal(pointer.hidden,false);near(initial[0],17+1000/1920*800);near(initial[1],23+500/1080*450);
   c.api.setSize(250);assert.deepEqual(position(pointer),initial);
-  c.api.preview('mv 120 -100');const predicted=position(pointer);
-  c.api.setSize(50);assert.deepEqual(position(pointer),predicted);
-  c.advance(100);c.api.report({x:1000,y:500,visible:true});assert.deepEqual(position(pointer),predicted,'recent local movement keeps its prediction during size changes');
-  c.advance(51);c.api.report({x:1000,y:500,visible:true});assert.deepEqual(position(pointer),initial,'server reports reconcile after the existing 150 ms interval');
+  c.api.preview('mv 120 -100');assert.deepEqual(position(pointer),initial);
+  c.api.setSize(50);assert.deepEqual(position(pointer),initial);
+  c.advance(10);c.api.report({x:1120,y:400,visible:true});near(pointer.style.left,17+1120/1920*800);near(pointer.style.top,23+400/1080*450);
 });
 
 test('zoom and pan resize the pointer position independently of its visual size',()=>{
@@ -122,7 +139,7 @@ test('zoom and pan resize the pointer position independently of its visual size'
   Object.assign(c.canvas,{offsetLeft:-310,offsetTop:-160,clientWidth:1600,clientHeight:900});c.resize();
   near(pointer.style.left,-310+720/1920*1600);near(pointer.style.top,-160+300/1080*900);
   const zoomed=position(pointer);c.api.resetSize();assert.deepEqual(position(pointer),zoomed);
-  c.api.preview('abs 0 0');assert.deepEqual(position(pointer),['-310px','-160px'],'the top left hotspot remains at the screen origin');
+  c.api.report({x:0,y:0,visible:true});assert.deepEqual(position(pointer),['-310px','-160px'],'the top left hotspot remains at the screen origin');
 });
 
 test('visibility and stream reset retain pointer size without displaying a stale pointer',()=>{

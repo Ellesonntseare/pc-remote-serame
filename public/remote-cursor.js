@@ -17,7 +17,7 @@
   const cursor=document.createElement('div');cursor.className='remoteCursor';cursor.hidden=true;
   cursor.setAttribute('aria-hidden','true');
   cursor.style.pointerEvents='none';
-  stage.append(cursor);let x=0,y=0,enabled=false,visible=false,lastPreview=-Infinity,sourceCursor='auto',embedded=false;
+  stage.append(cursor);let x=0,y=0,enabled=false,visible=false,sourceCursor='auto',embedded=false;
   let range=null,output=null,sizePreview=null,overlayPositioned=true;
   function checkOverlay(){
     // If the positioning stylesheet is unavailable, show a matching native
@@ -51,20 +51,15 @@
     if(!Number.isFinite(state.x)||!Number.isFinite(state.y)||!rs.m)return;
     embedded=state.embedded===true;
     enabled=true;
-    if(performance.now()-lastPreview>150){x=state.x;y=state.y;visible=state.visible!==false;}
+    x=state.x;y=state.y;visible=state.visible!==false;
     draw();
   }
-  function preview(command){
-    if(!enabled||!rs.m)return;
-    const [kind,a,b]=command.split(' ');
-    if(!Number.isFinite(Number(a))||!Number.isFinite(Number(b)))return;
-    if(kind==='abs'){x=Number(a);y=Number(b);}
-    else if(kind==='mv'){x+=Number(a);y+=Number(b);}
-    else return;
-    x=Math.max(0,Math.min(rs.m.w-1,x));y=Math.max(0,Math.min(rs.m.h-1,y));
-    visible=true;lastPreview=performance.now();draw();
+  function preview(){
+    // Keep the input hook, but never guess a Windows pointer position. Relative
+    // SendInput is accelerated by Windows, and absolute input may be rejected.
+    // Reports supply the actual hotspot, even during continuous trackpad input.
   }
-  function reset(){enabled=false;visible=false;embedded=false;lastPreview=-Infinity;draw();}
+  function reset(){enabled=false;visible=false;embedded=false;draw();}
   function setSourceCursor(value){if(!['auto','embedded','overlay'].includes(value))return;sourceCursor=value;draw();}
   const settings=document.getElementById('rsSettings')?.querySelector('.controlSheet');
   if(settings){
