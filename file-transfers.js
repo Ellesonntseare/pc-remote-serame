@@ -83,7 +83,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
   const fileETag=(name,stat)=>'"'+digest(name+':'+stat.size+':'+stat.mtimeMs+':'+stat.ctimeMs)+'"';
   async function filenameConflict(name,file){
     let existing;try{const stat=await fsp.lstat(file);existing={name,size:stat.size,directory:stat.isDirectory(),...stat.isFile()&&!stat.isSymbolicLink()&&{etag:fileETag(name,stat)}};}catch(error){if(error.code!=='ENOENT')throw error;}
-    return Object.assign(problem(409,'An item named '+name.split('/').at(-1)+' already exists. Choose Replace or another destination to keep the original filename.'),{code:'filename_conflict',fileName:name,...existing&&{existing}});
+    return Object.assign(problem(409,'An item named '+name.split('/').at(-1)+' already exists. Choose Keep both to save a separate copy, or choose another destination.'),{code:'filename_conflict',fileName:name,...existing&&{existing}});
   }
   async function requireAvailable(name){const file=await safeTarget(name,true);try{await fsp.lstat(file);}catch(error){if(error.code==='ENOENT')return;throw error;}throw await filenameConflict(name,file);}
   function replacementETag(value,allowed){if(value!==undefined&&(!allowed||typeof value!=='string'||!/^new$|^\"[a-f0-9]{64}\"$/.test(value)))throw problem(400,'Refresh the destination before replacing a file.');return value;}
@@ -293,13 +293,14 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
               // Recover a lost final acknowledgement before considering a new
               // destination; an already-published file must never be duplicated.
               if(!u.complete&&u.publishName){try{const [source,stored]=await Promise.all([fsp.stat(u.temp),safeTarget(u.publishName).then(file=>fsp.lstat(file))]);if(stored.isFile()&&!stored.isSymbolicLink()&&source.ino!==0&&source.ino===stored.ino&&source.dev===stored.dev)await finish(u);}catch(error){if(error.code!=='ENOENT')throw error;}}
-              if(u.complete)throw problem(409,'This upload has already finished. Its saved filename has not changed.');
+              if(u.complete&&!(body.conflict==='rename'&&u.conflict==='rename'&&body.replaceETag===undefined&&body.relativePath===undefined))throw problem(409,'This upload has already finished. Its saved filename has not changed.');
               const destination=body.relativePath===undefined?(u.relativePath||u.name):relativePath(allowedName(body.relativePath));
               if(destination.split('/').at(-1)!==u.name)throw problem(400,'Choose a destination folder while keeping the original filename.');
-              const syncETag=body.replaceETag===undefined?(destination===(u.relativePath||u.name)?u.syncETag:undefined):replacementETag(body.replaceETag,allowLocations);
+              const keepReplacement=body.conflict!=='rename'&&destination===(u.relativePath||u.name);
+              const syncETag=body.replaceETag===undefined?(keepReplacement?u.syncETag:undefined):replacementETag(body.replaceETag,allowLocations);
               const conflict=body.conflict===undefined?u.conflict:conflictPolicy(body.conflict);
               if(!syncETag&&conflict!=='rename')await requireAvailable(destination);
-              u.relativePath=destination;u.syncETag=syncETag;u.conflict=conflict;delete u.publishName;
+              if(!u.complete){u.relativePath=destination;u.syncETag=syncETag;u.conflict=conflict;delete u.publishName;}
             }
             u.token=token;u.until=Date.now()+RETENTION_MS;await persist(u);
             // Complete an upload whose last chunk committed before a process stop.

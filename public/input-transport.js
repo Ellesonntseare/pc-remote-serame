@@ -28,7 +28,7 @@
     clearTimeout(retryTimer);retryTimer=null;
     if(!active()||socket)return;
     let ws;
-    try{ws=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+'//'+location.host+'/api/input-stream'+(rs.m?.streamId?'?screen='+encodeURIComponent(rs.m.streamId):''));}
+    try{ws=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+'//'+location.host+'/api/input-stream'+(rs.m?.streamId?'?screen='+encodeURIComponent(rs.m.streamId)+'&cursor=1': ''));}
     catch{scheduleReconnect();return;}
     socket=ws;ws.pcrUsed=false;
     openTimer=setTimeout(()=>{if(socket===ws&&ws.readyState===WebSocket.CONNECTING)ws.close();},3000);
@@ -40,6 +40,11 @@
       if(socket!==ws)return;
       let response;
       try{response=JSON.parse(event.data);}catch{lost(ws,'Invalid input reply');ws.close();return;}
+      if(response.type==='cursor'){
+        window.PCRCursor?.report(response.state);
+        window.PCRPrecisionLens?.report(response.state);
+        return;
+      }
       const request=pending.get(response.id);
       if(request){pending.delete(response.id);request.cleanup();request.resolve(response);}
       else if(response.ok===false||response.status>=400){

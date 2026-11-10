@@ -385,7 +385,12 @@ function createApp(options={}) {
           return;
         } else if(pkt[0]===4){captureRequested=false;requestVideoFrame();return;}
         else if(pkt[0]===6){
-          for(const v of viewers)if(v.regions&&v.res.writable&&!v.busy)v.busy=!v.res.write(pkt);
+          for(const v of viewers)if(v.regions){
+            const ws=v.feedbackSocket;
+            if(ws?.cursorReports&&ws.readyState===WebSocket.OPEN){
+              if(ws.bufferedAmount<4096)ws.send('{"type":"cursor","state":'+pkt.subarray(5).toString('utf8')+'}');
+            }else if(v.res.writable&&!v.busy)v.busy=!v.res.write(pkt);
+          }
           return;
         }else if(pkt[0]!==0&&pkt[0]!==5) return;
         if(pkt[0]===1){applySmartQuality();for(const v of viewers)if(v.res.writable)v.res.write(viewerMetadata(v));return;}
@@ -613,8 +618,10 @@ function createApp(options={}) {
         sessions.set(sessionKey(token),{ip,until:Date.now()+seconds*1000,persistent,role:'owner',pairContext:pairingContext,...account&&{identity:previous.identity,account,pairContext:pairingContext}});sessionAdmin.login(sessionKey(token),req,account?'google':'password');if(persistent)saveSessions();record(ip,account?'Google account paired with this PC':requirePassword?'Signed in':'Phone paired',undefined,sessionKey(token));
         return respond(res,200,{ok:true}, {'Set-Cookie':[`${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict${persistent||!requirePassword?'; Max-Age='+seconds:''}${viaTunnel?'; Secure':''}`,`pc_remote_guest_request=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${viaTunnel?'; Secure':''}`]});
       }
+      if(pathname.startsWith('/alderwick/token/'))return await require('./alderwick-host').relay(req,res,pathname);
       const token=auth(req);
       if(!token)return respond(res,401,{error:'Pair your phone first'});
+      if(pathname==='/alderwick/')return await require('./alderwick-host').page(req,res,sessions.get(token),(viaTunnel?'https://':'http://')+req.headers.host);
       if(await socials.handle(req,res,{pathname,session:sessions.get(token),scope:workspaceScope(token),origin:(viaTunnel?'https://':'http://')+req.headers.host,respond}))return;
       if(pathname==='/api/local-route-key'&&req.method==='GET'){
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required to choose a faster connection.'});
@@ -969,6 +976,7 @@ function createApp(options={}) {
     if(screenId&&!viewer)return rejectUpgrade(socket,409,'Screen session changed');
     inputStream.handleUpgrade(req,socket,head,ws=>{
       const entry={ws,token};inputSockets.add(entry);
+      ws.cursorReports=new URL(req.url,'http://localhost').searchParams.get('cursor')==='1';
       if(viewer){viewer.feedbackSocket=ws;viewer.inFlight.clear();updateVideoDemand();}
       const expiry=sessionExpiry(()=>sessions.get(token)?.until||0,()=>disconnectInput(ws,1008,'Session expired'));
       const activeIds=new Set();

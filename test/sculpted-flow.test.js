@@ -21,7 +21,7 @@ function fixture(t){
 test('Explorer keeps its Windows layout, live nodes and working folder navigation after the new skin mounts',async t=>{
  const f=fixture(t);f.w.PCRPages.current='filesDialog';f.d.getElementById('filesDialog').open=true;await f.w.PCRFileManager.refresh();
  assert.ok(f.d.getElementById('filesDialog').classList.contains('explorerFiles'));
- assert.equal(f.sidebar.parentElement.className,'explorerBody');assert.equal(f.tabs.parentElement.className,'filesTabs');assert.equal(f.send.parentElement.className,'explorerCommands');
+ assert.equal(f.sidebar.parentElement.className,'explorerBody');assert.equal(f.tabs.parentElement.className,'filesTabs');assert.equal(f.send.parentElement.className,'explorerTransferBar');
  assert.equal(f.d.querySelector('.filesHeader').hidden,true);assert.equal(f.d.querySelector('.ecFileLocations'),null);
  f.d.querySelector('.fmFileName').click();await tick();assert.equal(f.w.PCRFileManager.path,'Notes');
  assert.ok(f.d.querySelector('.explorerAddress [data-breadcrumb]'));assert.ok(f.d.querySelector('.explorerCommands .explorerViewMenu'));

@@ -96,5 +96,59 @@ test('signing out clears paused batches before another account can reuse the fil
 });
 
 test('the browser upload screen follows the real upload and its cancel control reaches the existing batch',async t=>{
- const f=await fixture(t),held=holdChunk(f);f.w.eval(await fs.readFile(path.join(__dirname,'../public/native-transfers.js'),'utf8'));f.choose([new f.w.File(['upload screen'],'screen.txt')]);await until(()=>held());const screen=f.d.getElementById('uploadProgressScreen');assert.equal(screen.open,true);assert.match(screen.textContent,/screen.txt/);assert.match(screen.querySelector('h2').textContent,/Sending/);screen.querySelector('[data-upload-cancel]').click();await until(()=>screen.dataset.state==='cancelled');assert.equal(held().abortCount,1);assert.ok(!screen.textContent.includes('Saved on your PC'));assert.equal(screen.querySelector('[data-upload-done]').hidden,false);
+ const f=await fixture(t),held=holdChunk(f);f.w.eval(await fs.readFile(path.join(__dirname,'../public/native-transfers.js'),'utf8'));f.choose([new f.w.File(['upload screen'],'screen.txt')]);await until(()=>held());const screen=f.d.getElementById('uploadProgressScreen');assert.equal(screen.open,true);assert.match(screen.textContent,/screen.txt/);assert.match(screen.querySelector('h2').textContent,/Sending/);screen.querySelector('[data-upload-cancel]').click();await until(()=>screen.dataset.state==='cancelled'&&f.d.getElementById('filesProgress').hidden);assert.equal(held().abortCount,1);assert.ok(!screen.textContent.includes('Saved on your PC'));assert.equal(screen.querySelector('[data-upload-done]').hidden,false);
+});
+
+for(const lateConflict of [false,true]){
+  test('Keep both saves an unused filename '+(lateConflict?'when the destination changes during upload':'when the original name exists'),async t=>{
+    const f=await fixture(t),name='report.txt';
+    f.w.eval(await fs.readFile(path.join(__dirname,'../public/native-transfers.js'),'utf8'));
+    await fs.writeFile(path.join(f.root,'report (1).txt'),'previous copy');
+    let starts=0,resumes=0,resumeRequest;
+    const api=f.w.api;
+    f.w.api=async(route,options)=>{
+      const response=await api(route,options);
+      if(route==='/api/files/uploads'&&options?.method==='POST'){
+        starts++;
+        if(lateConflict&&starts===1&&response.ok)await fs.writeFile(path.join(f.root,name),'original');
+      }
+      if(route.endsWith('/resume')){resumes++;resumeRequest=[route,options];}
+      return response;
+    };
+    if(!lateConflict)await fs.writeFile(path.join(f.root,name),'original');
+    f.choose([new f.w.File(['new contents'],name)]);
+    const screen=f.d.getElementById('uploadProgressScreen'),keepBoth=screen.querySelector('[data-upload-keep-both]');
+    await until(()=>!keepBoth.hidden);
+    assert.equal(screen.querySelector('h2').textContent,'File already exists');
+    keepBoth.click();
+    await until(()=>screen.dataset.state==='complete'&&f.d.getElementById('filesProgress').hidden);
+    assert.equal(await fs.readFile(path.join(f.root,name),'utf8'),'original');
+    assert.equal(await fs.readFile(path.join(f.root,'report (1).txt'),'utf8'),'previous copy');
+    assert.equal(await fs.readFile(path.join(f.root,'report (2).txt'),'utf8'),'new contents');
+    assert.equal(screen.querySelector('[data-upload-name]').textContent,'report (2).txt');
+    assert.equal(starts,lateConflict?1:2);
+    assert.equal(resumes,lateConflict?1:0);
+    if(resumeRequest){
+      const retry=await api(...resumeRequest);
+      assert.equal(retry.complete,true);
+      assert.equal(retry.file.name,'report (2).txt');
+      assert.equal((await fs.readdir(f.root)).includes('report (3).txt'),false);
+    }
+  });
+}
+
+test('the Android progress screen sends Keep both for the conflicting file only',async t=>{
+  const f=await fixture(t),commands=[];
+  f.w.PCRAndroid={postMessage:message=>commands.push(JSON.parse(message))};
+  f.w.eval(await fs.readFile(path.join(__dirname,'../public/native-transfers.js'),'utf8'));
+  f.w.PCRUploadProgress.native([
+    {id:'waiting',direction:'upload',state:'paused',name:'waiting.txt'},
+    {id:'conflict',direction:'upload',state:'paused',name:'report.txt',filenameConflict:true},
+  ]);
+  const screen=f.d.getElementById('uploadProgressScreen');
+  assert.equal(screen.querySelector('[data-upload-name]').textContent,'report.txt');
+  assert.equal(screen.querySelector('[data-upload-keep-both]').hidden,false);
+  assert.equal(screen.querySelector('[data-upload-replace]').hidden,true);
+  screen.querySelector('[data-upload-keep-both]').click();
+  assert.deepEqual(commands,[{type:'transfer-control',id:'conflict',command:'keep-both'}]);
 });

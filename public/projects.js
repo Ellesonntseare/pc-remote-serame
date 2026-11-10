@@ -13,7 +13,7 @@
    try{
     const response=await fetch('/api/projects',{headers:{'X-PCR':'1'},credentials:'same-origin'});const data=await response.json();if(!response.ok)throw Error(data.error||'Projects are unavailable.');list.replaceChildren();
     for(const project of data.projects){const card=document.createElement('article'),title=document.createElement('h3'),detail=document.createElement('p');title.textContent=project.name;detail.textContent=project.description;card.append(title,detail);
-     if(project.available){const link=document.createElement('a');link.className='projectsOpen';link.href='/socials/';link.textContent='Open';card.append(link);}else{const state=document.createElement('span');state.textContent='Not installed';card.append(state);}list.append(card);}
+     if(project.available){const link=document.createElement('a');link.className='projectsOpen';link.href=project.id==='alderwick'?'/alderwick/':'/socials/';link.textContent='Open';card.append(link);}else{const state=document.createElement('span');state.textContent='Not installed';card.append(state);}list.append(card);}
    }catch(error){list.textContent=error.message;}
   };
   window.addEventListener('pcr:auth',update);update();
