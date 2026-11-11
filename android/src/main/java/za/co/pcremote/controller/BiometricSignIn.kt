@@ -69,7 +69,7 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
         return Cipher.getInstance("AES/GCM/NoPadding").apply{
             if(enroll)init(Cipher.ENCRYPT_MODE,secret)
             else{val saved=JSONObject(preferences.getString(alias,null)?:throw IllegalStateException("Sign in with your password."));init(Cipher.DECRYPT_MODE,secret,GCMParameterSpec(128,Base64.decode(saved.getString("iv"),Base64.NO_WRAP)))}
-            updateAAD(origin.toByteArray(Charsets.UTF_8))
+            // BiometricPrompt must authorize this operation before any data is sent to Keystore.
         }
     }
     private fun verifyOwner(origin:String,verified:()->Unit){
@@ -103,13 +103,24 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
         prompt=BiometricPrompt(activity,ContextCompat.getMainExecutor(activity),object:BiometricPrompt.AuthenticationCallback(){
             override fun onAuthenticationSucceeded(result:BiometricPrompt.AuthenticationResult){
                 if(!foreground||!gate.current(attempt))return;busy=false
-                val success=runCatching{
+                val completion=runCatching{
                     val authenticated=result.cryptoObject?.cipher?:throw IllegalStateException("Android did not unlock the biometric key.")
+                    // Use the cipher returned by the prompt. Android can cache an authorization
+                    // error from a premature updateAAD and surface it only at doFinal.
+                    authenticated.updateAAD(origin.toByteArray(Charsets.UTF_8))
                     if(enroll){val proof=ByteArray(32).also{SecureRandom().nextBytes(it)};val bytes=authenticated.doFinal(proof);proof.fill(0)
                         val record=JSONObject().put("iv",Base64.encodeToString(authenticated.iv,Base64.NO_WRAP)).put("proof",Base64.encodeToString(bytes,Base64.NO_WRAP));check(preferences.edit().putString(key(origin),record.toString()).commit())
                     }else{val record=JSONObject(preferences.getString(key(origin),null)!!);val proof=authenticated.doFinal(Base64.decode(record.getString("proof"),Base64.NO_WRAP));check(proof.size==32);proof.fill(0)}
-                }.isSuccess
-                if(!success){gate.lock();label?.text="Biometric sign-in could not unlock. Use your PC password or PIN.";emit(origin,"Biometric sign-in could not unlock. Use your password and set it up again.");return}
+                }
+                if(completion.isFailure){
+                    android.util.Log.w("EllesonBiometrics", "${if(enroll) "Setup" else "Unlock"} Keystore operation failed: ${completion.exceptionOrNull()?.javaClass?.simpleName}")
+                    gate.lock()
+                    val message = if(enroll) "Fingerprint sign-in could not finish setup. Tap Enable to try again."
+                        else "Fingerprint sign-in could not unlock. Use your PC password or PIN."
+                    label?.text=message
+                    emit(origin,message)
+                    return
+                }
                 if(!gate.accept(attempt))return
                 if(enroll){emit(origin,"Fingerprint / face sign-in enabled. The app locks when you leave it.");return}
                 val action=pending;pending=null;hide();action?.invoke();emit(origin)
