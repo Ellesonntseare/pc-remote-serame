@@ -5,19 +5,28 @@ function request(port,route,{method='GET',body,raw=false,token='owner',headers={
   const data=body===undefined?undefined:raw?Buffer.from(body):Buffer.from(JSON.stringify(body));
   return new Promise((resolve,reject)=>{const req=http.request({host:'127.0.0.1',port,path:route,method,headers:{'X-PCR':'1',...token&&{Authorization:'Bearer '+token},...data&&{'Content-Length':data.length},...headers}},res=>{const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>{const bytes=Buffer.concat(chunks);let json;try{json=JSON.parse(bytes);}catch{}resolve({status:res.statusCode,headers:res.headers,bytes,json});});});req.on('error',reject);req.end(data);});
 }
-async function fixture(t){
-  const root=await fs.mkdtemp(path.join(__dirname,'.resume-check-')),directory=path.join(root,'files');let transfers,server,port;
+async function fixture(t,{privateJournal=false}={}){
+  const root=await fs.mkdtemp(path.join(__dirname,'.resume-check-')),directory=path.join(root,'files'),journal=path.join(root,'private-journal');let transfers,server,port;
   const accounts=new Map([['owner','private-account-A'],['replacement','private-account-A'],['stranger','private-account-B']]);
   const respond=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
   const readJson=async(req,max)=>{const chunks=[];let bytes=0;for await(const chunk of req){bytes+=chunk.length;if(bytes>max)throw Object.assign(Error('Too large'),{status:413});chunks.push(chunk);}return JSON.parse(Buffer.concat(chunks));};
-  async function start(){transfers=createFileTransfers({directory,maxBytes:4*1024*1024});server=http.createServer(async(req,res)=>{const token=(req.headers.authorization||'').replace(/^Bearer /,'');if(!accounts.has(token))return respond(res,401,{error:'Sign in'});const handled=await transfers.handle(req,res,{pathname:new URL(req.url,'http://localhost').pathname,token,accountContext:accounts.get(token),readJson,respond});if(!handled)respond(res,404,{error:'Unknown'});});await new Promise(r=>server.listen(0,'127.0.0.1',r));port=server.address().port;}
+  async function start(){transfers=createFileTransfers({directory,...privateJournal&&{journalDirectory:journal},maxBytes:4*1024*1024});server=http.createServer(async(req,res)=>{const token=(req.headers.authorization||'').replace(/^Bearer /,'');if(!accounts.has(token))return respond(res,401,{error:'Sign in'});const handled=await transfers.handle(req,res,{pathname:new URL(req.url,'http://localhost').pathname,token,accountContext:accounts.get(token),readJson,respond});if(!handled)respond(res,404,{error:'Unknown'});});await new Promise(r=>server.listen(0,'127.0.0.1',r));port=server.address().port;}
   async function stop(){await transfers.close();await new Promise(r=>server.close(r));}
   await start();t.after(async()=>{await stop();const absolute=path.resolve(root);assert.equal(path.dirname(absolute),__dirname);assert.ok(path.basename(absolute).startsWith('.resume-check-'));await fs.rm(absolute,{recursive:true,force:true});});
-  return {directory,get port(){return port;},request:(route,o)=>request(port,route,o),async restart(edit){await stop();if(edit)await edit();await start();},revoke:token=>transfers.revoke(token)};
+  return {directory,journal,get port(){return port;},request:(route,o)=>request(port,route,o),async restart(edit){await stop();if(edit)await edit();await start();},async privatize(){await stop();privateJournal=true;await start();},revoke:token=>transfers.revoke(token)};
 }
 const create=(f,name,size)=>f.request('/api/files/uploads',{method:'POST',body:{name,size}});
 const put=(f,id,offset,body,token='owner')=>f.request('/api/files/uploads/'+id+'?offset='+offset,{method:'PUT',body,raw:true,token});
 const resume=(f,u,token='replacement',resumeSecret=u.resumeSecret)=>f.request('/api/files/uploads/'+u.id+'/resume',{method:'POST',token,body:{resumeSecret}});
+test('private recovery records preserve chunk resume while a completed picture has no JSON companion',async t=>{
+ const f=await fixture(t,{privateJournal:true}),bytes=crypto.randomBytes(1024*1024+71),u=(await create(f,'Photo.jpg',bytes.length)).json;
+ await put(f,u.id,0,bytes.subarray(0,u.chunkBytes));assert.ok(!(await fs.readdir(f.directory)).some(name=>name.endsWith('.json')));assert.ok((await fs.readdir(f.journal)).some(name=>name.endsWith('.json')));
+ await f.restart();assert.equal((await resume(f,u)).json.received,u.chunkBytes);await put(f,u.id,u.chunkBytes,bytes.subarray(u.chunkBytes),'replacement');assert.deepEqual(await fs.readdir(f.directory),['Photo.jpg']);assert.deepEqual(await fs.readFile(path.join(f.directory,'Photo.jpg')),bytes);
+});
+test('old application JSON receipts migrate privately without moving pictures or user JSON files',async t=>{
+ const f=await fixture(t),u=(await create(f,'old-picture.jpg',3)).json;await put(f,u.id,0,Buffer.from('pic'));await fs.writeFile(path.join(f.directory,'picture-notes.json'),'{"keep":true}');
+ await f.privatize();assert.equal((await resume(f,u)).json.complete,true);assert.deepEqual((await fs.readdir(f.directory)).sort(),['old-picture.jpg','picture-notes.json']);assert.equal(await fs.readFile(path.join(f.directory,'picture-notes.json'),'utf8'),'{"keep":true}');assert.ok((await fs.readdir(f.journal)).includes('.pcr-upload-'+u.id+'.json'));
+});
 async function upload(f,name,body,conflict){const u=(await f.request('/api/files/uploads',{method:'POST',body:{name,size:body.length,...conflict&&{conflict}}})).json;if(body.length)return (await put(f,u.id,0,body)).json.file;return u.file;}
 
 test('interrupted transfer resumes across a host restart and rotated login without restarting bytes',async t=>{

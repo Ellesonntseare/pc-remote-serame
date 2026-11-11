@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const source=fs.readFileSync(path.join(__dirname,'../public/interaction-motion.js'),'utf8');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 function fixture(t,{reduced=false,animationAPI=true}={}){
- const dom=new JSDOM('<html class="ecFlow"><head><style>button{position:static}</style></head><body><button id="action">Open files</button><div id="rs"><button id="mouse">Left mouse</button><canvas id="rsc"></canvas></div><section id="ecHome"><header>Home</header><section id="homePanel">Tools</section></section><dialog id="filesDialog"><header>Files</header><section id="filePanel">Folders</section><div id="preview"><video></video></div></dialog><nav class="ecNavigation"><button aria-current="page"><svg></svg></button></nav><div id="ecRailChoices" hidden><button>Mouse</button><button>Files</button></div><div class="secondScreenDiagram" data-orientation="landscape"><button data-placement="left" aria-pressed="false"><span class="secondScreenPhone"></span></button><button data-placement="right" aria-pressed="true"><span class="secondScreenPhone"></span></button></div></body></html>',{url:'https://pc.test',runScripts:'outside-only',pretendToBeVisual:true});
+ const dom=new JSDOM('<html class="ecFlow"><head><style>button{position:static}</style></head><body><button id="action">Open files</button><div id="rs"><button id="mouse">Left mouse</button><canvas id="rsc"></canvas></div><section id="ecHome"><header>Home</header><section id="homePanel">Tools</section></section><dialog id="filesDialog"><header>Files</header><section id="filePanel">Folders<div data-pc-files><div data-entries></div></div></section><div id="preview"><video></video></div></dialog><nav class="ecNavigation"><button aria-current="page"><svg></svg></button></nav><div id="ecRailChoices" hidden><button>Mouse</button><button>Files</button></div><div class="secondScreenDiagram" data-orientation="landscape"><button data-placement="left" aria-pressed="false"><span class="secondScreenPhone"></span></button><button data-placement="right" aria-pressed="true"><span class="secondScreenPhone"></span></button></div></body></html>',{url:'https://pc.test',runScripts:'outside-only',pretendToBeVisual:true});
  const w=dom.window,calls=[],listeners=[];w.PCRAuth={signedIn:true,role:'owner'};const media={matches:reduced,addEventListener:(_,fn)=>listeners.push(fn)};w.matchMedia=()=>media;
  if(animationAPI)w.Element.prototype.animate=function(frames,options){let finish;const animation={node:this,frames,options,cancelled:false,finished:new Promise(resolve=>finish=resolve),cancel(){this.cancelled=true;finish();},finish(){finish();}};calls.push(animation);return animation;};
  for(const button of w.document.querySelectorAll('button'))button.getBoundingClientRect=()=>({left:0,top:0,width:100,height:44});
@@ -39,4 +39,19 @@ test('transfer success uses new completed transfers and never celebrates old his
 });
 test('older browser engines retain functional controls without the animation API',t=>{
  const f=fixture(t,{animationAPI:false}),button=f.w.document.getElementById('action');let clicks=0;button.onclick=()=>clicks++;f.pointer(button,'pointerdown');f.pointer(button,'pointerup');button.click();f.emit('pcr:page',{id:'filesDialog'});assert.equal(clicks,1);assert.equal(button.querySelector('.ecMotionInk'),null);assert.equal(f.calls.length,0);
+});
+
+test('Files animates asynchronously loaded folder rows, bounds the work and follows selection without changing actions',async t=>{
+ const f=fixture(t),page=f.w.document.getElementById('filesDialog'),grid=page.querySelector('[data-entries]');page.open=true;f.w.PCRFileManager={state:{path:'Downloads'}};f.emit('pcr:page',{id:'filesDialog'});f.emit('pcr:files-before-render');
+ for(let n=0;n<30;n++){const row=f.w.document.createElement('button');row.className='fmFile';row.dataset.file='photo'+n+'.jpg';row.innerHTML='<span class="fmFileIcon"></span>';grid.append(row);}
+ f.emit('pcr:files-render');assert.equal(f.calls.filter(item=>item.node.classList.contains('fmFile')).length,18,'only the first visible rows animate');assert.equal(f.calls.find(item=>item.node.classList.contains('fmFile')).options.duration,340);
+ const selected=grid.firstElementChild;let clicks=0;selected.onclick=()=>clicks++;selected.click();assert.equal(clicks,1);f.emit('pcr:files-state',{selection:[selected.dataset.file]});assert.ok(f.calls.some(item=>item.node===selected.querySelector('.fmFileIcon')));
+ grid.setAttribute('aria-busy','true');await tick();assert.equal(page.classList.contains('ecFilesLoading'),true);grid.setAttribute('aria-busy','false');await tick();assert.equal(page.classList.contains('ecFilesLoading'),false);
+ f.reduce();const count=f.calls.length;f.emit('pcr:files-before-render');f.w.PCRFileManager.state.path='Pictures';f.emit('pcr:files-render');assert.equal(f.calls.length,count);
+});
+
+test('Explorer icon sizing leaves the bottom navigation wave at full width',t=>{
+ const dom=new JSDOM('<html class="ecFlow"><head></head><body><dialog id="filesDialog" class="explorerFiles" open><div class="fileManager"><svg id="folder"></svg></div><nav class="ecNavigation"><svg class="ecNavLiquid"></svg></nav></dialog></body></html>',{pretendToBeVisual:true});t.after(()=>dom.window.close());
+ for(const name of ['sculpted-flow.css','explorer-windows.css']){const style=dom.window.document.createElement('style');style.textContent=fs.readFileSync(path.join(__dirname,'../public',name),'utf8');dom.window.document.head.append(style);}
+ const w=dom.window;assert.equal(w.getComputedStyle(w.document.getElementById('folder')).width,'20px');assert.notEqual(w.getComputedStyle(w.document.querySelector('.ecNavLiquid')).width,'20px');
 });

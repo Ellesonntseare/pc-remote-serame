@@ -1,7 +1,7 @@
 /* Motion stays on interface controls. Remote video and pointer surfaces retain their geometry. */
 .ecMotionStatic{position:relative}
 .ecMotionControl{transition:scale 85ms ease-out,background-color .14s ease,border-color .14s ease,color .14s ease}
-.ecMotionControl.ecMotionPressed{scale:.97}
+.ecMotionControl.ecMotionPressed{scale:.95}
 .ecFlow button.ecMotionControl:active:not(:disabled){transform:none}
 .ecMotionInk{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none;z-index:2;contain:paint}
 .ecMotionRipple{position:absolute;display:block;border-radius:50%;background:var(--ec-accent,#fc563e);pointer-events:none;opacity:0}
@@ -20,3 +20,11 @@ html[data-motion=reduce] .ecMotionControl,html[data-motion=reduce] .secondScreen
  .ecMotionInk{display:none}
 }
 @media(max-width:420px){.ecMotionReceipt{font-size:12px;padding:10px 13px;gap:8px}}
+.ecFlow #filesDialog.explorerFiles .fmFile{transition:background-color .18s ease,border-color .18s ease}
+.ecFlow #filesDialog.explorerFiles .ecMotionRipple{background:#2e83cc}
+.ecFlow #filesDialog.explorerFiles .explorerAddress{position:relative}
+.ecFlow #filesDialog.ecFilesLoading .explorerAddress::after{content:'';position:absolute;left:0;bottom:0;height:2px;width:32%;background:linear-gradient(90deg,transparent,#428cce,transparent);animation:ecFolderLoading 1s ease-in-out infinite;pointer-events:none}
+.ecFlow #filesDialog.ecFilesLoading .fmFile{opacity:.45}
+@keyframes ecFolderLoading{from{transform:translateX(-100%)}to{transform:translateX(400%)}}
+@media(prefers-reduced-motion:reduce){.ecFlow #filesDialog.ecFilesLoading .explorerAddress::after{animation:none;width:100%}.ecFlow #filesDialog .fmFile{transition:none}}
+html[data-motion=reduce] #filesDialog.ecFilesLoading .explorerAddress::after{animation:none;width:100%}

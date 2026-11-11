@@ -230,7 +230,7 @@ internal static class Program
     private static void DrawCursor(Graphics g)
     {
         var cursor = new Native.CURSORINFO { cbSize = Marshal.SizeOf<Native.CURSORINFO>() };
-        if (!Native.GetCursorInfo(ref cursor) || (cursor.flags & 1) == 0) return;
+        if (!Native.GetCursorInfo(ref cursor) || (cursor.flags & 1) == 0&&!PrivacyDisplay.CaptureRequested) return;
         int hotX = 0, hotY = 0;
         if (Native.GetIconInfo(cursor.hCursor, out var info))
         {
@@ -259,7 +259,7 @@ internal static class Program
                 if (regions && Native.GetCursorInfo(ref cursor))
                 {
                     var state = (x: cursor.pt.X - primary.Left, y: cursor.pt.Y - primary.Top,
-                        visible: (cursor.flags & 1) != 0, embedded: cursorEmbedded);
+                        visible: (cursor.flags & 1) != 0||PrivacyDisplay.CaptureRequested, embedded: cursorEmbedded);
                     long now = Environment.TickCount64;
                     if (previous != state || now - sentAt >= 250)
                     {
