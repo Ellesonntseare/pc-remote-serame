@@ -50,13 +50,42 @@
   const section=document.createElement('section');section.className='nativeTransfers';section.hidden=true;section.innerHTML='<div class="fmSectionHead"><h3>Transfer queue</h3><span>Continues when you switch apps</span></div><div data-native-queue></div>';pane.prepend(section);
   const inbox=document.createElement('section');inbox.className='fmShareInbox';inbox.hidden=true;inbox.setAttribute('role','status');inbox.innerHTML='<div><strong data-share-count></strong><p>Shared files save automatically in the PC transfer folder.</p></div><button type="button" class="filesPrimary" hidden>Retry sending</button>';pane.prepend(inbox);inbox.querySelector('button').onclick=()=>{sharing=false;sendShared();};
   function status(message,error=false){const target=document.getElementById('filesStatus');if(target){target.textContent=message;target.dataset.error=String(error);}}
-  function sendShared(){
+  function sendShared(destination=''){
     if(!native()||!sharedCount||sharing)return;
+    if(destinationPicker.open)destinationPicker.close();
     sharing=true;inbox.hidden=false;inbox.querySelector('[data-share-count]').textContent='Sending '+sharedCount+' shared '+(sharedCount===1?'file':'files')+' to your PC…';
-    // Android shares always use the PC inbox, independent of the folder/tab
-    // being browsed. The native service owns the bytes and background transfer.
-    window.PCRUploadProgress?.begin('native');const sent=send({type:'transfer-shared',destination:''});inbox.querySelector('button').hidden=sent;
-    if(!sent){sharing=false;status('Could not start sending. Tap Retry sending.',true);window.PCRUploadProgress?.failed('Could not start sending. Close this screen and tap Retry sending.');}
+    inbox.querySelector('p').textContent='You can keep using the app while your files are sent.';
+    window.PCRUploadProgress?.begin('native');
+    const sent=send({type:'transfer-shared',destination}),retry=inbox.querySelector('button');
+    retry.hidden=sent;
+    if(!sent){
+      sharing=false;retry.textContent='Retry sending';retry.onclick=()=>sendShared(destination);
+      status('Could not start sending. Tap Retry sending.',true);window.PCRUploadProgress?.failed('Could not start sending. Close this screen and tap Retry sending.');
+    }
+  }
+  const destinationPicker=document.createElement('dialog');
+  destinationPicker.className='nativeDialog';destinationPicker.setAttribute('aria-labelledby','shareDestinationTitle');
+  destinationPicker.innerHTML='<h2 id="shareDestinationTitle">Save on your PC</h2><p>Choose Transfers or a folder you starred in Files.</p><div data-share-folders></div><button type="button" data-share-back>Back</button>';
+  document.body.append(destinationPicker);
+  const folderChoices=destinationPicker.querySelector('[data-share-folders]');
+  destinationPicker.querySelector('[data-share-back]').onclick=()=>destinationPicker.close();
+  function chooseShareDestination(){
+    if(!native()||!sharedCount||sharing)return;
+    const manager=window.PCRFileManager?.state;
+    const favourites=window.PCRAuth?.role==='owner'?(manager?.favourites||[]).filter(path=>typeof path==='string'&&path.length>0&&path.length<=700&&path!=='@this-pc'):[];
+    if(!favourites.length){sendShared();return;}
+    inbox.hidden=false;inbox.querySelector('[data-share-count]').textContent=sharedCount+' shared '+(sharedCount===1?'file':'files');
+    inbox.querySelector('p').textContent='Choose where to save on your PC.';
+    const choose=inbox.querySelector('button');choose.hidden=false;choose.textContent='Choose folder';choose.onclick=chooseShareDestination;
+    folderChoices.replaceChildren();
+    for(const destination of ['',...new Set(favourites)]){
+      const [root,...parts]=destination.split('/');
+      const rootName=manager?.locations?.find(location=>location.id===root)?.label||root;
+      const button=document.createElement('button');button.type='button';button.className='filesSmallButton';
+      button.textContent=destination?(rootName+' / '+parts.join(' / ')).replace(/ \/ $/,''):'Transfers';
+      button.onclick=()=>sendShared(destination);folderChoices.append(button);
+    }
+    if(!destinationPicker.open)destinationPicker.showModal();
   }
   async function receiveFiles(){
     if(!autoReceive()||document.hidden||receiveController)return;
@@ -95,11 +124,11 @@
   }
   document.addEventListener('click',event=>{if(native()&&event.target.closest('#filesInput,#filesChoose,[data-phone-pick]')){event.preventDefault();event.stopImmediatePropagation();send({type:'transfer-pick',destination:window.PCRFileManager?.destination||''});}},true);
   window.addEventListener('pcr:transfer-queue',event=>{if(!native()||event.detail?.origin!==location.origin)return;const completed=new Set(queue.filter(item=>item.state==='complete').map(item=>item.id));queue=Array.isArray(event.detail.tasks)?event.detail.tasks:[];draw();if(queue.some(item=>item.state==='complete'&&!completed.has(item.id)))window.PCRFileManager?.refresh?.();});
-  window.addEventListener('pcr:share-inbox',event=>{if(!native())return;const value=event.detail||{};sharedCount=Math.max(0,Math.min(200,Number(value.count)||0));if(!sharedCount){sharing=false;inbox.hidden=true;}if(value.open){document.querySelector('.filesHome')?.click();if(value.text){if(!sharedCount)document.getElementById('textTab')?.click();const note=document.getElementById('filesNote');if(note)note.value=value.text;}}sendShared();});
+  window.addEventListener('pcr:share-inbox',event=>{if(!native())return;const value=event.detail||{};sharedCount=Math.max(0,Math.min(200,Number(value.count)||0));if(!sharedCount){sharing=false;inbox.hidden=true;if(destinationPicker.open)destinationPicker.close();}if(value.open){document.querySelector('.filesHome')?.click();if(value.text){if(!sharedCount)document.getElementById('textTab')?.click();const note=document.getElementById('filesNote');if(note)note.value=value.text;}}chooseShareDestination();});
   window.addEventListener('pcr:sync',()=>void receiveFiles());
   window.addEventListener('pcr:second-screen-files',event=>{if(autoReceive()&&event.detail?.message)status(event.detail.message,true);});
   document.addEventListener('visibilitychange',updateReceiver);
   window.addEventListener('pagehide',()=>{clearInterval(receiveTimer);receiveTimer=null;receiveEpoch++;receiveController?.abort();receiveController=null;});
   window.addEventListener('pcr:native-ready',ready);window.addEventListener('pcr:page',event=>{if(event.detail?.id==='filesDialog')ready();});
-  window.addEventListener('pcr:auth',()=>{receiveEpoch++;registeredAt=0;receiveController?.abort();receiveController=null;if(!window.PCRAuth?.signedIn){if(hadSession&&window.PCRNativeCapabilities?.nativeTransfers)send({type:'transfer-signout'});hadSession=false;queue=[];sharedCount=0;sharing=false;inbox.hidden=true;draw();updateReceiver();}else{hadSession=true;ready();}});window.PCRNativeTransfers={ready,receiveFiles,get autoReceive(){return autoReceive();}};ready();
+  window.addEventListener('pcr:auth',()=>{receiveEpoch++;registeredAt=0;receiveController?.abort();receiveController=null;if(!window.PCRAuth?.signedIn){if(hadSession&&window.PCRNativeCapabilities?.nativeTransfers)send({type:'transfer-signout'});hadSession=false;queue=[];sharedCount=0;sharing=false;inbox.hidden=true;if(destinationPicker.open)destinationPicker.close();draw();updateReceiver();}else{hadSession=true;ready();}});window.PCRNativeTransfers={ready,receiveFiles,get autoReceive(){return autoReceive();}};ready();
 })();

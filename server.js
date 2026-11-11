@@ -72,6 +72,7 @@ const PWA_ASSETS = new Map([
   ['/biometric-signin.js',['biometric-signin.js','text/javascript; charset=utf-8']],
   ['/navigation-bar.js',['navigation-bar.js','text/javascript; charset=utf-8']],
   ['/navigation-bar.css',['navigation-bar.css','text/css; charset=utf-8']],
+  ['/connection-health.js',['connection-health.js','text/javascript; charset=utf-8']],
   ['/media-recording.js',['media-recording.js','text/javascript; charset=utf-8']],
   ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
   ...['workspace-settings','device-links','device-input','typing-controls','home-panels','native-window','window-presentation','touch-trail','explorer-workspace','account-workspace'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
@@ -223,7 +224,8 @@ function createApp(options={}) {
   const sharedClipboard=createSharedClipboard({store:accountData,directory:options.sharedClipboardDirectory,apply:async value=>{if(options.sharedClipboardProvider?.apply)return options.sharedClipboardProvider.apply(value);if(options.clipboardProvider?.set&&['text','empty'].includes(value.kind))return options.clipboardProvider.set(value.text||'');if(!clipboardObserver?.active)throw Error('The Windows clipboard connection is starting.');return clipboardObserver.set(value);}});
   const nativeFeatures=options.nativeFeatures||createNativeFeatures({root:ROOT});
   const appUpdates=options.appUpdates||createAppUpdates({root:ROOT,currentVersion:require('./package.json').version});
-  const localRouteProof=createLocalRouteProof();
+  const localRouteProof=createLocalRouteProof(options.routeIdentityFile);
+  const hostRunId=crypto.randomBytes(16).toString('hex');
   const displayPrivacy=options.displayPrivacy||createDisplayPrivacy({root:ROOT});
   const audioSockets=new Set();
   const accountContext=requirePassword?crypto.createHash('sha256').update('pc-remote-owner-v1\0'+options.password).digest('hex'):undefined;
@@ -557,9 +559,16 @@ function createApp(options={}) {
       if(req.method==='GET'&&pathname==='/api/local-proof'){
         try{const address=(req.socket.localAddress||'').replace(/^::ffff:/,''),port=req.socket.localPort,nonce=new URL(req.url,'http://localhost').searchParams.get('nonce')||'';return respond(res,200,{ok:true,...localRouteProof.proof(nonce,'http://'+address+':'+port)});}catch{return respond(res,409,{error:'Start this connection check from the signed-in app.'});}
       }
+      if(req.method==='GET'&&pathname==='/api/route-proof'){
+        if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
+        const address=(req.socket.localAddress||'').replace(/^::ffff:/,'');
+        const origin=viaTunnel?'https://'+tunnelHostname:'http://'+address+':'+req.socket.localPort;
+        try{const nonce=new URL(req.url,'http://localhost').searchParams.get('nonce')||'';return respond(res,200,{ok:true,...localRouteProof.proof(nonce,origin,{allowInit:true})});}
+        catch{return respond(res,400,{error:'This route could not be verified.'});}
+      }
       if(req.method==='GET'&&pathname==='/api/ping'){
         const token=auth(req),paired=!!token&&sessions.get(token).role!=='account';
-        return respond(res,200,{ok:true,paired,requirePin,requirePassword,guestEnabled:requirePassword,...(paired?{name:sessions.get(token).role==='guest'?'Shared PC':hostname,...accessInfo(token),screen:enabled&&process.platform==='win32'&&permits(token,'screen')}:token?accessInfo(token):{})});
+        return respond(res,200,{ok:true,paired,requirePin,requirePassword,hostRunId,guestEnabled:requirePassword,...(paired?{name:sessions.get(token).role==='guest'?'Shared PC':hostname,...accessInfo(token),screen:enabled&&process.platform==='win32'&&permits(token,'screen')}:token?accessInfo(token):{})});
       }
       if(req.method==='GET'&&pathname==='/api/app-version')return respond(res,200,{version:require('./package.json').version});
       if(pathname.startsWith('/api/auth/google/')){
@@ -635,7 +644,8 @@ function createApp(options={}) {
       if(await socials.handle(req,res,{pathname,session:sessions.get(token),scope:workspaceScope(token),origin:(viaTunnel?'https://':'http://')+req.headers.host,respond}))return;
       if(pathname==='/api/local-route-key'&&req.method==='GET'){
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required to choose a faster connection.'});
-        return respond(res,200,{ok:true,...localRouteProof.key(),persistent:!!sessions.get(token)?.persistent,expiresAt:sessions.get(token).until});
+        const localOrigins=allowLan?Object.values(os.networkInterfaces()).flat().filter(entry=>entry?.family==='IPv4'&&!entry.internal&&privateIP(entry.address)).slice(0,12).map(entry=>'http://'+entry.address+':'+req.socket.localPort):[];
+        return respond(res,200,{ok:true,...localRouteProof.key(),localOrigins,website:tunnelHostname?'https://'+tunnelHostname:null,persistent:!!sessions.get(token)?.persistent,expiresAt:sessions.get(token).until});
       }
       if(pathname==='/api/second-screen'&&req.method==='GET'){
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required for Second screen.'});
@@ -891,7 +901,7 @@ function createApp(options={}) {
         const b=await jsonBody(req);if(!commands.has(b.action))return respond(res,400,{error:'Unknown action'});
         if(!permits(token,['volup','voldown','mute','playpause','next','prev'].includes(b.action)?'media':'power'))return respond(res,403,{error:'This control was not approved.'});
         record(ip,`Requested ${b.action}`,undefined,token);
-        return act(b.action,(e,result)=>respond(res,e?500:200,e?{error:`Action failed: ${e.message}`}:{ok:true,...result,msg:result?.msg||`${b.action} requested`}));
+        return act(b.action,(e,result)=>respond(res,e?500:200,e?{error:`Action failed: ${e.message}`}:{ok:true,...result,...b.action==='restart'&&{hostRunId},msg:result?.msg||`${b.action} requested`}));
       }
       return respond(res,404,{error:'Not found'});
     }catch(err){if(res.headersSent){res.destroy();return;}return respond(res,err.message==='Request too large'?413:400,{error:err.message});}
@@ -1061,7 +1071,7 @@ if(require.main===module){
   catch(e) { if(e.code!=='ENOENT'){console.error('Cannot load config.json:',e.message);process.exit(1);} }
   const allowLan=config.allowLan!==false;
   if(typeof config.password!=='string'||!config.password||['serame','admin'].includes(config.password)){console.error('Set your owner password in local config.json, or use the Windows host setup. The old default sign-ins are disabled.');process.exit(1);}
-  const app=createApp({socialsDirectory:config.socialsDirectory,socialsDataDirectory:config.socialsDataDirectory,workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),sharedClipboardDirectory:path.join(ROOT,'.shared-clipboard'),observeClipboard:true,useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
+  const app=createApp({routeIdentityFile:path.join(ROOT,'.route-identity.pem'),socialsDirectory:config.socialsDirectory,socialsDataDirectory:config.socialsDataDirectory,workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),sharedClipboardDirectory:path.join(ROOT,'.shared-clipboard'),observeClipboard:true,useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
   app.server.listen(app.port,allowLan?'0.0.0.0':'127.0.0.1',()=>{
     const actual=app.server.address().port;
     const ip=app.addresses.find(a=>a.startsWith('192.168.'))||app.addresses[0]||'127.0.0.1';

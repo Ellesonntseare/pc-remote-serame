@@ -124,8 +124,9 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     child.on('error',fail);child.on('close',()=>{if(!stopped)fail();finish();});write(initial);return session;
   }
   function close(){closed=true;appTokens.clear();for(const session of audioSessions)session.stop();for(const session of phoneSessions)session.stop();}
-  function openSecondScreen({width,height,side='right',onEvent=()=>{},onError=()=>{},onClose=()=>{}}={}){
+  function openSecondScreen({width,height,side='right',alignment,onEvent=()=>{},onError=()=>{},onClose=()=>{}}={}){
     if(!['left','right','top','bottom'].includes(side)||!Number.isInteger(width)||!Number.isInteger(height)||width<320||height<320||width>8192||height>8192)throw Error('Choose a valid second-screen arrangement.');
+    if(alignment!==undefined&&(!Number.isInteger(alignment)||alignment< -100||alignment>100))throw Error('Choose a valid display alignment.');
     const child=helper('--second-screen');let stopped=false,ended=false,pending='',killTimer;
     const write=value=>!stopped&&child.stdin.writable&&child.stdin.writableLength<8192&&child.stdin.write(JSON.stringify(value)+'\n');
     function finish(){if(ended)return;ended=true;clearInterval(heartbeat);clearTimeout(killTimer);clearTimeout(startTimer);phoneSessions.delete(session);onClose();}
@@ -134,7 +135,7 @@ function createNativeFeatures({root,spawnImpl=spawn,platform=process.platform,fs
     const session={stop,input:value=>write({type:'input',...value}),recover:()=>write({type:'recover'})};phoneSessions.add(session);
     const heartbeat=setInterval(()=>{if(!write({type:'heartbeat'}))fail();},1000);heartbeat.unref?.();const startTimer=setTimeout(()=>fail('The virtual display did not start. Check its driver setup.'),15000);startTimer.unref?.();
     child.stdin.on('error',()=>fail());child.stderr.resume();child.stdout.setEncoding('utf8');child.stdout.on('data',text=>{if(stopped)return;pending+=text;if(pending.length>256*1024)return fail();let newline;while((newline=pending.indexOf('\n'))>=0){const line=pending.slice(0,newline);pending=pending.slice(newline+1);try{const value=JSON.parse(line);if(value.kind==='error')return fail(String(value.message||'Virtual display unavailable.').slice(0,240));if(value.kind==='ready'){if(typeof value.monitor!=='string'||value.monitor.length>80||!Number.isInteger(value.width)||!Number.isInteger(value.height)||value.width<2||value.height<2||value.width>1920||value.height>1920||value.width*value.height>2073600)throw Error();clearTimeout(startTimer);}else if(value.kind==='pointer'){if(typeof value.visible!=='boolean'||![value.x,value.y].every(n=>Number.isFinite(n)&&n>=0&&n<=1))throw Error();}else if(value.kind==='files'){if(!Array.isArray(value.paths)||!value.paths.length||value.paths.length>100||value.paths.some(file=>typeof file!=='string'||file.length>2048||!path.win32.isAbsolute(file)||file.includes('\0')))throw Error();}else if(value.kind==='input-result'){if(!Number.isSafeInteger(value.id)||typeof value.ok!=='boolean'||!['text','key'].includes(value.action))throw Error();}else if(value.kind!=='drop-error')throw Error();onEvent(value);}catch{return fail();}}});
-    child.once('error',()=>fail());child.once('close',()=>{if(!stopped)fail();finish();});write({width,height,side});return session;
+    child.once('error',()=>fail());child.once('close',()=>{if(!stopped)fail();finish();});write({width,height,side,alignment});return session;
   }
   async function sendMedia(action){
     if(!['volup','voldown','mute','playpause','next','prev'].includes(action))throw Error('Invalid media command.');

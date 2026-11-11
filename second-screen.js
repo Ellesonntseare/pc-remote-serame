@@ -12,7 +12,7 @@ function createSecondScreen({sessions,sessionExpiry,native,deviceFor,onFiles=asy
   ws.on('message',raw=>{if(peer.stopped)return;if(sessions.get(token)?.role!=='owner')return stop(peer);try{const value=JSON.parse(raw.toString());if(Date.now()-peer.rateAt>1000){peer.rateAt=Date.now();peer.rate=0;}if(++peer.rate>200)throw Error('Input is arriving too quickly.');
    if(value.type==='ping'&&Number.isFinite(value.at)){send(peer,{type:'pong',at:value.at});}
    else if(value.type==='start'&&!peer.helper){
-    peer.helper=native.openSecondScreen({width:value.width,height:value.height,side:value.side,onEvent:event=>{
+    peer.helper=native.openSecondScreen({width:value.width,height:value.height,side:value.side,alignment:value.alignment,onEvent:event=>{
      if(peer.stopped)return;
      if(event.kind==='ready'){peer.source={id:randomBytes(18).toString('base64url'),monitor:event.monitor};send(peer,{type:'ready',monitorId:peer.source.id,width:event.width,height:event.height,side:event.side});}
      else if(event.kind==='files'){void Promise.resolve().then(()=>onFiles(token,device,event.paths)).then(offers=>{send(peer,{type:'files',offers});send(peer,{type:'status',message:offers.length+' file(s) sent to Android. Check the transfer notification.'});}).catch(error=>send(peer,{type:'status',message:error.message}));}

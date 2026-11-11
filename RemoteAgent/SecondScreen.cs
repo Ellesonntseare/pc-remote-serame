@@ -49,7 +49,9 @@ internal sealed class SecondScreen : IDisposable
         // portrait mode in the driver's list. Restore this orientation on exit.
         if((aspect<1)!=(mode.width<mode.height)){(mode.width,mode.height)=(mode.height,mode.width);mode.orientation=(mode.orientation+1)%4;}
         var primary=Screen.PrimaryScreen?.Bounds??throw new InvalidOperationException("The physical PC screen is unavailable.");
-        mode.x=side=="left"?primary.Left-(int)mode.width:side=="right"?primary.Right:primary.Left;mode.y=side=="top"?primary.Top-(int)mode.height:side=="bottom"?primary.Bottom:primary.Top;mode.fields=0x20|0x80|0x40000|0x80000|0x100000|0x400000;
+        int? alignment=config.TryGetProperty("alignment",out var offset)&&offset.ValueKind==JsonValueKind.Number?offset.GetInt32():null;
+        var position=PhoneDeskGeometry.PlaceDisplay(primary,new Size((int)mode.width,(int)mode.height),side,alignment);
+        mode.x=position.X;mode.y=position.Y;mode.fields=0x20|0x80|0x40000|0x80000|0x100000|0x400000;
         if(ChangeDisplaySettingsEx(deviceName,ref mode,IntPtr.Zero,0,IntPtr.Zero)!=0)throw new InvalidOperationException("Windows could not extend the virtual display. Check its driver and display settings.");
         attached=true;bounds=new Rectangle(mode.x,mode.y,(int)mode.width,(int)mode.height);
         Publish(new{kind="ready",monitor=deviceName,width=bounds.Width,height=bounds.Height,side});
