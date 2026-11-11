@@ -11,8 +11,8 @@ android {
         applicationId = "za.co.pcremote.controller"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "2.3.4"
+        versionCode = 28
+        versionName = "2.3.5"
     }
 
     buildFeatures { buildConfig = true }
@@ -53,6 +53,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.core:core-ktx:1.15.0")
     testImplementation("junit:junit:4.13.2")
     implementation("androidx.webkit:webkit:1.12.1")

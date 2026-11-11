@@ -48,7 +48,8 @@ import org.json.JSONObject
 import java.net.URI
 
 /** Personal PC client with explicit, Android-approved guest screen sharing. */
-class MainActivity : Activity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
+    private lateinit var biometricSignIn:BiometricSignIn
     private lateinit var web: WebView
     private lateinit var connectScreen: ScrollView
     private lateinit var error: TextView
@@ -113,6 +114,8 @@ class MainActivity : Activity() {
         ViewCompat.requestApplyInsets(contentRoot)
         connectScreen = findViewById(R.id.connectScreen)
         web = findViewById(R.id.web)
+        biometricSignIn=BiometricSignIn(this,web,contentRoot as ViewGroup,{selectedOrigin},{origin,suffix->connectTo(origin,suffix)})
+        biometricSignIn.refreshQuickButton()
         window.decorView.viewTreeObserver.addOnGlobalLayoutListener {
             val visible=ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime())==true
             if(visible!=phoneKeyboardVisible){
@@ -244,7 +247,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",BuildConfig.PHONE_ACCESS).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",BuildConfig.PHONE_ACCESS).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",BuildConfig.PHONE_ACCESS).put("phoneAudio",BuildConfig.PHONE_ACCESS).put("phonePlaybackAudio",BuildConfig.PHONE_ACCESS&&Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",false).put("phoneScreenSharing",BuildConfig.PHONE_ACCESS).put("phoneAccess",BuildConfig.PHONE_ACCESS).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("biometricSignIn",true).put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",BuildConfig.PHONE_ACCESS).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",BuildConfig.PHONE_ACCESS).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",BuildConfig.PHONE_ACCESS).put("phoneAudio",BuildConfig.PHONE_ACCESS).put("phonePlaybackAudio",BuildConfig.PHONE_ACCESS&&Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",false).put("phoneScreenSharing",BuildConfig.PHONE_ACCESS).put("phoneAccess",BuildConfig.PHONE_ACCESS).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow Elleson Connect through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -302,6 +305,8 @@ class MainActivity : Activity() {
     }
 
     private fun connectTo(origin: String,suffix:String="") {
+        val target=TrustedOrigin.normalize(origin)?:return
+        if(biometricSignIn.intercept(target,suffix))return
         connectionGeneration++
         DeviceCompanion.disconnect()
         selectedOrigin = TrustedOrigin.normalize(origin) ?: return
@@ -310,6 +315,7 @@ class MainActivity : Activity() {
         bridgeInstalled = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
         if (bridgeInstalled) WebViewCompat.addWebMessageListener(web, "PCRAndroid", setOf(selectedOrigin!!)) { view, message, sourceOrigin, isMainFrame, reply ->
             if (!isMainFrame || TrustedOrigin.normalize(sourceOrigin.toString()) != selectedOrigin || !isAllowed(view.url ?: "")) return@addWebMessageListener
+            if(biometricSignIn.locked)return@addWebMessageListener
             try {
                 val value = JSONObject(message.data ?: "{}")
                 val command = value.optString("type")
@@ -322,6 +328,9 @@ class MainActivity : Activity() {
                     return@addWebMessageListener
                 }
                 when (value.optString("type")) {
+                    "biometric-status" -> {selectedOrigin?.let{val status=biometricSignIn.state(it);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:biometric-state',{detail:$status}))",null)}}
+                    "biometric-enable" -> {selectedOrigin?.let{biometricSignIn.enable(it)}}
+                    "biometric-disable" -> {selectedOrigin?.let{biometricSignIn.disable(it)}}
                     "transfer-ready" -> transferReady()
                     "app-update" -> {
                         val origin=selectedOrigin?:return@addWebMessageListener
@@ -621,6 +630,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        biometricSignIn.close()
         FolderSync.events=null
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).removePrimaryClipChangedListener(clipboardListener)
         nearby?.stop()
@@ -649,6 +659,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        biometricSignIn.background(externalActivity||isInPictureInPictureMode||isChangingConfigurations)
         appForeground=false
         fastRouteGeneration++;fastLocalPending=false
         DeviceCompanion.foreground(this,false)
@@ -742,7 +753,7 @@ class MainActivity : Activity() {
             }.setOnCancelListener{ScreenShareService.respondControl(id,false);controlDialog=null}.create()
         controlDialog?.show()
     }
-    override fun onResume() { super.onResume();externalActivity=false;if(!isInPictureInPictureMode){miniWindowEvent(false);if(remoteFullscreenActive)setRemoteFullscreen(true);web.postDelayed({showControlRequest()},400)};updateHomeMini();if(connectScreen.visibility==View.VISIBLE)nearby?.start() }
+    override fun onResume() { super.onResume();biometricSignIn.resume();externalActivity=false;if(!isInPictureInPictureMode){miniWindowEvent(false);if(remoteFullscreenActive)setRemoteFullscreen(true);web.postDelayed({showControlRequest()},400)};updateHomeMini();if(connectScreen.visibility==View.VISIBLE)nearby?.start() }
 
     private fun nearbyEvent(value:JSONObject){
         if(isFinishing||isDestroyed)return
