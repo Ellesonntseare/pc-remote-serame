@@ -92,7 +92,8 @@ private val EMOJI = listOf(
 class SerameKeyboardService : InputMethodService() {
     companion object { var instance:SerameKeyboardService?=null;private set }
     internal fun phoneInput(command:za.co.pcremote.controller.PhoneCommand):Boolean {
-        if(!isInputViewShown||currentInputEditorInfo?.packageName==packageName)return false
+        val editor = currentInputEditorInfo ?: return false
+        if(!isInputViewShown||editor.packageName==packageName||PasswordInput.isPassword(editor.inputType))return false
         val connection=currentInputConnection?:return false
         if(command.action=="insert")return connection.commitText(command.text,1)
         if(command.key=="Enter"&&sendDefaultEditorAction(true))return true
@@ -258,9 +259,7 @@ class SerameKeyboardService : InputMethodService() {
         val v = t and InputType.TYPE_MASK_VARIATION
         val isText = cls == InputType.TYPE_CLASS_TEXT
 
-        isPassword = isText && (v == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-            v == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
-            v == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD)
+        isPassword = PasswordInput.isPassword(t)
         if(info?.packageName!=packageName){manualTools=false;DeviceCompanion.pcMode(false)}
         ctrl=false;alt=false
 

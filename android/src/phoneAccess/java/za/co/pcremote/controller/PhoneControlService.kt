@@ -27,7 +27,7 @@ class PhoneControlService : AccessibilityService() {
     fun releaseInput() { hidePointer(); drag?.release() }
     private fun type(command:PhoneCommand):Boolean {
         val node=rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-        if(node==null||!node.isEditable||node.packageName?.toString()==packageName)return false
+        if(node==null||!node.isEditable||node.isPassword||node.packageName?.toString()==packageName)return false
         if(Build.VERSION.SDK_INT>=33){
             val connection=inputMethod?.currentInputConnection
             if(connection!=null){
@@ -37,7 +37,6 @@ class PhoneControlService : AccessibilityService() {
             }
         }
         if(za.co.pcremote.controller.keyboard.SerameKeyboardService.instance?.phoneInput(command)==true)return true
-        if(node.isPassword)return false
         if(command.action=="key"&&command.modifiers and 2!=0){
             val action=when(command.key){"c"->AccessibilityNodeInfo.ACTION_COPY;"x"->AccessibilityNodeInfo.ACTION_CUT;"v"->AccessibilityNodeInfo.ACTION_PASTE;"a"->AccessibilityNodeInfo.ACTION_SET_SELECTION;else->return false}
             return if(command.key=="a")node.performAction(action,Bundle().apply{putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT,0);putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT,node.text?.length?:0)})else node.performAction(action)
