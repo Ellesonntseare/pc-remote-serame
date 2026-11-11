@@ -50,6 +50,7 @@ import java.net.URI
 /** Personal PC client with explicit, Android-approved guest screen sharing. */
 class MainActivity : androidx.fragment.app.FragmentActivity() {
     private lateinit var biometricSignIn:BiometricSignIn
+    private var biometricPickerFlow=false
     private lateinit var web: WebView
     private lateinit var connectScreen: ScrollView
     private lateinit var error: TextView
@@ -589,7 +590,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         web.evaluateJavascript("window.PCRMiniWindow?.prepare()",null)
         if(Build.VERSION.SDK_INT<31)minimisePc(homeMiniWidth,homeMiniHeight,false)
     }
-    override fun startActivityForResult(intent:Intent,requestCode:Int,options:Bundle?){externalActivity=true;updateHomeMini(false);super.startActivityForResult(intent,requestCode,options)}
+    override fun startActivityForResult(intent:Intent,requestCode:Int,options:Bundle?){externalActivity=true;biometricPickerFlow=intent.action in listOf(Intent.ACTION_OPEN_DOCUMENT,Intent.ACTION_OPEN_DOCUMENT_TREE,Intent.ACTION_CREATE_DOCUMENT,Intent.ACTION_GET_CONTENT,Intent.ACTION_CHOOSER);updateHomeMini(false);super.startActivityForResult(intent,requestCode,options)}
     override fun startActivity(intent:Intent,options:Bundle?){externalActivity=true;updateHomeMini(false);super.startActivity(intent,options)}
     private fun setRemoteFullscreen(enabled:Boolean){
         remoteFullscreenActive=enabled
@@ -659,7 +660,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
 
     override fun onStop() {
-        biometricSignIn.background(externalActivity||isInPictureInPictureMode||isChangingConfigurations)
+        biometricSignIn.background(biometricPickerFlow||isInPictureInPictureMode||isChangingConfigurations)
         appForeground=false
         fastRouteGeneration++;fastLocalPending=false
         DeviceCompanion.foreground(this,false)
@@ -753,7 +754,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             }.setOnCancelListener{ScreenShareService.respondControl(id,false);controlDialog=null}.create()
         controlDialog?.show()
     }
-    override fun onResume() { super.onResume();biometricSignIn.resume();externalActivity=false;if(!isInPictureInPictureMode){miniWindowEvent(false);if(remoteFullscreenActive)setRemoteFullscreen(true);web.postDelayed({showControlRequest()},400)};updateHomeMini();if(connectScreen.visibility==View.VISIBLE)nearby?.start() }
+    override fun onResume() { super.onResume();biometricSignIn.resume();biometricPickerFlow=false;externalActivity=false;if(!isInPictureInPictureMode){miniWindowEvent(false);if(remoteFullscreenActive)setRemoteFullscreen(true);web.postDelayed({showControlRequest()},400)};updateHomeMini();if(connectScreen.visibility==View.VISIBLE)nearby?.start() }
 
     private fun nearbyEvent(value:JSONObject){
         if(isFinishing||isDestroyed)return

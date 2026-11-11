@@ -71,9 +71,8 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
             updateAAD(origin.toByteArray(Charsets.UTF_8))
         }
     }
-    fun enable(origin:String){
+    private fun verifyOwner(origin:String,verified:()->Unit){
         if(busy||locked)return
-        if(!available()){emit(origin,state(origin).getString("message"));return}
         busy=true;val attempt=gate.begin(origin);val cookie=CookieManager.getInstance().getCookie(origin).orEmpty()
         Thread{
             val approved=runCatching{
@@ -83,13 +82,17 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
                     reply.optBoolean("paired")&&reply.optString("role")=="owner"&&(reply.optBoolean("requirePassword")||reply.optBoolean("requirePin"))
                 }finally{connection.disconnect()}
             }.getOrDefault(false)
-            activity.runOnUiThread{busy=false;if(!foreground||currentOrigin()!=origin||!gate.accept(attempt))return@runOnUiThread
+            activity.runOnUiThread{if(!gate.current(attempt))return@runOnUiThread;busy=false;if(!foreground||currentOrigin()!=origin)return@runOnUiThread
                 if(!approved){emit(origin,"Sign in as the PC owner with a password or PIN before enabling biometrics.");return@runOnUiThread}
-                android.app.AlertDialog.Builder(activity).setTitle("Enable fingerprint / face sign-in?")
-                    .setMessage("Unlock this phone's saved Elleson Connect sign-in with Android biometrics. Use Remember me to keep a sign-in across PC restarts. Your fingerprint or face data stays with Android.")
-                    .setNegativeButton("Cancel",null).setPositiveButton("Enable"){_,_->authenticate(origin,true)}.show()
+                verified()
             }
         }.start()
+    }
+    fun enable(origin:String){
+        if(!available()){emit(origin,state(origin).getString("message"));return}
+        verifyOwner(origin){android.app.AlertDialog.Builder(activity).setTitle("Enable fingerprint / face sign-in?")
+            .setMessage("Unlock this phone's saved Elleson Connect sign-in with Android biometrics. Use Remember me to keep a sign-in across PC restarts. Your fingerprint or face data stays with Android.")
+            .setNegativeButton("Cancel",null).setPositiveButton("Enable"){_,_->authenticate(origin,true)}.show()}
     }
     private fun authenticate(origin:String,enroll:Boolean=false){
         if(busy||!foreground)return
@@ -98,7 +101,7 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
         val attempt=gate.begin(origin);busy=true;label?.text="Confirm with Android’s fingerprint or face prompt."
         prompt=BiometricPrompt(activity,ContextCompat.getMainExecutor(activity),object:BiometricPrompt.AuthenticationCallback(){
             override fun onAuthenticationSucceeded(result:BiometricPrompt.AuthenticationResult){
-                busy=false;if(!foreground||!gate.accept(attempt))return
+                if(!foreground||!gate.current(attempt))return;busy=false
                 val success=runCatching{
                     val authenticated=result.cryptoObject?.cipher?:throw IllegalStateException("Android did not unlock the biometric key.")
                     if(enroll){val proof=ByteArray(32).also{SecureRandom().nextBytes(it)};val bytes=authenticated.doFinal(proof);proof.fill(0)
@@ -106,6 +109,7 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
                     }else{val record=JSONObject(preferences.getString(key(origin),null)!!);val proof=authenticated.doFinal(Base64.decode(record.getString("proof"),Base64.NO_WRAP));check(proof.size==32);proof.fill(0)}
                 }.isSuccess
                 if(!success){gate.lock();label?.text="Biometric sign-in could not unlock. Use your PC password or PIN.";emit(origin,"Biometric sign-in could not unlock. Use your password and set it up again.");return}
+                if(!gate.accept(attempt))return
                 if(enroll){emit(origin,"Fingerprint / face sign-in enabled. The app locks when you leave it.");return}
                 val action=pending;pending=null;hide();action?.invoke();emit(origin)
             }
@@ -141,7 +145,7 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
             CookieManager.getInstance().flush();pending=null;hide();navigate(origin,"")
         }
     }
-    fun disable(origin:String){if(locked)return;preferences.edit().remove(key(origin)).apply();runCatching{store().deleteEntry(key(origin))};emit(origin,"Fingerprint / face sign-in disabled on this phone.")}
+    fun disable(origin:String){verifyOwner(origin){preferences.edit().remove(key(origin)).apply();runCatching{store().deleteEntry(key(origin))};emit(origin,"Fingerprint / face sign-in disabled on this phone.")}}
     fun background(skip:Boolean){foreground=false;if(skip)return;gate.lock();prompt?.cancelAuthentication();busy=false;currentOrigin()?.takeIf{enabled(it)}?.let{show(it)}}
     fun resume(){foreground=true;currentOrigin()?.takeIf{enabled(it)&&!gate.unlocked(it)}?.let{show(it)};refreshQuickButton()}
     fun close(){foreground=false;gate.lock();prompt?.cancelAuthentication();busy=false}

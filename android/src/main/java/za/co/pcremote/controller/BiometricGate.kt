@@ -6,8 +6,10 @@ internal class BiometricGate {
     private var generation=0L
     private var unlocked:String?=null
     fun begin(origin:String)=Attempt(origin,++generation)
+    fun current(attempt:Attempt)=attempt.generation==generation
     fun accept(attempt:Attempt):Boolean {
         if(attempt.generation!=generation)return false
+        generation++
         unlocked=attempt.origin
         return true
     }
