@@ -4,6 +4,8 @@ Optional fingerprint / supported face unlock protects a saved sign-in when openi
 
 The dark/orange fingerprint screen follows the supplied design. Tap the fingerprint button, then authenticate in Android's own prompt. A successful, per-use Android Keystore AES-GCM operation is required before revealing the protected app. Android manages biometric templates. Changing enrolled biometrics invalidates the key and requires password sign-in and setup again. Password/PIN fallback removes the remembered WebView session before showing ordinary sign-in. Background file transfers continue in their existing native service.
 
+Protected sessions do not automatically turn into a visible PC mini-window when leaving the app. Returning from Android's file picker keeps an active foreground workflow usable; ordinary backgrounding locks the app.
+
 This is a local app lock for an existing host session. It does not replace server authentication, renew an expired session, add TOTP codes, encrypt every WebView cookie, or establish bank security clearance. Only Android Class 3 biometric hardware is accepted; phones with weaker face unlock can use a strong fingerprint or ordinary password sign-in.
 
 Includes 2.3.4's system-bar, cutout and keyboard inset fix. Standard and optional Phone Access editions keep their existing separate identities and signing certificate. The standard edition adds Android biometric permission and its compatibility fingerprint permission, without accessibility, microphone, camera or package-install permissions. Android 8 or newer remains required.

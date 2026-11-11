@@ -580,7 +580,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         if(Build.VERSION.SDK_INT>=31)builder.setAutoEnterEnabled(auto)
         return builder.build()
     }
-    private fun canHomeMini()=homeMiniReady&&!externalActivity&&web.visibility==View.VISIBLE&&isAllowed(web.url?:"")&&!isFinishing&&filesResult==null&&downloadRequest==null&&pendingSyncFolder==null&&!pendingProjection
+    private fun canHomeMini()=homeMiniReady&&!externalActivity&&!biometricSignIn.protects(selectedOrigin)&&web.visibility==View.VISIBLE&&isAllowed(web.url?:"")&&!isFinishing&&filesResult==null&&downloadRequest==null&&pendingSyncFolder==null&&!pendingProjection
     private fun updateHomeMini(enabled:Boolean=canHomeMini()){
         if(Build.VERSION.SDK_INT>=31&&packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE))runCatching{setPictureInPictureParams(miniParams(homeMiniWidth,homeMiniHeight,enabled))}
     }
@@ -660,7 +660,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
 
     override fun onStop() {
-        biometricSignIn.background(biometricPickerFlow||isInPictureInPictureMode||isChangingConfigurations)
+        biometricSignIn.background(biometricPickerFlow||isChangingConfigurations)
         appForeground=false
         fastRouteGeneration++;fastLocalPending=false
         DeviceCompanion.foreground(this,false)

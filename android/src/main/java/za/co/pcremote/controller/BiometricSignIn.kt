@@ -50,6 +50,7 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
     private fun key(origin:String)="elleson.bio."+MessageDigest.getInstance("SHA-256").digest(origin.toByteArray()).joinToString(""){"%02x".format(it)}
     private fun available()=BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)==BiometricManager.BIOMETRIC_SUCCESS
     fun enabled(origin:String)=preferences.contains(key(origin))
+    fun protects(origin:String?)=origin!=null&&enabled(origin)
     fun state(origin:String)=JSONObject().put("available",available()).put("enabled",enabled(origin)).put("locked",locked)
         .put("message",if(available())"Use the fingerprint or secure face recognition enrolled on this phone." else "Set up a strong fingerprint or supported face unlock in Android settings. Password sign-in is still available.")
     private fun emit(origin:String,message:String?=null){val value=state(origin);if(message!=null)value.put("message",message);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:biometric-state',{detail:$value}))",null);refreshQuickButton()}
