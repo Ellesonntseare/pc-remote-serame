@@ -11,9 +11,26 @@ android {
         applicationId = "za.co.pcremote.controller"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "2.3.2"
+        versionCode = 26
+        versionName = "2.3.3"
     }
+
+    buildFeatures { buildConfig = true }
+    flavorDimensions += "access"
+    productFlavors {
+        create("standard") {
+            dimension = "access"
+            buildConfigField("boolean", "PHONE_ACCESS", "false")
+            manifestPlaceholders["appLabel"] = "Elleson Connect"
+        }
+        create("phoneAccess") {
+            dimension = "access"
+            applicationIdSuffix = ".phoneaccess"
+            buildConfigField("boolean", "PHONE_ACCESS", "true")
+            manifestPlaceholders["appLabel"] = "Elleson Connect Phone Access"
+        }
+    }
+    buildTypes.getByName("release") { isDebuggable = false }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -31,6 +48,7 @@ android {
             keyPassword = System.getenv("PCR_SIGNING_PASSWORD")?.trim()
         }
         buildTypes.getByName("debug").signingConfig = signingConfigs.getByName("personalPreview")
+        buildTypes.getByName("release").signingConfig = signingConfigs.getByName("personalPreview")
     }
 }
 

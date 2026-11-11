@@ -193,7 +193,7 @@ class MainActivity : Activity() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
                     val permissions=mediaPermissions(request)
-                    if(permissions==null||!isAllowed(web.url?:"")){request.deny();return@runOnUiThread}
+                    if(!BuildConfig.PHONE_ACCESS||permissions==null||!isAllowed(web.url?:"")){request.deny();return@runOnUiThread}
                     val missing=permissions.filter{checkSelfPermission(it)!=PackageManager.PERMISSION_GRANTED}
                     if(missing.isEmpty())grantWebMedia(request)
                     else {microphoneRequest?.deny();microphoneRequest=request;requestPermissions(missing.toTypedArray(),503)}
@@ -234,7 +234,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",true).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",BuildConfig.PHONE_ACCESS).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",BuildConfig.PHONE_ACCESS).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",BuildConfig.PHONE_ACCESS).put("phoneAudio",BuildConfig.PHONE_ACCESS).put("phonePlaybackAudio",BuildConfig.PHONE_ACCESS&&Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",false).put("phoneScreenSharing",BuildConfig.PHONE_ACCESS).put("phoneAccess",BuildConfig.PHONE_ACCESS).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow Elleson Connect through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -302,6 +302,15 @@ class MainActivity : Activity() {
             if (!isMainFrame || TrustedOrigin.normalize(sourceOrigin.toString()) != selectedOrigin || !isAllowed(view.url ?: "")) return@addWebMessageListener
             try {
                 val value = JSONObject(message.data ?: "{}")
+                val command = value.optString("type")
+                if (command in listOf("app-update", "app-update-install")) {
+                    reply.postMessage("{\"type\":\"stopped\",\"message\":\"Install updates using Android’s package installer.\"}")
+                    return@addWebMessageListener
+                }
+                if (!BuildConfig.PHONE_ACCESS && command in listOf("start", "mark", "control-stop", "keyboard-settings", "phone-audio-start", "phone-audio-control", "local-media-start")) {
+                    reply.postMessage("{\"type\":\"stopped\",\"message\":\"This feature requires the optional Elleson Connect Phone Access app.\"}")
+                    return@addWebMessageListener
+                }
                 when (value.optString("type")) {
                     "transfer-ready" -> transferReady()
                     "app-update" -> {
@@ -320,13 +329,13 @@ class MainActivity : Activity() {
                         try{startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),509)}catch(_:Exception){Toast.makeText(this,"Enable Android's Files app to choose documents.",Toast.LENGTH_LONG).show()}
                     }
                     "transfer-shared" -> { val items=org.json.JSONArray();sharedUris.forEach{items.put(JSONObject().put("direction","upload").put("uri",it.toString()).put("destination",value.optString("destination").take(700)))};if(items.length()>0){enqueueTransfers(items);sharedUris.clear();sharedText="";transferReady()} }
-                    "transfer-control" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("pause","resume","cancel","replace"))startForegroundService(Intent(this,TransferService::class.java).setAction(TransferService.CONTROL).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("id",value.optString("id")).putExtra("command",command))}
+                    "transfer-control" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("pause","resume","cancel","replace","keep-both"))startForegroundService(Intent(this,TransferService::class.java).setAction(TransferService.CONTROL).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("id",value.optString("id")).putExtra("command",command))}
                     "transfer-file-action" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("open","share")&&TransferService.completedDownload(this,origin,value.optString("id"))!=null)startActivity(Intent(this,TransferActionActivity::class.java).putExtra("origin",origin).putExtra("id",value.optString("id")).putExtra("command",command))}
                     "transfer-signout" -> {DeviceCompanion.disconnect();selectedOrigin?.let{TransferService.stopOrigin(this,it);FolderSync.disconnect(this,it)}}
                     "companion-connect" -> {val origin=selectedOrigin?:return@addWebMessageListener;DeviceCompanion.connect(this,origin,CookieManager.getInstance().getCookie(origin).orEmpty(),value.optString("account"),value.optString("deviceId"),value.optString("name"))}
                     "companion-disconnect" -> DeviceCompanion.disconnect()
                     "companion-context" -> DeviceCompanion.context(value.optString("page"),value.optBoolean("pcInput"))
-                    "keyboard-settings" -> startActivity(Intent(this,za.co.pcremote.controller.keyboard.KeyboardSettingsActivity::class.java))
+                    "keyboard-settings" -> startActivity(Intent().setClassName(this,"za.co.pcremote.controller.keyboard.KeyboardSettingsActivity"))
                     "phone-audio-start" -> {phoneAudioOutput=if(value.optString("output")=="virtual-mic")"virtual-mic" else "speakers";compressedPhoneAudio=value.optBoolean("compressed",true);requestPhoneAudio(value.optString("source"),value.optDouble("volume",.6))}
                     "phone-audio-stop" -> {pendingPhoneAudio=null;PhoneAudioService.stop()}
                     "phone-audio-control" -> PhoneAudioService.control(value.optDouble("volume",.6),value.optBoolean("muted",false))
@@ -424,7 +433,7 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION")
     private fun requestProjection() {
-        if (!pendingProjection || !isAllowed(web.url ?: "")) return
+        if (!BuildConfig.PHONE_ACCESS || !pendingProjection || !isAllowed(web.url ?: "")) return
         val manager = getSystemService(MediaProjectionManager::class.java)
         // Android 14 otherwise defaults to an app-only chooser. Request the
         // complete display so Home, other apps and rotation remain in the stream.
@@ -530,7 +539,7 @@ class MainActivity : Activity() {
         var attempts=0
         fun show(){
             if(generation!=keyboardGeneration||isFinishing||isDestroyed||isInPictureInPictureMode||!isAllowed(web.url?:""))return
-            web.evaluateJavascript("!!(document.activeElement?.id==='typeText'&&!document.activeElement.readOnly)"){focused->
+            web.evaluateJavascript("!!(['typeText','secondScreenText'].includes(document.activeElement?.id)&&!document.activeElement.readOnly)"){focused->
                 if(focused!="true"||generation!=keyboardGeneration||!web.hasWindowFocus())return@evaluateJavascript
                 if(Build.VERSION.SDK_INT>=30&&web.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime())==true)return@evaluateJavascript
                 val manager=getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
@@ -713,7 +722,7 @@ class MainActivity : Activity() {
     private fun showControlRequest() {
         val id=ScreenShareService.pendingControl()?:return
         if(!hasWindowFocus() || isFinishing || controlDialog?.isShowing==true)return
-        val enabled=PhoneControlService.instance!=null
+        val enabled=PhoneAccess.controlEnabled
         controlDialog=AlertDialog.Builder(this).setTitle("Allow Elleson Connect to control this phone?")
             .setMessage(if(enabled)"Allow PC mouse control, clicks, scrolling, Back, Home and replacing text in selected fields for this session (up to 10 minutes). Stop control anytime from the sharing notification." else "Enable Elleson Connect phone control in Android Accessibility settings, then return here and approve this request. This lets your PC mouse control other apps on your phone.")
             .setNegativeButton("Decline"){_,_->ScreenShareService.respondControl(id,false);controlDialog=null}

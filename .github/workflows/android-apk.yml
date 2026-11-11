@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   build:
-    name: Android debug APK
+    name: Android release APKs
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -54,30 +54,39 @@ jobs:
           printf '%s' "$STORE_B64" | tr -d '\r\n' | base64 --decode > "$RUNNER_TEMP/pcremote-preview.p12"
           chmod 600 "$RUNNER_TEMP/pcremote-preview.p12"
           printf 'PCR_SIGNING_STORE=%s\n' "$RUNNER_TEMP/pcremote-preview.p12" >> "$GITHUB_ENV"
-      - name: Build debug APK
+      - name: Test both editions and build release APKs
         env:
           PCR_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
-        run: gradle :android:testDebugUnitTest :android:assembleDebug --no-daemon --stacktrace
+        run: gradle :android:testStandardReleaseUnitTest :android:testPhoneAccessReleaseUnitTest :android:assembleStandardRelease :android:assemblePhoneAccessRelease --no-daemon --stacktrace
       - name: Verify APK signature and version
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs android/build/outputs/apk/debug/android-debug.apk > apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs android/build/outputs/apk/standard/release/android-standard-release.apk > apk-signature.txt
           cat apk-signature.txt
           grep -q 'Signer #1 certificate SHA-256 digest: 1803b0080ad05d54df52de3a61fa4a9978244ca51e9df842d0303d42636c11eb' apk-signature.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/debug/android-debug.apk > apk-metadata.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/standard/release/android-standard-release.apk > apk-metadata.txt
           sed -n '1,8p' apk-metadata.txt
           grep -q "application-label:'Elleson Connect'" apk-metadata.txt
-          grep -q "name='za.co.pcremote.controller' versionCode='25' versionName='2.3.2'" apk-metadata.txt
-          grep -q "android.permission.CAMERA" apk-metadata.txt
-          grep -q "android.permission.RECORD_AUDIO" apk-metadata.txt
-          grep -q "android.permission.MODIFY_AUDIO_SETTINGS" apk-metadata.txt
+          grep -q "name='za.co.pcremote.controller' versionCode='26' versionName='2.3.3'" apk-metadata.txt
+          ! grep -q "application-debuggable" apk-metadata.txt
+          ! grep -Eq "android.permission.(CAMERA|RECORD_AUDIO|REQUEST_INSTALL_PACKAGES|FOREGROUND_SERVICE_MEDIA_PROJECTION)" apk-metadata.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree android/build/outputs/apk/standard/release/android-standard-release.apk AndroidManifest.xml > apk-manifest.txt
+          ! grep -Eq "BIND_ACCESSIBILITY_SERVICE|BIND_INPUT_METHOD|PhoneControlService|SerameKeyboardService|ScreenShareService" apk-manifest.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs android/build/outputs/apk/phoneAccess/release/android-phoneAccess-release.apk > phone-access-signature.txt
+          grep -q "1803b0080ad05d54df52de3a61fa4a9978244ca51e9df842d0303d42636c11eb" phone-access-signature.txt
           grep -q "android.permission.FOREGROUND_SERVICE_DATA_SYNC" apk-metadata.txt
-          sha256sum android/build/outputs/apk/debug/android-debug.apk
+          sha256sum android/build/outputs/apk/standard/release/android-standard-release.apk
       - name: Upload installable APK
         if: github.event_name == 'workflow_dispatch' && !inputs.publish_release && !inputs.skip_artifact
         uses: actions/upload-artifact@v4
         with:
           name: Elleson-Connect-Android-APK
-          path: android/build/outputs/apk/debug/android-debug.apk
+          path: |
+            android/build/outputs/apk/standard/release/android-standard-release.apk
+            android/build/outputs/apk/phoneAccess/release/android-phoneAccess-release.apk
+            apk-signature.txt
+            apk-metadata.txt
+            apk-manifest.txt
+            phone-access-signature.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -87,7 +96,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view v2.3.2-preview || gh release create v2.3.2-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.2 Personal Preview" --notes-file docs/RELEASE-2.3.2.md
-          test "$(gh release view v2.3.2-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
-          cp android/build/outputs/apk/debug/android-debug.apk Elleson-Connect-Android-2.3.2.apk
-          gh release upload v2.3.2-preview Elleson-Connect-Android-2.3.2.apk --clobber
+          gh release view v2.3.3-preview || gh release create v2.3.3-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.3 Personal Preview" --notes-file docs/RELEASE-2.3.3.md
+          test "$(gh release view v2.3.3-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
+          cp android/build/outputs/apk/standard/release/android-standard-release.apk Elleson-Connect-Android-2.3.3.apk
+          gh release upload v2.3.3-preview Elleson-Connect-Android-2.3.3.apk --clobber
