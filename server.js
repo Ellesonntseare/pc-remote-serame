@@ -22,7 +22,7 @@ const {saveDeviceName}=require('./host-settings');
 const {createNetworkDevices}=require('./network-devices');
 const nativeClipboard=require('./native-clipboard');
 const {createNativeFeatures}=require('./native-features');
-const {createAppUpdates}=require('./app-updates');
+const {createAppUpdates,sendUpdatePackage}=require('./app-updates');
 const {createLocalRouteProof}=require('./local-route-proof');
 const {createSecondScreen}=require('./second-screen');
 const {createNativeVideo,PROFILES:NATIVE_VIDEO_PROFILES}=require('./native-video');
@@ -635,14 +635,16 @@ function createApp(options={}) {
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required to set up Second screen.'});
         try{await nativeFeatures.openLink('https://github.com/VirtualDrivers/Virtual-Display-Driver#-installation');return respond(res,200,{ok:true});}catch{return respond(res,503,{error:'Open the Virtual Display Driver installation page on your PC.'});}
       }
-      if(pathname==='/api/updates'||/^\/api\/updates\/(android|windows)\/download$/.test(pathname)){
+      const updateFile=pathname==='/api/files/download'&&new URL(req.url,'http://localhost').searchParams.has('appUpdate');
+      if(updateFile||pathname==='/api/updates'||/^\/api\/updates\/(android|windows)\/download$/.test(pathname)){
         if(sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Only the PC owner can install app updates.'});
         if(req.method!=='GET')return respond(res,405,{error:'Use GET for app updates.'});
         if(pathname==='/api/updates'){
           if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
-          try{return respond(res,200,await appUpdates.status());}catch(error){return respond(res,503,{error:error.message});}
+          const query=new URL(req.url,'http://localhost').searchParams;
+          try{return respond(res,200,await appUpdates.status({force:query.get('refresh')==='1',edition:query.get('edition')==='phoneAccess'?'phoneAccess':'standard'}));}catch(error){return respond(res,503,{error:error.message});}
         }
-        try{const item=await appUpdates.getPackage(pathname.includes('/android/')?'android':'windows');res.writeHead(200,{'Content-Type':pathname.includes('/android/')?'application/vnd.android.package-archive':'application/vnd.microsoft.portable-executable','Content-Length':item.size,'Content-Disposition':'attachment; filename="'+item.name+'"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Content-SHA256':item.sha256});fs.createReadStream(item.file).on('error',()=>res.destroy()).pipe(res);return;}catch(error){return respond(res,503,{error:error.message});}
+        try{const query=new URL(req.url,'http://localhost').searchParams,kind=updateFile||pathname.includes('/android/')?(query.get('edition')==='phoneAccess'?'phoneAccess':'android'):'windows',item=await appUpdates.getPackage(kind);if(updateFile&&(query.get('appUpdate')!==item.sha256||query.get('name')!==item.name))return respond(res,409,{error:'The published update changed. Check for updates again.'});sendUpdatePackage(req,res,item);return;}catch(error){return respond(res,503,{error:error.message});}
       }
       if(req.method==='POST'&&pathname==='/api/presence'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
