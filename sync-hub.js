@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
 const SETTINGS=new Set(require('./public/sync-settings'));
-function createScopeHub({file,clipboard,stageFiles,getFileRevision=()=>0,getHostName=()=> 'PC',setHostName,onActivity,onRegister,identity='PC Remote',now=Date.now}={}){
+function createScopeHub({file,clipboard,stageFiles,getFileRevision=()=>0,getHostName=()=> 'PC',setHostName,onActivity,onRegister,onRemove,identity='PC Remote',now=Date.now}={}){
   const hostId=crypto.createHash('sha256').update(identity).digest('hex').slice(0,24);
   let state={revision:0,settings:{},devices:[],inbox:[]},ready=null,saving=Promise.resolve(),clip={text:'',source:'pc',revision:0},clipRead=null,clipAt=0;const clients=new Map();
   async function load(){if(!ready)ready=(async()=>{if(!file)return;try{const stat=await fs.stat(file);if(stat.size>1024*1024)return;const value=JSON.parse(await fs.readFile(file,'utf8'));if(value.version===1&&Number.isSafeInteger(value.revision)){state.revision=value.revision;for(const [key,text]of Object.entries(value.settings||{}))if(SETTINGS.has(key)&&typeof text==='string'&&text.length<=16000)state.settings[key]=text;state.devices=(value.devices||[]).filter(d=>typeof d.id==='string').slice(-40);state.inbox=(value.inbox||[]).filter(d=>typeof d.id==='string'&&Array.isArray(d.delivered)).slice(-100);}}catch{}})();await ready;}
@@ -18,6 +18,17 @@ function createScopeHub({file,clipboard,stageFiles,getFileRevision=()=>0,getHost
       if(req.method==='POST'&&pathname==='/api/sync/register'){const value=await readJson(req,8192);if(typeof value.id!=='string'||value.id===hostId||!/^[a-zA-Z0-9-]{12,80}$/.test(value.id))return reply(400,{error:'Invalid device identifier.'});let device=state.devices.find(d=>d.id===value.id);if(!device){if(state.devices.length>=40)state.devices.sort((a,b)=>a.seen-b.seen).shift();device={id:value.id,name:'Device',platform:'browser',seen:0};state.devices.push(device);}if(!device.customName)device.name=String(value.name||'Device').slice(0,80);device.platform=value.platform==='android'?'android':'browser';device.seen=now();clients.set(token,device.id);await save();onRegister?.(token,device);return reply(200,{ok:true,device,revision:state.revision});}
       const device=deviceFor(token);
       if(req.method==='GET'&&pathname==='/api/sync/devices')return reply(200,{ok:true,devices:devices(),host:host()});
+      if(req.method==='POST'&&pathname==='/api/sync/devices/remove'){
+        const body=await readJson(req,4096);
+        if(typeof body.id!=='string'||body.id===hostId)return reply(400,{error:'The Windows host cannot be removed from its own device list.'});
+        if(body.id===device?.id)return reply(409,{error:'This is the device you are using. Sign out to disconnect it.'});
+        const target=state.devices.find(row=>row.id===body.id);if(!target)return reply(404,{error:'This device is no longer listed.'});
+        const tokens=[...clients].filter(([,id])=>id===target.id).map(([key])=>key);
+        state.devices=state.devices.filter(row=>row!==target);state.inbox=state.inbox.filter(item=>item.target!==target.id);for(const key of tokens)clients.delete(key);state.revision++;await save();
+        await onRemove?.(token,target.id,tokens);
+        onActivity?.({type:'settings',action:'settings.device-removed',label:'Removed a connected device',device:deviceFor(token)?.name||getHostName(),payload:{device:target.id,name:target.name}});
+        return reply(200,{ok:true,devices:devices(),host:host(),revision:state.revision});
+      }
       if(req.method==='POST'&&pathname==='/api/sync/devices/name'){
         const body=await readJson(req,4096),name=typeof body.name==='string'?body.name.trim():'';
         if(!name||name.length>80||/[\x00-\x1f\x7f]/.test(name))return reply(400,{error:'Use a device name between 1 and 80 characters.'});
@@ -40,7 +51,7 @@ function createSyncHub(options={}){
   const scopes=new Map();
   function scoped(key='owner'){
     if(typeof key!=='string'||!/^[a-zA-Z0-9:_-]{1,160}$/.test(key))throw Error('Invalid account scope.');
-    if(!scopes.has(key)){const file=key==='owner'?options.file:options.file?options.file.replace(/\.json$/,'')+'.'+crypto.createHash('sha256').update(key).digest('hex').slice(0,24)+'.json':undefined;scopes.set(key,createScopeHub({...options,file,onActivity:event=>options.onActivity?.(key,event),onRegister:(token,device)=>options.onRegister?.(key,token,device)}));}
+    if(!scopes.has(key)){const file=key==='owner'?options.file:options.file?options.file.replace(/\.json$/,'')+'.'+crypto.createHash('sha256').update(key).digest('hex').slice(0,24)+'.json':undefined;scopes.set(key,createScopeHub({...options,file,onActivity:event=>options.onActivity?.(key,event),onRegister:(token,device)=>options.onRegister?.(key,token,device),onRemove:(token,id,tokens)=>options.onRemove?.(key,token,id,tokens)}));}
     return scopes.get(key);
   }
   return{pending:(token,accountKey='owner')=>scoped(accountKey).pending(token),handle:(req,res,context)=>scoped(context.accountKey||'owner').handle(req,res,context),enqueue:({accountKey='owner',...value})=>scoped(accountKey).enqueue(value),devices:(accountKey='owner')=>scoped(accountKey).devices(),device:(token,accountKey='owner')=>scoped(accountKey).device(token),revoke:token=>{for(const scope of scopes.values())scope.revoke(token);},close:()=>Promise.all([...scopes.values()].map(scope=>scope.close()))};
