@@ -70,6 +70,8 @@ const PWA_ASSETS = new Map([
   ...['mission-control','camera-sharing','local-connection','sculpted-flow','interaction-motion','second-screen-design','settings-design','audio-suite-design'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/login-design.css',['login-design.css','text/css; charset=utf-8']],
   ['/biometric-signin.js',['biometric-signin.js','text/javascript; charset=utf-8']],
+  ['/navigation-bar.js',['navigation-bar.js','text/javascript; charset=utf-8']],
+  ['/navigation-bar.css',['navigation-bar.css','text/css; charset=utf-8']],
   ['/media-recording.js',['media-recording.js','text/javascript; charset=utf-8']],
   ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
   ...['workspace-settings','device-links','device-input','typing-controls','home-panels','native-window','window-presentation','touch-trail','explorer-workspace','account-workspace'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),

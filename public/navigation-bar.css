@@ -1,0 +1,76 @@
+.ecFlow .ecNavigation.ecNavAdjustable {
+  transition: opacity .28s ease, height var(--ec-morph) var(--ec-ease), width var(--ec-morph) var(--ec-ease), border-radius var(--ec-morph) var(--ec-ease), padding var(--ec-morph) var(--ec-ease);
+}
+
+.ecFlow .ecNavigation.ecNavIdle { opacity: .28; }
+.ecFlow .ecNavigation.ecNavDragging { transition: none; z-index: 150; user-select: none; }
+
+.ecFlow .ecNavigation.ecNavAdjustable[data-nav-shape=bottom] { padding-top: 15px; }
+.ecFlow .ecNavigation.ecNavAdjustable .ecNavAdjust {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 25px;
+  padding: 0 !important;
+  color: #e6bfa7 !important;
+  touch-action: none;
+}
+.ecFlow .ecNavigation.ecNavAdjustable .ecNavAdjust svg { width: 15px; height: 15px; }
+.ecFlow .ecNavigation .ecNavMove { top: 0; left: 50%; translate: -50% 0; cursor: grab; }
+.ecFlow .ecNavigation .ecNavResize { right: 0; bottom: 0; cursor: nwse-resize; }
+.ecFlow .ecNavigation .ecNavHide { top: 0; right: 4px; cursor: pointer; }
+.ecFlow .ecNavigation .ecNavMove:active { cursor: grabbing; }
+.ecFlow .ecNavigation .ecNavAdjust:focus-visible { outline: 2px solid #ff9d7b; outline-offset: -2px; }
+.ecFlow .ecNavigation[data-nav-shape=rail] .ecNavMove { height: 21px; }
+.ecFlow .ecNavigation[data-nav-shape=rail] .ecNavHide { width: 25px; height: 21px; right: 1px; }
+.ecFlow .ecNavigation[data-nav-shape=rail] .ecNavMove { left: 27%; }
+.ecFlow .ecNavigation[data-nav-shape=rail] [data-ec-go] { width: 100%; min-height: 0; }
+.ecFlow .ecNavigation[data-nav-shape=rail] .ecNavAdjust svg { display: block; }
+
+.ecFlow :is(#rs, #filesDialog, dialog, .app, #ecHome) .ecNavigation.ecNavAdjustable[data-nav-custom=true] {
+  top: var(--ec-nav-top) !important;
+  left: var(--ec-nav-left) !important;
+  bottom: auto !important;
+  right: auto !important;
+  width: var(--ec-nav-width) !important;
+  height: var(--ec-nav-height) !important;
+  max-height: none !important;
+  translate: none;
+}
+
+.ecFlow .ecNavigation.ecNavAdjustable .ecNavShow { display: none; }
+.ecFlow:not(.phoneKeyboardOpen) :is(#rs:not(.screenClean), #filesDialog, dialog, .app, #ecHome) .ecNavigation.ecNavAdjustable[data-nav-collapsed=true]:not([hidden]) {
+  display: grid !important;
+  place-items: center;
+  grid-template-columns: 1fr;
+  top: auto !important;
+  bottom: max(7px, env(safe-area-inset-bottom)) !important;
+  left: 50% !important;
+  right: auto !important;
+  width: 102px !important;
+  height: 42px !important;
+  padding: 0 !important;
+  translate: -50% 0;
+  border-radius: 24px !important;
+}
+.ecFlow .ecNavigation.ecNavAdjustable[data-nav-collapsed=true] > :not(.ecNavShow) { display: none !important; }
+.ecFlow .ecNavigation.ecNavAdjustable[data-nav-collapsed=true] .ecNavShow {
+  position: static;
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  font-size: 12px !important;
+  touch-action: manipulation;
+}
+
+.ecFlow #rs.screenClean .ecNavigation.ecNavAdjustable,
+.ecFlow.phoneKeyboardOpen .ecNavigation.ecNavAdjustable { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ecFlow .ecNavigation.ecNavAdjustable { transition: none; }
+}
+html[data-motion=reduce].ecFlow .ecNavigation.ecNavAdjustable { transition: none; }

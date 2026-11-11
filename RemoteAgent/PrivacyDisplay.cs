@@ -17,7 +17,18 @@ internal static class PrivacyDisplay
     [DllImport("dwmapi.dll")] private static extern int DwmFlush();
     [DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(Point point, uint flags);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr window, uint command);
     [DllImport("user32.dll",SetLastError=true)] private static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
+    private static readonly IntPtr Topmost = new(-1);
+    private const uint KeepGeometry = 0x1 | 0x2 | 0x10;
+
+    private static bool IsBehind(IntPtr window, IntPtr cover)
+    {
+        // GW_HWNDPREV walks toward the top of the Z order.
+        for (var above = GetWindow(window, 3); above != IntPtr.Zero; above = GetWindow(above, 3))
+            if (above == cover) return true;
+        return false;
+    }
     private sealed class Probe : Form
     {
         public Probe(Rectangle bounds){AutoScaleMode=AutoScaleMode.None;StartPosition=FormStartPosition.Manual;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;BackColor=Color.Black;Bounds=new Rectangle(bounds.Left+bounds.Width/2-48,bounds.Top+bounds.Height/2-48,96,96);}
@@ -40,22 +51,21 @@ internal static class PrivacyDisplay
         string stage="initialization";object? failure=null;
         try
         {
-            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             var bounds=Screen.PrimaryScreen?.Bounds??throw new InvalidOperationException("No physical display is available.");
-            // Warm the patch while it is black. Only change its colour after
-            // the opaque topmost covers are up, avoiding a visible test flash.
-            probe=new Probe(bounds);probe.Show();ShowWindow(probe.Handle,4);
-            SetWindowPos(probe.Handle,IntPtr.Zero,0,0,0,0,0x1|0x2|0x10|0x40);probe.Refresh();DwmFlush();
-            captureSignal=new Mutex(false,CaptureSignal);
             // Warm the compositor capture while the desktop is still visible.
             // Starting WGC after an opaque cover is shown can leave the underlying
             // windows occlusion-throttled before the first captured frame.
-            using var after=new Bitmap(bounds.Width,bounds.Height,PixelFormat.Format32bppArgb);
             var monitor=MonitorFromPoint(new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2),2);
             // This verifier must ignore the cursor: an enlarged pointer over the
             // test patch is not a failure of display exclusion. Stream captures
             // continue to include the cursor.
             capture=new WindowCapture(monitor,monitor:true,captureCursor:false);
+            using var after=new Bitmap(capture.Size.Width,capture.Size.Height,PixelFormat.Format32bppArgb);
+            // Show a black patch after capture starts so an idle desktop also
+            // gets a compositor update. Its colour is verified under the cover.
+            probe=new Probe(bounds);probe.Show();ShowWindow(probe.Handle,4);
+            SetWindowPos(probe.Handle,Topmost,0,0,0,0,KeepGeometry|0x40);probe.Refresh();DwmFlush();
             int Matched(Color expected)
             {
                 var patch=probe!.RectangleToScreen(probe.ClientRectangle);
@@ -73,6 +83,7 @@ internal static class PrivacyDisplay
             // leave it occluded before DWM has ever composited the marker.
             stage="capture-warmup";
             foreach(var display in Screen.AllScreens)covers.Add(new Cover(display.Bounds));
+            var primaryCover = covers.Single(cover => cover.Bounds == bounds);
             var first=covers[0];var restoreHandle=first.Handle;
             if(!RegisterHotKey(restoreHandle,1,0x4000|1|2|4,0x50))throw new InvalidOperationException("The display restore shortcut is unavailable.");
             void Stop(){if(closing)return;closing=true;Application.ExitThread();}
@@ -98,15 +109,19 @@ internal static class PrivacyDisplay
                     if(verifier==null)
                     {
                         stage="capture-warmup";
-                        if(!capture!.Capture(after)||Matched(Color.Black)<8)
+                        // A live frame is sufficient to warm WGC. Requiring black
+                        // pixels here falsely rejects working capture when a
+                        // foreground window or transition covers the warmup patch.
+                        if(!capture!.Capture(after)||!capture.FrameChanged)
                         {
                             if(Environment.TickCount64<warmupDeadline)return;
                             if(warmupRestarted)throw new InvalidOperationException("Windows could not start desktop capture before the privacy cover was shown. Displays restored.");
                             warmupRestarted=true;warmupDeadline=Environment.TickCount64+2500;
                             capture.Dispose();capture=new WindowCapture(monitor,monitor:true,captureCursor:false);
-                            SetWindowPos(probe!.Handle,IntPtr.Zero,0,0,0,0,0x1|0x2|0x10|0x40);probe.Invalidate();probe.Refresh();return;
+                            SetWindowPos(probe!.Handle,Topmost,0,0,0,0,KeepGeometry|0x40);probe.Invalidate();probe.Refresh();DwmFlush();return;
                         }
                         stage="cover-setup";
+                        captureSignal=new Mutex(false,CaptureSignal);
                         foreach(var cover in covers)
                         {
                             if(!SetLayeredWindowAttributes(cover.Handle,0,255,2))throw new InvalidOperationException("The privacy cover could not pass through PC input.");
@@ -115,13 +130,14 @@ internal static class PrivacyDisplay
                             handles.Add(cover.Handle);
                         }
                         stage="cursor-privacy";localCursor.Hide();DwmFlush();
-                        SetWindowPos(probe!.Handle,covers[0].Handle,0,0,0,0,0x1|0x2|0x10);
+                        if(!SetWindowPos(probe!.Handle,primaryCover.Handle,0,0,0,0,KeepGeometry)||!IsBehind(probe.Handle,primaryCover.Handle))
+                            throw new InvalidOperationException("Windows could not position the capture check behind the privacy cover. Displays restored.");
                         probe.BackColor=Color.Magenta;probe.Invalidate();probe.Refresh();DwmFlush();
                         verifier=new PrivacyCaptureVerification(Environment.TickCount64);return;
                     }
                     stage="input-passthrough";
                     if(handles.Contains(WindowFromPoint(new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2))))throw new InvalidOperationException("The privacy cover would block PC input. Displays restored.");
-                    stage=verifier.Stage;matched=capture!.Capture(after)?Matched(verifier.LivePhase?Color.Lime:Color.Magenta):0;
+                    stage=verifier.Stage;matched=capture!.Capture(after)&&capture.FrameChanged?Matched(verifier.LivePhase?Color.Lime:Color.Magenta):0;
                     switch(verifier.Observe(Environment.TickCount64,matched>=8))
                     {
                         case PrivacyCaptureVerification.Action.ChangeProbe:
