@@ -307,7 +307,7 @@ class MainActivity : Activity() {
                     reply.postMessage("{\"type\":\"stopped\",\"message\":\"Install updates using Android’s package installer.\"}")
                     return@addWebMessageListener
                 }
-                if (!BuildConfig.PHONE_ACCESS && command in listOf("start", "mark", "control-stop", "keyboard-settings", "phone-audio-start", "phone-audio-control", "local-media-start")) {
+                if (!AndroidFeaturePolicy.allows(command, BuildConfig.PHONE_ACCESS)) {
                     reply.postMessage("{\"type\":\"stopped\",\"message\":\"This feature requires the optional Elleson Connect Phone Access app.\"}")
                     return@addWebMessageListener
                 }

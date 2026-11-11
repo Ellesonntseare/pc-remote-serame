@@ -99,4 +99,6 @@ jobs:
           gh release view v2.3.3-preview || gh release create v2.3.3-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.3 Personal Preview" --notes-file docs/RELEASE-2.3.3.md
           test "$(gh release view v2.3.3-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
           cp android/build/outputs/apk/standard/release/android-standard-release.apk Elleson-Connect-Android-2.3.3.apk
-          gh release upload v2.3.3-preview Elleson-Connect-Android-2.3.3.apk --clobber
+          cp android/build/outputs/apk/phoneAccess/release/android-phoneAccess-release.apk Elleson-Connect-Phone-Access-2.3.3.apk
+          tar -czf android-test-results-2.3.3.tar.gz android/build/test-results/testStandardReleaseUnitTest android/build/test-results/testPhoneAccessReleaseUnitTest
+          gh release upload v2.3.3-preview Elleson-Connect-Android-2.3.3.apk Elleson-Connect-Phone-Access-2.3.3.apk apk-signature.txt apk-metadata.txt apk-manifest.txt phone-access-signature.txt android-test-results-2.3.3.tar.gz --clobber
