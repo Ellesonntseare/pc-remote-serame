@@ -66,7 +66,7 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/standard/release/android-standard-release.apk > apk-metadata.txt
           sed -n '1,8p' apk-metadata.txt
           grep -q "application-label:'Elleson Connect'" apk-metadata.txt
-          grep -q "name='za.co.pcremote.controller' versionCode='26' versionName='2.3.4'" apk-metadata.txt
+          grep -q "name='za.co.pcremote.controller' versionCode='27' versionName='2.3.4'" apk-metadata.txt
           ! grep -q "application-debuggable" apk-metadata.txt
           ! grep -Eq "android.permission.(CAMERA|RECORD_AUDIO|REQUEST_INSTALL_PACKAGES|FOREGROUND_SERVICE_MEDIA_PROJECTION)" apk-metadata.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree android/build/outputs/apk/standard/release/android-standard-release.apk AndroidManifest.xml > apk-manifest.txt
