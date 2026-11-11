@@ -24,3 +24,5 @@ html[data-motion=reduce] .secondScreenGhostPhone{transition:none}
 
 .ecFlow #secondScreenPage.pcrPage[open]{display:flex}.ecFlow #secondScreenPage h2{display:inline-flex;margin-right:10px}
 .secondScreenAlignment{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;align-items:center;margin-top:14px;color:#c4d6e6;font-size:12px}.secondScreenAlignment input{grid-row:2;grid-column:1/-1;width:100%;accent-color:#10b981}.secondScreenAlignment output{color:#38dcb2}.secondScreenDiagram:is([data-alignment-side=left],[data-alignment-side=right]) [aria-pressed=true]{translate:0 var(--phone-slide,0px)}.secondScreenDiagram:is([data-alignment-side=top],[data-alignment-side=bottom]) [aria-pressed=true]{translate:var(--phone-slide,0px) 0}
+.secondScreenPreview:is([data-side=left],[data-side=right]) .secondScreenGhostPhone{translate:0 var(--preview-phone-slide,0px)}
+.secondScreenPreview:is([data-side=top],[data-side=bottom]) .secondScreenGhostPhone{translate:var(--preview-phone-slide,0px) 0}

@@ -12,7 +12,17 @@
   const apk=document.createElement('section');apk.className='secondScreenAppCard';apk.innerHTML='<span aria-hidden="true">▣</span><div><strong data-apk-title>Install Elleson Connect on the phone</strong><small data-apk-description>Signed Android app</small></div><button type="button" data-apk>Get APK</button>';right.append(apk);
   const shortcuts=document.createElement('section');shortcuts.className='secondScreenShortcuts';shortcuts.innerHTML='<h3>Touch &amp; gesture shortcuts</h3><div><span><b>Tap</b>Click a PC item</span><span><b>Drag</b>Move or select</span><span><b>Two fingers</b>Scroll the PC window</span><span><b>Hold</b>Open the context menu</span></div>';
   const header=page.querySelector('header');header.after(layout);page.append(shortcuts);const badge=document.createElement('span');badge.className='secondScreenConnectionBadge';badge.textContent='Checking';q('h2').after(badge);
-  function paint(){const state=window.PCRSecondScreen?.state||{},phase=state.active?'Connected':state.starting?'Connecting':state.ready?'Ready':'Setup needed';badge.textContent=phase;page.dataset.connection=phase.toLowerCase().replace(' ','-');q('[data-preview-state]').textContent=phase;preview.dataset.side=state.side||'right';preview.dataset.orientation=state.orientation||'landscape';q('[data-preview-position]').textContent=({left:'Left of PC',right:'Right of PC',top:'Above PC',bottom:'Below PC'})[state.side||'right'];const version=window.PCRNativeCapabilities?.version;apk.querySelector('[data-apk-title]').textContent=version?'Android app connected':'Install Elleson Connect on the phone';apk.querySelector('[data-apk-description]').textContent=version?'Version '+version:'Required on the target phone';apk.querySelector('[data-apk]').hidden=!!version;}
+  function paint(){
+   const state=window.PCRSecondScreen?.state||{},phase=state.active?'Connected':state.starting?'Connecting':state.ready?'Ready':'Setup needed';
+   badge.textContent=phase;page.dataset.connection=phase.toLowerCase().replace(' ','-');q('[data-preview-state]').textContent=phase;
+   preview.dataset.side=state.side||'right';preview.dataset.orientation=state.orientation||'landscape';
+   preview.style.setProperty('--preview-phone-slide',String((state.alignment||0)*.2)+'px');
+   q('[data-preview-position]').textContent=({left:'Left of PC',right:'Right of PC',top:'Above PC',bottom:'Below PC'})[preview.dataset.side];
+   const version=window.PCRNativeCapabilities?.version;
+   apk.querySelector('[data-apk-title]').textContent=version?'Android app connected':'Install Elleson Connect on the phone';
+   apk.querySelector('[data-apk-description]').textContent=version?'Version '+version:'Required on the target phone';
+   apk.querySelector('[data-apk]').hidden=!!version;
+  }
   apk.querySelector('[data-apk]').onclick=async()=>{const button=apk.querySelector('button');button.disabled=true;try{const response=await fetch('/api/updates?refresh=1',{headers:{'X-PCR':'1'}}),value=await response.json();if(!response.ok)throw Error(value.error||'The APK is unavailable.');const link=document.createElement('a');link.href=value.android.fileUrl;link.download=value.android.name;page.append(link);link.click();link.remove();}catch(error){q('[data-status]').textContent=error.message;}finally{button.disabled=false;}};
   window.addEventListener('pcr:second-screen-state',paint);window.addEventListener('pcr:second-screen-placement',paint);window.addEventListener('pcr:native-ready',paint);window.addEventListener('pcr:auth',paint);paint();
  }

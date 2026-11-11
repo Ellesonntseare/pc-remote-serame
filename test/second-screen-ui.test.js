@@ -14,6 +14,8 @@ test('extended-display SVG cursor follows Windows pointer reports, hides off-dis
  assert.ok(page.querySelector('.secondScreenDesignLeft [data-side]'));
  assert.equal(page.querySelector('h2').textContent,'Second screen','connection status does not change the page title');
  page.querySelector('[data-placement=left]').click();assert.equal(page.querySelector('.secondScreenPreview').dataset.side,'left');
+ const alignment=page.querySelector('.secondScreenAlignment input');alignment.value='50';alignment.dispatchEvent(new w.Event('input'));
+ assert.equal(page.querySelector('.secondScreenPreview').style.getPropertyValue('--preview-phone-slide'),'10px');
  Object.defineProperties(stage,{clientWidth:{value:300},clientHeight:{value:200}});
  page.querySelector('[data-start]').click();const socket=sockets[0];socket.onopen();
  const report=value=>socket.onmessage({data:JSON.stringify(value)});
