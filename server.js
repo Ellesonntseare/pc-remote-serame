@@ -67,7 +67,7 @@ const PWA_ASSETS = new Map([
   ['/google-signin.js',['google-signin.js','text/javascript; charset=utf-8']],
   ['/native-media.js',['native-media.js','text/javascript; charset=utf-8']],
   ['/device-companion.js',['device-companion.js','text/javascript; charset=utf-8']],
-  ...['mission-control','camera-sharing','local-connection','sculpted-flow'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
+  ...['mission-control','camera-sharing','local-connection','sculpted-flow','interaction-motion'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
   ['/media-recording.js',['media-recording.js','text/javascript; charset=utf-8']],
   ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
   ...['workspace-settings','device-links','device-input','typing-controls','home-panels','native-window','window-presentation','touch-trail','explorer-workspace','account-workspace'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),

@@ -1,0 +1,22 @@
+/* Motion stays on interface controls. Remote video and pointer surfaces retain their geometry. */
+.ecMotionStatic{position:relative}
+.ecMotionControl{transition:scale 85ms ease-out,background-color .14s ease,border-color .14s ease,color .14s ease}
+.ecMotionControl.ecMotionPressed{scale:.97}
+.ecFlow button.ecMotionControl:active:not(:disabled){transform:none}
+.ecMotionInk{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none;z-index:2;contain:paint}
+.ecMotionRipple{position:absolute;display:block;border-radius:50%;background:var(--ec-accent,#fc563e);pointer-events:none;opacity:0}
+.secondScreenPhone{position:relative;z-index:1;transition:width .18s ease,height .18s ease}
+#secondScreenPage .secondScreenDiagram button{transition:background-color .18s ease,border-color .18s ease,color .18s ease}
+.ecMotionReceipt{position:fixed;z-index:500;left:50%;transform:translateX(-50%);bottom:calc(116px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:10px;box-sizing:border-box;width:max-content;max-width:calc(100% - 32px);padding:12px 17px;border:1px solid #7dbf8f66;border-radius:18px;background:#17231f;color:#d6f2dc;box-shadow:0 10px 32px #0004;font:600 13px/1.4 system-ui;pointer-events:none}
+.ecMotionReceipt svg{width:23px;height:23px;flex-shrink:0;stroke:#9ce0b1;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+html[data-motion=reduce] .ecMotionControl,html[data-motion=reduce] .secondScreenPhone,html[data-motion=reduce] #secondScreenPage .secondScreenDiagram button{transition:none}
+@media(hover:hover) and (pointer:fine){
+ .ecFlow :is(.ecHomeDestinations,.ecNavigation) button svg{transition:translate .16s ease}
+ .ecFlow :is(.ecHomeDestinations,.ecNavigation) button:hover:not(:disabled) svg{translate:0 -2px}
+ html.ecFlow[data-motion=reduce] button svg{transition:none;translate:none}
+}
+@media(prefers-reduced-motion:reduce){
+ .ecMotionControl,.secondScreenPhone,#secondScreenPage .secondScreenDiagram button{transition:none}
+ .ecMotionInk{display:none}
+}
+@media(max-width:420px){.ecMotionReceipt{font-size:12px;padding:10px 13px;gap:8px}}
