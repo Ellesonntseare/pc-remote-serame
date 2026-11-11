@@ -43,6 +43,7 @@ import androidx.webkit.WebViewFeature
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
 import org.json.JSONObject
 import java.net.URI
 
@@ -101,6 +102,15 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        WindowCompat.setDecorFitsSystemWindows(window,false)
+        val contentRoot=(findViewById<android.view.ViewGroup>(android.R.id.content)).getChildAt(0)
+        ViewCompat.setOnApplyWindowInsetsListener(contentRoot){view,insets->
+            val bars=insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val keyboard=insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(bars.left,bars.top,bars.right,maxOf(bars.bottom,keyboard.bottom))
+            insets
+        }
+        ViewCompat.requestApplyInsets(contentRoot)
         connectScreen = findViewById(R.id.connectScreen)
         web = findViewById(R.id.web)
         window.decorView.viewTreeObserver.addOnGlobalLayoutListener {
