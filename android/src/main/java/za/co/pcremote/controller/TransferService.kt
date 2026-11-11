@@ -71,8 +71,8 @@ class TransferService : Service() {
         // Called immediately, including notification actions, before starting any disk/network work.
         if(Build.VERSION.SDK_INT>=29)startForeground(119,notification(null),ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)else startForeground(119,notification(null))
         val origin=TrustedOrigin.normalize(intent?.getStringExtra("origin").orEmpty())
-        if(origin!=null)intent?.getStringExtra("cookie")?.takeIf{it.contains("pc_remote_session=")}?.let{cookies[origin]=it}
         synchronized(lock) {
+            if(origin!=null)intent?.getStringExtra("cookie")?.takeIf{it.contains("pc_remote_session=")}?.let{cookies[origin]=it}
             if(intent?.action==HANDOFF&&origin!=null&&cookies.containsKey(origin)){
                 val previous=TrustedOrigin.normalize(intent.getStringExtra("previousOrigin").orEmpty())
                 if(previous!=null&&previous!=origin)moveRoute(previous,origin)
@@ -120,7 +120,7 @@ class TransferService : Service() {
         return START_NOT_STICKY
     }
     private fun moveRoute(from:String,to:String){
-        for(row in tasks.filter{it.optString("origin")==from}){
+        for(row in tasks.filter{it.optString("nextRoute",it.optString("origin"))==from}){
             val state=row.optString("state")
             if(row.optString("id")==activeId&&state=="saving"){
                 row.put("nextRoute",to)
@@ -158,7 +158,10 @@ class TransferService : Service() {
     private fun check(row:JSONObject) { synchronized(lock){if(row.optString("state") !in listOf("running","saving"))throw IOException("Transfer paused")} }
     private fun request(row:JSONObject,path:String):Request.Builder {
         if(!path.startsWith("/api/files/"))throw IllegalArgumentException("Invalid transfer action")
-        return Request.Builder().url(row.getString("origin")+path).header("Cookie",cookies[row.getString("origin")].orEmpty()).header("X-PCR","1").header("X-PCR-Transfer",row.getString("id"))
+        return synchronized(lock){
+            val origin=row.getString("origin")
+            Request.Builder().url(origin+path).header("Cookie",cookies[origin].orEmpty()).header("X-PCR","1").header("X-PCR-Transfer",row.getString("id"))
+        }
     }
     private fun execute(row:JSONObject,builder:Request.Builder):Response {val call=synchronized(lock){check(row);client.newCall(builder.build()).also{activeCall=it}};return call.execute().also{if(it.code==401||it.code==403){it.close();throw IllegalStateException("Sign in again, then resume this transfer.")}}}
     private fun json(row:JSONObject,path:String,body:JSONObject?=null):JSONObject {

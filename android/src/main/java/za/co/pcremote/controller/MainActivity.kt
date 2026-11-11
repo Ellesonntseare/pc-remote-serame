@@ -464,12 +464,15 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     private fun reportConnectionHealth(fromWeb:Boolean) {
         val origin=selectedOrigin?.takeIf{fromWeb}
         val generation=connectionGeneration
-        val local=if(origin?.startsWith("http://")==true)origin else routeBinding?.local?.firstOrNull()
-            ?:TrustedOrigin.localTarget(address.text.toString(),portField.text.toString().toIntOrNull()?:7666)?.let{(ip,port)->"http://$ip:$port"}
-        val website=if(origin?.startsWith("https://")==true)origin else routeBinding?.website
-            ?:if(fromWeb) null else "https://remote.teamtrader.co.za"
+        val savedLocal=TrustedOrigin.localTarget(address.text.toString(),portField.text.toString().toIntOrNull()?:7666)?.let{(ip,port)->"http://$ip:$port"}
+        val cookie=origin?.let{CookieManager.getInstance().getCookie(it)}
+        val cached=routeBinding
         if(!fromWeb)error.text="Checking the PC and connection routes…"
         Thread {
+            val binding=cached ?: if(origin!=null&&!cookie.isNullOrEmpty())ConnectionRoutes.bind(origin,cookie) else null
+            val local=if(origin?.startsWith("http://")==true)origin else binding?.local?.firstOrNull()?:savedLocal
+            val website=if(origin?.startsWith("https://")==true)origin else binding?.website
+                ?:if(fromWeb) null else "https://remote.teamtrader.co.za"
             val localPing=ConnectionRoutes.ping(local)
             val webPing=ConnectionRoutes.ping(website)
             val localAdvice=ConnectionRoutes.advice(local,localPing,true)
@@ -517,7 +520,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 routeFailures=if(ping.reachable)0 else failures+1
                 if(chosen==null||!biometricSignIn.inheritVerifiedRoute(current,chosen.origin)){scheduleRouteCheck();return@runOnUiThread}
                 CookieManager.getInstance().setCookie(chosen.origin,chosen.cookie){accepted->
-                    if(accepted&&appForeground&&generation==connectionGeneration&&routeOwner&&!biometricSignIn.locked){
+                    if(accepted&&appForeground&&generation==connectionGeneration&&routeOwner&&automaticRoute()&&!biometricSignIn.locked){
                         CookieManager.getInstance().flush()
                         val suffix=when(routeView){"filesDialog"->"#route-files";"rs"->"#route-remote";"privacy"->"#route-privacy";else->"#route-home"}
                         TransferService.handoff(this,current,chosen.origin,chosen.cookie.substringBefore(';'))
