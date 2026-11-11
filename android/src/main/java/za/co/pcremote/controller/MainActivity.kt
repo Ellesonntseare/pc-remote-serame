@@ -70,6 +70,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     private var fullscreenView: View? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
     private var connectionGeneration = 0
+    private val routeHandler=android.os.Handler(android.os.Looper.getMainLooper())
+    private var routeOwner=false
+    private var routeView="home"
+    private var routeBusy=false
+    private var routeBinding:ConnectionRoutes.Host?=null
+    private var routeFailures=0
+    private var lastRouteChange=0L
+    private val routeTick=Runnable{checkAutomaticRoute()}
     private var nearby:NearbyComputers?=null
     private val nearbyTargets=linkedSetOf<String>()
     private var fastLocalPending=false
@@ -126,6 +134,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             }
         }
         error = findViewById(R.id.error)
+        findViewById<Button>(R.id.connectionHealth).setOnClickListener{reportConnectionHealth(false)}
         FolderSync.events={runOnUiThread{folderSyncEvent()}}
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).addPrimaryClipChangedListener(clipboardListener)
         findViewById<TextView>(R.id.appVersion).text="Elleson Connect "+packageManager.getPackageInfo(packageName,0).versionName.orEmpty()
@@ -248,7 +257,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("biometricSignIn",true).put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",BuildConfig.PHONE_ACCESS).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",BuildConfig.PHONE_ACCESS).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",BuildConfig.PHONE_ACCESS).put("phoneAudio",BuildConfig.PHONE_ACCESS).put("phonePlaybackAudio",BuildConfig.PHONE_ACCESS&&Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",false).put("phoneScreenSharing",BuildConfig.PHONE_ACCESS).put("phoneAccess",BuildConfig.PHONE_ACCESS).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("biometricSignIn",true).put("routeRecovery",true).put("automaticRoute",automaticRoute()).put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",BuildConfig.PHONE_ACCESS).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",BuildConfig.PHONE_ACCESS).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",BuildConfig.PHONE_ACCESS).put("phoneAudio",BuildConfig.PHONE_ACCESS).put("phonePlaybackAudio",BuildConfig.PHONE_ACCESS&&Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",false).put("phoneScreenSharing",BuildConfig.PHONE_ACCESS).put("phoneAccess",BuildConfig.PHONE_ACCESS).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow Elleson Connect through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -309,6 +318,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         val target=TrustedOrigin.normalize(origin)?:return
         if(biometricSignIn.intercept(target,suffix))return
         connectionGeneration++
+        routeOwner=false;routeBinding=null;routeFailures=0
+        routeHandler.removeCallbacks(routeTick)
         DeviceCompanion.disconnect()
         selectedOrigin = TrustedOrigin.normalize(origin) ?: return
         getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("lastOrigin",selectedOrigin).apply()
@@ -329,6 +340,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     return@addWebMessageListener
                 }
                 when (value.optString("type")) {
+                    "connection-health" -> reportConnectionHealth(true)
+                    "automatic-route" -> {
+                        getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putBoolean("automaticRoute",value.optBoolean("enabled")).apply()
+                        scheduleRouteCheck(0);reportConnectionHealth(true)
+                    }
+                    "route-session" -> {
+                        val owner=value.optBoolean("owner")
+                        if(!owner){routeBinding=null;routeFailures=0}
+                        routeOwner=owner;routeView=value.optString("view","home").take(30)
+                        scheduleRouteCheck(if(routeBinding==null)750 else 6500)
+                    }
                     "biometric-status" -> {selectedOrigin?.let{val status=biometricSignIn.state(it);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:biometric-state',{detail:$status}))",null)}}
                     "biometric-enable" -> {selectedOrigin?.let{biometricSignIn.enable(it)}}
                     "biometric-disable" -> {selectedOrigin?.let{biometricSignIn.disable(it)}}
@@ -339,7 +361,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         if(AppUpdatePolicy.valid(version,size,sha))startForegroundService(Intent(this,AppUpdateService::class.java).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("sha256",sha).putExtra("size",size).putExtra("version",version))
                     }
                     "app-update-install" -> {selectedOrigin?.let{origin->AppUpdateService.ready(origin)?.let{file->startActivity(Intent(this,AppUpdateActivity::class.java).putExtra("file",file.absolutePath))}}}
-                    "second-screen-preferences" -> {val side=value.optString("side");val orientation=value.optString("orientation");val quality=value.optString("quality");if(side in listOf("left","right","top","bottom")&&orientation in listOf("portrait","landscape")&&quality in listOf("auto","hd","smooth","low")){val saved=JSONObject().put("side",side).put("orientation",orientation).put("quality",quality).put("fast",value.optBoolean("fast",true));getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("secondScreenPreferences",saved.toString()).apply()}}
+                    "second-screen-preferences" -> {val side=value.optString("side");val orientation=value.optString("orientation");val quality=value.optString("quality");if(side in listOf("left","right","top","bottom")&&orientation in listOf("portrait","landscape")&&quality in listOf("auto","hd","smooth","low")){val saved=JSONObject().put("side",side).put("orientation",orientation).put("quality",quality).put("fast",value.optBoolean("fast",true)).put("alignment",value.optInt("alignment").coerceIn(-100,100));getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("secondScreenPreferences",saved.toString()).apply()}}
                     "second-screen-route" -> chooseFastLocalConnection()
                     "second-screen-route-cancel" -> {fastRouteGeneration++;fastLocalPending=false;nearby?.stop()}
                     "second-screen-orientation" -> {val active=value.optBoolean("active");requestedOrientation=if(!active)android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED else if(value.optString("orientation")=="portrait")android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;if(active)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
@@ -432,6 +454,81 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         error.text = ""; connectScreen.visibility = View.GONE; web.visibility = View.VISIBLE; web.requestFocus(); web.loadUrl("$selectedOrigin/$suffix")
     }
 
+    private fun automaticRoute() = getSharedPreferences("pc_remote_android",MODE_PRIVATE).getBoolean("automaticRoute",true)
+
+    private fun scheduleRouteCheck(delay:Long=6500) {
+        routeHandler.removeCallbacks(routeTick)
+        if(appForeground&&routeOwner&&automaticRoute())routeHandler.postDelayed(routeTick,delay)
+    }
+
+    private fun reportConnectionHealth(fromWeb:Boolean) {
+        val origin=selectedOrigin?.takeIf{fromWeb}
+        val generation=connectionGeneration
+        val local=if(origin?.startsWith("http://")==true)origin else routeBinding?.local?.firstOrNull()
+            ?:TrustedOrigin.localTarget(address.text.toString(),portField.text.toString().toIntOrNull()?:7666)?.let{(ip,port)->"http://$ip:$port"}
+        val website=if(origin?.startsWith("https://")==true)origin else routeBinding?.website
+            ?:if(fromWeb) null else "https://remote.teamtrader.co.za"
+        if(!fromWeb)error.text="Checking the PC and connection routes…"
+        Thread {
+            val localPing=ConnectionRoutes.ping(local)
+            val webPing=ConnectionRoutes.ping(website)
+            val localAdvice=ConnectionRoutes.advice(local,localPing,true)
+            val webAdvice=ConnectionRoutes.advice(website,webPing,false)
+            val any=localPing.reachable||webPing.reachable
+            val host=if(any)"Reachable" else "Unreachable. Make sure the PC is awake and Elleson Connect Host is running."
+            runOnUiThread {
+                if(isDestroyed||isFinishing||generation!=connectionGeneration)return@runOnUiThread
+                if(fromWeb&&origin==selectedOrigin&&isAllowed(web.url?:"")){
+                    val detail=JSONObject().put("host",host).put("local",localAdvice).put("website",webAdvice)
+                        .put("automatic",automaticRoute()).put("message","Connection checks complete.")
+                    web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:connection-health',{detail:$detail}))",null)
+                }else if(!fromWeb)error.text="Windows host: $host\nLocal Wi-Fi: $localAdvice\nWebsite route: $webAdvice"
+            }
+        }.start()
+    }
+
+    private fun checkAutomaticRoute() {
+        if(!appForeground||!routeOwner||!automaticRoute())return
+        val current=selectedOrigin?:return
+        if(routeBusy||fastLocalPending||biometricSignIn.locked||externalActivity||isInPictureInPictureMode){scheduleRouteCheck();return}
+        val cookie=CookieManager.getInstance().getCookie(current).orEmpty()
+        if(!cookie.contains("pc_remote_session=")){scheduleRouteCheck();return}
+        val generation=connectionGeneration
+        val cached=routeBinding
+        val failures=routeFailures
+        val preferLocal=routeView in listOf("home","filesDialog","workspaceSettings")&&SystemClock.elapsedRealtime()-lastRouteChange>20000
+        routeBusy=true
+        Thread {
+            val ping=ConnectionRoutes.ping(current,cookie)
+            val reported=if(ping.paired&&ping.owner&&(cached==null||System.currentTimeMillis()-cached.checkedAt>=60000))ConnectionRoutes.bind(current,cookie)else null
+            val binding=if(cached==null||reported?.key==cached.key)reported?:cached else cached
+            val candidates=when {
+                binding==null||binding.expiresAt<=System.currentTimeMillis()->emptyList()
+                ping.reachable&&ping.paired&&current.startsWith("https://")&&preferLocal->binding.local.take(3)
+                !ping.reachable&&failures>=1&&current.startsWith("http://")->listOfNotNull(binding.website)
+                !ping.reachable&&failures>=1->binding.local.take(3)
+                else->emptyList()
+            }
+            val chosen=candidates.filter{it!=current}.firstNotNullOfOrNull{ConnectionRoutes.authorize(binding!!,it,cookie)}
+            runOnUiThread {
+                routeBusy=false
+                if(isDestroyed||isFinishing||generation!=connectionGeneration||!appForeground||!routeOwner||!automaticRoute())return@runOnUiThread
+                routeBinding=binding
+                routeFailures=if(ping.reachable)0 else failures+1
+                if(chosen==null||!biometricSignIn.inheritVerifiedRoute(current,chosen.origin)){scheduleRouteCheck();return@runOnUiThread}
+                CookieManager.getInstance().setCookie(chosen.origin,chosen.cookie){accepted->
+                    if(accepted&&appForeground&&generation==connectionGeneration&&routeOwner&&!biometricSignIn.locked){
+                        CookieManager.getInstance().flush()
+                        val suffix=when(routeView){"filesDialog"->"#route-files";"rs"->"#route-remote";"privacy"->"#route-privacy";else->"#route-home"}
+                        TransferService.handoff(this,current,chosen.origin,chosen.cookie.substringBefore(';'))
+                        lastRouteChange=SystemClock.elapsedRealtime()
+                        connectTo(chosen.origin,suffix)
+                    }else scheduleRouteCheck()
+                }
+            }
+        }.start()
+    }
+
     private fun chooseFastLocalConnection(){
         if(fastLocalPending)return
         val origin=selectedOrigin?:return;val serial=connectionGeneration;val routeSerial=++fastRouteGeneration
@@ -519,6 +616,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
 
     private fun showConnect(message: String) {
+        routeOwner=false;routeBinding=null;routeHandler.removeCallbacks(routeTick)
         hideFullscreen()
         homeMiniReady=false;updateHomeMini(false);setRemoteFullscreen(false)
         volumeControlEnabled=false;
@@ -631,6 +729,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
 
     override fun onDestroy() {
+        routeHandler.removeCallbacks(routeTick)
         biometricSignIn.close()
         FolderSync.events=null
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).removePrimaryClipChangedListener(clipboardListener)
@@ -653,6 +752,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onStart() {
         super.onStart()
         appForeground=true
+        scheduleRouteCheck(500)
         DeviceCompanion.foreground(this,true)
         companionObserver?.invoke()
         companionObserver=DeviceCompanion.observe{if(isAllowed(web.url?:"")){val value=JSONObject().put("state",DeviceCompanion.state).put("connected",DeviceCompanion.connected);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:companion-state',{detail:$value}))",null)}}
@@ -660,6 +760,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
 
     override fun onStop() {
+        routeHandler.removeCallbacks(routeTick)
         biometricSignIn.background(biometricPickerFlow||isChangingConfigurations)
         appForeground=false
         fastRouteGeneration++;fastLocalPending=false

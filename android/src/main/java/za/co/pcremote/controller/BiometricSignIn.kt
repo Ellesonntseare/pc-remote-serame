@@ -49,8 +49,18 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
     val locked:Boolean get()=overlay?.visibility==View.VISIBLE
     private fun key(origin:String)="elleson.bio."+MessageDigest.getInstance("SHA-256").digest(origin.toByteArray()).joinToString(""){"%02x".format(it)}
     private fun available()=BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)==BiometricManager.BIOMETRIC_SUCCESS
-    fun enabled(origin:String)=preferences.contains(key(origin))
+    private fun enrollmentOrigin(origin:String)=preferences.getString("route."+key(origin),null)?:origin
+    fun enabled(origin:String)=preferences.contains(key(enrollmentOrigin(origin)))
     fun protects(origin:String?)=origin!=null&&enabled(origin)
+    fun inheritVerifiedRoute(from:String,target:String):Boolean {
+        if(locked||!foreground)return false
+        if(!enabled(from))return !enabled(target)
+        if(!gate.unlocked(from))return false
+        val original=enrollmentOrigin(from)
+        if(enabled(target)&&enrollmentOrigin(target)!=original)return false
+        if(target!=original&&!preferences.edit().putString("route."+key(target),original).commit())return false
+        return gate.accept(gate.begin(target))
+    }
     fun state(origin:String)=JSONObject().put("available",available()).put("enabled",enabled(origin)).put("locked",locked)
         .put("message",if(available())"Use the fingerprint or secure face recognition enrolled on this phone." else "Set up a strong fingerprint or supported face unlock in Android settings. Password sign-in is still available.")
     private fun emit(origin:String,message:String?=null){val value=state(origin);if(message!=null)value.put("message",message);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:biometric-state',{detail:$value}))",null);refreshQuickButton()}
@@ -58,7 +68,7 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
     fun intercept(origin:String,suffix:String):Boolean {if(!enabled(origin)||gate.unlocked(origin))return false;show(origin){navigate(origin,suffix)};return true}
     private fun store():KeyStore=KeyStore.getInstance("AndroidKeyStore").apply{load(null)}
     private fun cipher(origin:String,enroll:Boolean):Cipher {
-        val alias=key(origin)
+        val alias=key(enrollmentOrigin(origin))
         if(enroll){store().deleteEntry(alias);val spec=KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setKeySize(256).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setUserAuthenticationRequired(true).setInvalidatedByBiometricEnrollment(true)
@@ -107,10 +117,11 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
                     val authenticated=result.cryptoObject?.cipher?:throw IllegalStateException("Android did not unlock the biometric key.")
                     // Use the cipher returned by the prompt. Android can cache an authorization
                     // error from a premature updateAAD and surface it only at doFinal.
-                    authenticated.updateAAD(origin.toByteArray(Charsets.UTF_8))
+                    val proofOrigin=enrollmentOrigin(origin)
+                    authenticated.updateAAD(proofOrigin.toByteArray(Charsets.UTF_8))
                     if(enroll){val proof=ByteArray(32).also{SecureRandom().nextBytes(it)};val bytes=authenticated.doFinal(proof);proof.fill(0)
-                        val record=JSONObject().put("iv",Base64.encodeToString(authenticated.iv,Base64.NO_WRAP)).put("proof",Base64.encodeToString(bytes,Base64.NO_WRAP));check(preferences.edit().putString(key(origin),record.toString()).commit())
-                    }else{val record=JSONObject(preferences.getString(key(origin),null)!!);val proof=authenticated.doFinal(Base64.decode(record.getString("proof"),Base64.NO_WRAP));check(proof.size==32);proof.fill(0)}
+                        val record=JSONObject().put("iv",Base64.encodeToString(authenticated.iv,Base64.NO_WRAP)).put("proof",Base64.encodeToString(bytes,Base64.NO_WRAP));check(preferences.edit().putString(key(proofOrigin),record.toString()).commit())
+                    }else{val record=JSONObject(preferences.getString(key(proofOrigin),null)!!);val proof=authenticated.doFinal(Base64.decode(record.getString("proof"),Base64.NO_WRAP));check(proof.size==32);proof.fill(0)}
                 }
                 if(completion.isFailure){
                     android.util.Log.w("EllesonBiometrics", "${if(enroll) "Setup" else "Unlock"} Keystore operation failed: ${completion.exceptionOrNull()?.javaClass?.simpleName}")
@@ -157,7 +168,7 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
             CookieManager.getInstance().flush();pending=null;hide();navigate(origin,"")
         }
     }
-    fun disable(origin:String){verifyOwner(origin){preferences.edit().remove(key(origin)).apply();runCatching{store().deleteEntry(key(origin))};emit(origin,"Fingerprint / face sign-in disabled on this phone.")}}
+    fun disable(origin:String){verifyOwner(origin){val alias=key(enrollmentOrigin(origin));preferences.edit().remove(alias).apply();runCatching{store().deleteEntry(alias)};emit(origin,"Fingerprint / face sign-in disabled on this phone.")}}
     fun background(skip:Boolean){foreground=false;if(skip)return;gate.lock();prompt?.cancelAuthentication();busy=false;currentOrigin()?.takeIf{enabled(it)}?.let{show(it)}}
     fun resume(){foreground=true;currentOrigin()?.takeIf{enabled(it)&&!gate.unlocked(it)}?.let{show(it)};refreshQuickButton()}
     fun close(){foreground=false;gate.lock();prompt?.cancelAuthentication();busy=false}
