@@ -20,4 +20,9 @@ test('extended-display SVG cursor follows Windows pointer reports, hides off-dis
  report({type:'pointer',visible:false,x:0,y:0});assert.equal(cursor.hasAttribute('hidden'),true);
  report({type:'pointer',visible:true,x:.7,y:.4});assert.equal(cursor.hasAttribute('hidden'),false);
  w.PCRSecondScreen.stop();assert.equal(cursor.hasAttribute('hidden'),true);
+ delete w.PCRAndroid;w.dispatchEvent(new w.Event('pcr:auth'));
+ assert.equal(w.document.querySelector('.secondScreenHome').hidden,false,'owner browsers can find Second screen and read its requirements');
+ w.PCRAuth={signedIn:true,role:'guest'};w.dispatchEvent(new w.Event('pcr:auth'));
+ assert.equal(w.document.querySelector('.secondScreenHome').hidden,true);
+
 });

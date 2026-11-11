@@ -14,9 +14,9 @@ internal sealed class SecondScreen : IDisposable
     [DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern bool EnumDisplayDevices(string? device,uint index,ref Device result,uint flags);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern bool EnumDisplaySettings(string name,int index,ref Mode mode);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern int ChangeDisplaySettingsEx(string name,ref Mode mode,IntPtr window,uint flags,IntPtr data);
+    [DllImport("user32.dll")]static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")]static extern bool GetCursorPos(out Point point);
     [DllImport("user32.dll")]static extern bool SetCursorPos(int x,int y);
-    [DllImport("user32.dll")]static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
     [DllImport("user32.dll")]static extern bool EnumWindows(WindowCallback callback,IntPtr data);
     [DllImport("user32.dll")]static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll")]static extern bool IsIconic(IntPtr window);
@@ -66,12 +66,36 @@ internal sealed class SecondScreen : IDisposable
         if(Environment.TickCount64-heartbeat>5000){Application.ExitThread();return;}
         if(GetCursorPos(out var point)&&(point!=lastPoint||Environment.TickCount64-lastPointer>1000)){lastPoint=point;lastPointer=Environment.TickCount64;Publish(new{kind="pointer",visible=bounds.Contains(point),x=Math.Clamp((point.X-bounds.Left)/(double)bounds.Width,0,1),y=Math.Clamp((point.Y-bounds.Top)/(double)bounds.Height,0,1)});}
     }
-    void Input(JsonElement item){double x=item.GetProperty("x").GetDouble(),y=item.GetProperty("y").GetDouble();if(!double.IsFinite(x)||!double.IsFinite(y)||x<0||x>1||y<0||y>1)return;SetCursorPos(bounds.Left+(int)(x*(bounds.Width-1)),bounds.Top+(int)(y*(bounds.Height-1)));switch(item.GetProperty("action").GetString()){
-        case "down":if(!mouseDown){mouseDown=true;mouse_event(2,0,0,0,UIntPtr.Zero);}break;
-        case "up":if(mouseDown){mouseDown=false;mouse_event(4,0,0,0,UIntPtr.Zero);}break;
-        case "right":mouse_event(8,0,0,0,UIntPtr.Zero);mouse_event(16,0,0,0,UIntPtr.Zero);break;
-        case "wheel":int delta=item.GetProperty("delta").GetInt32();if(delta is >=-1200 and <=1200)mouse_event(0x800,0,0,unchecked((uint)delta),UIntPtr.Zero);break;
+    void Input(JsonElement item){
+        var action=item.GetProperty("action").GetString();
+        if(action is "text" or "key"){Keyboard(item,action);return;}
+        double x=item.GetProperty("x").GetDouble(),y=item.GetProperty("y").GetDouble();if(!double.IsFinite(x)||!double.IsFinite(y)||x<0||x>1||y<0||y>1)return;if(!SetCursorPos(bounds.Left+(int)(x*(bounds.Width-1)),bounds.Top+(int)(y*(bounds.Height-1))))throw new InvalidOperationException("Windows blocked pointer positioning.");switch(item.GetProperty("action").GetString()){
+        case "down":if(!mouseDown){mouseDown=true;Program.SendMouse(2);}break;
+        case "up":if(mouseDown){mouseDown=false;Program.SendMouse(4);}break;
+        case "right":Program.SendMouse(8);Program.SendMouse(16);break;
+        case "wheel":int delta=item.GetProperty("delta").GetInt32();if(delta is >=-1200 and <=1200)Program.SendMouse(0x800,data:unchecked((uint)delta));break;
     }}
+    void Keyboard(JsonElement item,string action){
+        long id=item.GetProperty("id").GetInt64();
+        try{
+            var window=GetForegroundWindow();
+            if(window==IntPtr.Zero||!GetWindowRect(window,out var rect)||!bounds.IntersectsWith(Rectangle.FromLTRB(rect.left,rect.top,rect.right,rect.bottom)))
+                throw new InvalidOperationException("Tap a text field on the extended display before sending text.");
+            if(action=="text"){
+                var text=item.GetProperty("text").GetString()??"";
+                if(text.Length is <1 or >1024)throw new ArgumentException("Send up to 1,024 characters at a time.");
+                Program.SendEdit(0,text);
+            }else{
+                int key=item.GetProperty("key").GetString() switch{
+                    "Enter"=>13,"Backspace"=>8,"Tab"=>9,_=>throw new ArgumentException("Unsupported keyboard key.")
+                };
+                Program.PressKey(key,"press");
+            }
+            Publish(new{kind="input-result",id,action,ok=true});
+        }catch(Exception error){
+            Publish(new{kind="input-result",id,action,ok=false,message=error.Message});
+        }
+    }
     void Recover(){var physical=Screen.PrimaryScreen?.WorkingArea??Rectangle.Empty;if(physical.IsEmpty)return;EnumWindows((window,_)=>{var kind=new StringBuilder(128);GetClassName(window,kind,kind.Capacity);if(kind.ToString() is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")return true;if(IsWindowVisible(window)&&!IsIconic(window)&&GetWindowTextLength(window)>0&&GetWindowRect(window,out var rect)&&bounds.Contains((rect.left+rect.right)/2,(rect.top+rect.bottom)/2))SetWindowPos(window,IntPtr.Zero,physical.Left+24,physical.Top+24,0,0,0x1|0x4|0x10);return true;},IntPtr.Zero);if(GetCursorPos(out var cursor)&&bounds.Contains(cursor))SetCursorPos(physical.Left+physical.Width/2,physical.Top+physical.Height/2);}
-    public void Dispose(){if(disposed)return;disposed=true;timer.Stop();timer.Dispose();drop?.Dispose();if(mouseDown)mouse_event(4,0,0,0,UIntPtr.Zero);if(attached){Recover();var restore=previous;if(!previouslyAttached)restore.width=restore.height=0;restore.fields=0x20|0x80|0x40000|0x80000|0x100000|0x400000;ChangeDisplaySettingsEx(deviceName,ref restore,IntPtr.Zero,0,IntPtr.Zero);}}
+    public void Dispose(){if(disposed)return;disposed=true;timer.Stop();timer.Dispose();drop?.Dispose();if(mouseDown)try{Program.SendMouse(4);}catch{}if(attached){Recover();var restore=previous;if(!previouslyAttached)restore.width=restore.height=0;restore.fields=0x20|0x80|0x40000|0x80000|0x100000|0x400000;ChangeDisplaySettingsEx(deviceName,ref restore,IntPtr.Zero,0,IntPtr.Zero);}}
 }

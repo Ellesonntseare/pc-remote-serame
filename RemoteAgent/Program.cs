@@ -426,7 +426,7 @@ internal static class Program
         }
     }
 
-    private static void SendMouse(uint flags,int x=0,int y=0,uint data=0)
+    internal static void SendMouse(uint flags,int x=0,int y=0,uint data=0)
     {
         var inputs=new[]{new Native.INPUT{type=0,U=new Native.INPUTUNION{mi=new Native.MOUSEINPUT{dx=x,dy=y,mouseData=data,dwFlags=flags}}}};
         if(Native.SendInput(1,inputs,Marshal.SizeOf<Native.INPUT>())!=1)
@@ -447,7 +447,7 @@ internal static class Program
             if (kind != "down") { SendMouse(up); HeldMouseButtons.Remove(button); }
         }
     }
-    private static void PressKey(int value, string kind)
+    internal static void PressKey(int value, string kind)
     {
         if (value < 0 || value > 255) return;
         lock (HeldInputLock)
@@ -483,7 +483,7 @@ internal static class Program
         // Do not restore the old clipboard: the target handles paste asynchronously.
     }
 
-    private static void SendEdit(int remove, string text)
+    internal static void SendEdit(int remove, string text)
     {
         var inputs = new List<Native.INPUT>();
         void Add(ushort value, bool unicode)
