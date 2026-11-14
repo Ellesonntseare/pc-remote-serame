@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const root=path.resolve(__dirname,'..'),read=name=>fs.readFileSync(path.join(root,name),'utf8');
 test('Elleson Connect is displayed across Android, Windows, web and the included keyboard',()=>{
  for(const name of ['index.html','public/mission-control.js','public/sw.js','public/google-signin.js','android/build.gradle.kts','android/src/main/res/layout/activity_main.xml','HostTray/Program.cs','installer/PCRemote.iss'])assert.ok(read(name).includes('Elleson Connect'),name);
- assert.ok(read('android/src/phoneAccess/AndroidManifest.xml').includes('Elleson Keyboard Â· Elleson Connect'));
+ assert.ok(read('android/src/phoneAccess/AndroidManifest.xml').includes('Elleson Keyboard · Elleson Connect'));
  assert.ok(read('android/src/phoneAccess/java/za/co/pcremote/controller/keyboard/SerameKeyboardService.kt').includes('brand.text = "Elleson"'));
 });
 test('rebranding keeps upgrade, session, discovery and keyboard identities compatible',()=>{
