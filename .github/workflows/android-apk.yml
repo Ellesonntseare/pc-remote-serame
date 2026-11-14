@@ -66,7 +66,7 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/standard/release/android-standard-release.apk > apk-metadata.txt
           sed -n '1,8p' apk-metadata.txt
           grep -q "application-label:'Elleson Connect'" apk-metadata.txt
-          grep -q "name='za.co.pcremote.controller' versionCode='31' versionName='2.3.8'" apk-metadata.txt
+          grep -q "name='za.co.pcremote.controller' versionCode='32' versionName='2.3.9'" apk-metadata.txt
           ! grep -q "application-debuggable" apk-metadata.txt
           ! grep -Eq "android.permission.(CAMERA|RECORD_AUDIO|REQUEST_INSTALL_PACKAGES|FOREGROUND_SERVICE_MEDIA_PROJECTION)" apk-metadata.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree android/build/outputs/apk/standard/release/android-standard-release.apk AndroidManifest.xml > apk-manifest.txt
@@ -96,9 +96,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view v2.3.8-preview || gh release create v2.3.8-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.8 Personal Preview" --notes-file docs/RELEASE-2.3.8.md
-          test "$(gh release view v2.3.8-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
-          cp android/build/outputs/apk/standard/release/android-standard-release.apk Elleson-Connect-Android-2.3.8.apk
-          cp android/build/outputs/apk/phoneAccess/release/android-phoneAccess-release.apk Elleson-Connect-Phone-Access-2.3.8.apk
-          tar -czf android-test-results-2.3.8.tar.gz android/build/test-results/testStandardReleaseUnitTest android/build/test-results/testPhoneAccessReleaseUnitTest
-          gh release upload v2.3.8-preview Elleson-Connect-Android-2.3.8.apk Elleson-Connect-Phone-Access-2.3.8.apk apk-signature.txt apk-metadata.txt apk-manifest.txt phone-access-signature.txt android-test-results-2.3.8.tar.gz --clobber
+          gh release view v2.3.9-preview || gh release create v2.3.9-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.9 Personal Preview" --notes-file docs/RELEASE-2.3.9.md
+          test "$(gh release view v2.3.9-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
+          cp android/build/outputs/apk/standard/release/android-standard-release.apk Elleson-Connect-Android-2.3.9.apk
+          cp android/build/outputs/apk/phoneAccess/release/android-phoneAccess-release.apk Elleson-Connect-Phone-Access-2.3.9.apk
+          tar -czf android-test-results-2.3.9.tar.gz android/build/test-results/testStandardReleaseUnitTest android/build/test-results/testPhoneAccessReleaseUnitTest
+          gh release upload v2.3.9-preview Elleson-Connect-Android-2.3.9.apk Elleson-Connect-Phone-Access-2.3.9.apk apk-signature.txt apk-metadata.txt apk-manifest.txt phone-access-signature.txt android-test-results-2.3.9.tar.gz --clobber

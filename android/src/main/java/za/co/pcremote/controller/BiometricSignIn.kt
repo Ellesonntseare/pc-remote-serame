@@ -22,6 +22,7 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -38,6 +39,7 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
     private val currentOrigin:()->String?,private val navigate:(String,String)->Unit) {
     private val preferences=activity.getSharedPreferences("biometric_sign_in_v1",0)
     private val gate=BiometricGate()
+    private val automaticPrompt=BiometricPromptGate()
     private var overlay:FrameLayout?=null
     private var label:TextView?=null
     private var prompt:BiometricPrompt?=null
@@ -136,15 +138,15 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
                 if(enroll){emit(origin,"Fingerprint / face sign-in enabled. The app locks when you leave it.");return}
                 val action=pending;pending=null;hide();action?.invoke();emit(origin)
             }
-            override fun onAuthenticationError(code:Int,message:CharSequence){busy=false;label?.text=if(code==BiometricPrompt.ERROR_LOCKOUT||code==BiometricPrompt.ERROR_LOCKOUT_PERMANENT)"Android temporarily locked biometrics. Use your PC password or PIN." else "Authentication cancelled. Tap the fingerprint to try again, or use your password.";emit(origin,"Biometric authentication did not complete. Password sign-in is available.")}
-            override fun onAuthenticationFailed(){label?.text="Not recognized. Try the sensor again."}
+            override fun onAuthenticationError(code:Int,message:CharSequence){if(!foreground||!gate.current(attempt))return;busy=false;label?.text=if(code==BiometricPrompt.ERROR_LOCKOUT||code==BiometricPrompt.ERROR_LOCKOUT_PERMANENT)"Android temporarily locked biometrics. Use your PC password or PIN." else "Authentication cancelled. Tap the fingerprint to try again, or use your password.";emit(origin,"Biometric authentication did not complete. Password sign-in is available.")}
+            override fun onAuthenticationFailed(){if(!foreground||!gate.current(attempt))return;label?.text="Not recognized. Try the sensor again."}
         })
         try{prompt!!.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle(if(enroll)"Enable Elleson Connect biometrics" else "Unlock Elleson Connect").setSubtitle("Confirm with your enrolled fingerprint or supported face unlock")
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG).setNegativeButtonText("Cancel").build(),BiometricPrompt.CryptoObject(operation))}
         catch(_:Exception){busy=false;gate.lock();label?.text="Android could not start biometrics. Use your PC password or PIN.";emit(origin,"Android could not start biometric authentication.")}
     }
     private fun show(origin:String,action:(()->Unit)?=null){
-        if(locked&&lockedOrigin==origin){if(action!=null)pending=action;return}
+        if(locked&&lockedOrigin==origin){if(action!=null)pending=action;scheduleAuthentication(origin);return}
         hide();lockedOrigin=origin;pending=action;previousVisibility=web.visibility;web.visibility=View.INVISIBLE
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val root=FrameLayout(activity).apply{setBackgroundColor(Color.rgb(7,9,14));isClickable=true;isFocusable=true;importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_YES};overlay=root
@@ -155,11 +157,21 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
         card.addView(text("Unlock your saved sign-in with Android.",13f,"#8494AC"))
         val fingerprint=ImageButton(activity).apply{setImageResource(R.drawable.biometric_fingerprint);setPadding(dp(22),dp(22),dp(22),dp(22));contentDescription="Unlock with fingerprint or face";background=GradientDrawable().apply{setColor(Color.rgb(40,28,28));cornerRadius=dp(60).toFloat();setStroke(dp(1),Color.rgb(255,107,53))};setOnClickListener{authenticate(origin)}}
         card.addView(fingerprint,LinearLayout.LayoutParams(dp(112),dp(112)).apply{gravity=Gravity.CENTER;topMargin=dp(24);bottomMargin=dp(20)})
-        label=text("Tap the fingerprint to authenticate.",12f,"#EB9A70");card.addView(label)
+        label=text("Preparing fingerprint / face authentication…",12f,"#EB9A70");card.addView(label)
         card.addView(Button(activity).apply{text="Use PC password / PIN";isAllCaps=false;setTextColor(Color.rgb(170,187,208));setBackgroundColor(Color.TRANSPARENT);setOnClickListener{manualSignIn(origin)}},LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(52)))
-        root.addView(card,FrameLayout.LayoutParams(minOf(dp(400),activity.resources.displayMetrics.widthPixels-dp(32)),ViewGroup.LayoutParams.WRAP_CONTENT,Gravity.CENTER));parent.addView(root,ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));root.requestFocus()
+        root.addView(card,FrameLayout.LayoutParams(minOf(dp(400),activity.resources.displayMetrics.widthPixels-dp(32)),ViewGroup.LayoutParams.WRAP_CONTENT,Gravity.CENTER));parent.addView(root,ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));root.requestFocus();scheduleAuthentication(origin)
     }
-    private fun hide(){if(overlay==null)return;overlay?.let{parent.removeView(it)};overlay=null;label=null;lockedOrigin=null;web.visibility=previousVisibility;activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)}
+    private fun scheduleAuthentication(origin:String){
+        val screen=overlay?:return
+        // Wait until the lock screen is attached and the activity is resumed.
+        // Duplicate lifecycle callbacks must not reopen a cancelled prompt.
+        screen.post{
+            if(overlay!==screen||lockedOrigin!=origin||activity.isFinishing||activity.isDestroyed)return@post
+            val resumed=foreground&&activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            if(automaticPrompt.request(origin,resumed,locked,busy))authenticate(origin)
+        }
+    }
+    private fun hide(){automaticPrompt.reset();if(overlay==null)return;overlay?.let{parent.removeView(it)};overlay=null;label=null;lockedOrigin=null;web.visibility=previousVisibility;activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)}
     private fun manualSignIn(origin:String){
         gate.lock();prompt?.cancelAuthentication();busy=false;val attempt=gate.begin(origin)
         // The fallback must clear this remembered session before showing the ordinary password form.
@@ -169,7 +181,18 @@ internal class BiometricSignIn(private val activity:FragmentActivity,private val
         }
     }
     fun disable(origin:String){verifyOwner(origin){val alias=key(enrollmentOrigin(origin));preferences.edit().remove(alias).apply();runCatching{store().deleteEntry(alias)};emit(origin,"Fingerprint / face sign-in disabled on this phone.")}}
-    fun background(skip:Boolean){foreground=false;if(skip)return;gate.lock();prompt?.cancelAuthentication();busy=false;currentOrigin()?.takeIf{enabled(it)}?.let{show(it)}}
-    fun resume(){foreground=true;currentOrigin()?.takeIf{enabled(it)&&!gate.unlocked(it)}?.let{show(it)};refreshQuickButton()}
-    fun close(){foreground=false;gate.lock();prompt?.cancelAuthentication();busy=false}
+    fun background(skip:Boolean){foreground=false;automaticPrompt.reset();if(skip)return;gate.lock();prompt?.cancelAuthentication();busy=false;currentOrigin()?.takeIf{enabled(it)}?.let{show(it)}}
+    fun resume(){
+        foreground=true
+        val origin=lockedOrigin?:currentOrigin()?:activity.getSharedPreferences("pc_remote_android",0)
+            .getString("lastOrigin",null)?.let{TrustedOrigin.normalize(it)}
+        origin?.takeIf{enabled(it)&&!gate.unlocked(it)}?.let{target->
+            // A fresh launch has no WebView origin yet. Continue to the saved PC
+            // only after Android has authenticated the enrolled biometric key.
+            if(currentOrigin()==null&&!locked)show(target){navigate(target,"")}else show(target)
+            scheduleAuthentication(target)
+        }
+        refreshQuickButton()
+    }
+    fun close(){foreground=false;automaticPrompt.reset();gate.lock();prompt?.cancelAuthentication();busy=false}
 }

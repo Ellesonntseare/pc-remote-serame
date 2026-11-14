@@ -1,6 +1,6 @@
 # Elleson Connect
 
-Current integrated version: **2.3.8** for the Windows host and Android. All November host, Android, connection recovery, privacy, file transfer, interface and remote-control changes are included on `main`. See [2.3.8 release notes](docs/RELEASE-2.3.8.md).
+Current versions: **2.3.8 Windows host** and **2.3.9 Android**. Android 2.3.9 starts fingerprint authentication automatically; see [Android 2.3.9](docs/RELEASE-2.3.9.md). All November host, Android, connection recovery, privacy, file transfer, interface and remote-control changes are included on `main`. See [2.3.8 release notes](docs/RELEASE-2.3.8.md).
 
 Your devices, together. Version **2.2.0** introduces the Elleson Connect identity across Android, Windows and the web, with a new EC icon family and the included **Elleson Keyboard**. Install it over your existing personal app to keep your settings and paired devices. See [branding and upgrade compatibility](docs/BRANDING.md).
 
