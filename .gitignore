@@ -65,3 +65,5 @@ test/CursorFreeCaptureChecks/bin/
 test/CursorFreeCaptureChecks/obj/
 
 .socials-data/
+.transfer-journal/
+.route-identity.pem

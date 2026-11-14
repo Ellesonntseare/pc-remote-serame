@@ -88,7 +88,12 @@
     root.style.setProperty('--phone-viewport-height',height+'px');
     root.style.setProperty('--phone-viewport-top',Math.max(0,viewport?.offsetTop||0)+'px');
     const home=document.getElementById('ecHome'),navigation=document.querySelector('.ecNavigation[data-environment="home"]');
-    if(home&&navigation&&!navigation.hidden){const top=home.getBoundingClientRect().top,bottom=navigation.getBoundingClientRect().top;home.style.setProperty('--phone-home-height',Math.max(100,bottom-top-12)+'px');}
+    if(home&&navigation&&!navigation.hidden){
+      const top=home.getBoundingClientRect().top,bar=navigation.getBoundingClientRect(),viewportBottom=(viewport?.offsetTop||0)+height;
+      const floating=navigation.dataset.navCustom==='true'&&viewportBottom-bar.bottom>22;
+      const bottom=floating?viewportBottom-20:bar.top;
+      home.style.setProperty('--phone-home-height',Math.max(100,bottom-top-12)+'px');
+    }
     root.classList.toggle('phoneKeyboardOpen',keyboard);
     if(keyboard&&document.activeElement?.id!=='typeText')document.activeElement?.scrollIntoView?.({block:'nearest',inline:'nearest'});
   }
@@ -98,7 +103,7 @@
   function mount(){
     const home=document.getElementById('ecHome'),footer=home?.querySelector('.ecHomeFoot');
     if(home&&footer&&!home.querySelector('.phoneHomeContent')){const content=document.createElement('div');content.className='phoneHomeContent';while(home.firstElementChild&&home.firstElementChild!==footer)content.append(home.firstElementChild);home.prepend(content);}
-    const navigation=document.querySelector('.ecNavigation');if(navigation&&window.ResizeObserver)new ResizeObserver(schedule).observe(navigation);window.addEventListener('pcr:page',schedule);schedule();
+    const navigation=document.querySelector('.ecNavigation');if(navigation&&window.ResizeObserver)new ResizeObserver(schedule).observe(navigation);window.addEventListener('pcr:page',schedule);window.addEventListener('pcr:navigation-layout',schedule);schedule();
     const files=document.getElementById('filesDialog'),commands=files?.querySelector('.explorerCommands'),sidebar=files?.querySelector('.explorerSidebar');
     if(!commands||!sidebar||commands.querySelector('.phoneFoldersToggle'))return;
     sidebar.id='phoneExplorerFolders';const toggle=document.createElement('button');toggle.type='button';toggle.className='phoneFoldersToggle';

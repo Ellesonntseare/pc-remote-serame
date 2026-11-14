@@ -210,3 +210,13 @@ test('video control channel retains input metadata and releases capture demand w
  await pause(30);assert.ok(f.written.includes('flow 1'));f.emitFrame();await pause(30);assert.equal(f.packets(control).filter(p=>p.type===0||p.type===5).length,0);
  const {ws}=await f.connect();await pause(20);ws.send(JSON.stringify({type:'bind',streamId:f.streamId}));await pause(20);
 });
+test('cursor reports bypass screen frame credits on an opted-in input socket',async t=>{
+  const f=await fixture();t.after(()=>f.close());
+  const screen=await f.openScreen('/api/screen?regions=1');
+  const {ws}=await f.connect({},'/api/input-stream?screen='+screen.metadata.streamId+'&cursor=1');
+  f.emitCursor();await until(()=>ws.messages.some(m=>m.type==='cursor'));
+  assert.deepEqual(ws.messages.find(m=>m.type==='cursor').state,{x:300,y:200,visible:true});
+  assert.equal(f.packets(screen).filter(p=>p.type===6).length,0);
+  ws.close();await once(ws,'close');
+  f.emitCursor();await until(()=>f.packets(screen).some(p=>p.type===6));
+});

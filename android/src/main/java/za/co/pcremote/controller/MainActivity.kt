@@ -43,11 +43,14 @@ import androidx.webkit.WebViewFeature
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
 import org.json.JSONObject
 import java.net.URI
 
 /** Personal PC client with explicit, Android-approved guest screen sharing. */
-class MainActivity : Activity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
+    private lateinit var biometricSignIn:BiometricSignIn
+    private var biometricPickerFlow=false
     private lateinit var web: WebView
     private lateinit var connectScreen: ScrollView
     private lateinit var error: TextView
@@ -67,6 +70,14 @@ class MainActivity : Activity() {
     private var fullscreenView: View? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
     private var connectionGeneration = 0
+    private val routeHandler=android.os.Handler(android.os.Looper.getMainLooper())
+    private var routeOwner=false
+    private var routeView="home"
+    private var routeBusy=false
+    private var routeBinding:ConnectionRoutes.Host?=null
+    private var routeFailures=0
+    private var lastRouteChange=0L
+    private val routeTick=Runnable{checkAutomaticRoute()}
     private var nearby:NearbyComputers?=null
     private val nearbyTargets=linkedSetOf<String>()
     private var fastLocalPending=false
@@ -101,8 +112,19 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        WindowCompat.setDecorFitsSystemWindows(window,false)
+        val contentRoot=(findViewById<android.view.ViewGroup>(android.R.id.content)).getChildAt(0)
+        ViewCompat.setOnApplyWindowInsetsListener(contentRoot){view,insets->
+            val bars=insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val keyboard=insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(bars.left,bars.top,bars.right,maxOf(bars.bottom,keyboard.bottom))
+            insets
+        }
+        ViewCompat.requestApplyInsets(contentRoot)
         connectScreen = findViewById(R.id.connectScreen)
         web = findViewById(R.id.web)
+        biometricSignIn=BiometricSignIn(this,web,contentRoot as ViewGroup,{selectedOrigin},{origin,suffix->connectTo(origin,suffix)})
+        biometricSignIn.refreshQuickButton()
         window.decorView.viewTreeObserver.addOnGlobalLayoutListener {
             val visible=ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime())==true
             if(visible!=phoneKeyboardVisible){
@@ -112,6 +134,7 @@ class MainActivity : Activity() {
             }
         }
         error = findViewById(R.id.error)
+        findViewById<Button>(R.id.connectionHealth).setOnClickListener{reportConnectionHealth(false)}
         FolderSync.events={runOnUiThread{folderSyncEvent()}}
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).addPrimaryClipChangedListener(clipboardListener)
         findViewById<TextView>(R.id.appVersion).text="Elleson Connect "+packageManager.getPackageInfo(packageName,0).versionName.orEmpty()
@@ -193,7 +216,7 @@ class MainActivity : Activity() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
                     val permissions=mediaPermissions(request)
-                    if(permissions==null||!isAllowed(web.url?:"")){request.deny();return@runOnUiThread}
+                    if(!BuildConfig.PHONE_ACCESS||permissions==null||!isAllowed(web.url?:"")){request.deny();return@runOnUiThread}
                     val missing=permissions.filter{checkSelfPermission(it)!=PackageManager.PERMISSION_GRANTED}
                     if(missing.isEmpty())grantWebMedia(request)
                     else {microphoneRequest?.deny();microphoneRequest=request;requestPermissions(missing.toTypedArray(),503)}
@@ -234,7 +257,7 @@ class MainActivity : Activity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",true).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("biometricSignIn",true).put("routeRecovery",true).put("automaticRoute",automaticRoute()).put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",BuildConfig.PHONE_ACCESS).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",BuildConfig.PHONE_ACCESS).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",BuildConfig.PHONE_ACCESS).put("phoneAudio",BuildConfig.PHONE_ACCESS).put("phonePlaybackAudio",BuildConfig.PHONE_ACCESS&&Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",false).put("phoneScreenSharing",BuildConfig.PHONE_ACCESS).put("phoneAccess",BuildConfig.PHONE_ACCESS).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow Elleson Connect through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -292,7 +315,11 @@ class MainActivity : Activity() {
     }
 
     private fun connectTo(origin: String,suffix:String="") {
+        val target=TrustedOrigin.normalize(origin)?:return
+        if(biometricSignIn.intercept(target,suffix))return
         connectionGeneration++
+        routeOwner=false;routeBinding=null;routeFailures=0
+        routeHandler.removeCallbacks(routeTick)
         DeviceCompanion.disconnect()
         selectedOrigin = TrustedOrigin.normalize(origin) ?: return
         getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("lastOrigin",selectedOrigin).apply()
@@ -300,9 +327,33 @@ class MainActivity : Activity() {
         bridgeInstalled = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
         if (bridgeInstalled) WebViewCompat.addWebMessageListener(web, "PCRAndroid", setOf(selectedOrigin!!)) { view, message, sourceOrigin, isMainFrame, reply ->
             if (!isMainFrame || TrustedOrigin.normalize(sourceOrigin.toString()) != selectedOrigin || !isAllowed(view.url ?: "")) return@addWebMessageListener
+            if(biometricSignIn.locked)return@addWebMessageListener
             try {
                 val value = JSONObject(message.data ?: "{}")
+                val command = value.optString("type")
+                if (command in listOf("app-update", "app-update-install")) {
+                    reply.postMessage("{\"type\":\"stopped\",\"message\":\"Install updates using Android’s package installer.\"}")
+                    return@addWebMessageListener
+                }
+                if (!AndroidFeaturePolicy.allows(command, BuildConfig.PHONE_ACCESS)) {
+                    reply.postMessage("{\"type\":\"stopped\",\"message\":\"This feature requires the optional Elleson Connect Phone Access app.\"}")
+                    return@addWebMessageListener
+                }
                 when (value.optString("type")) {
+                    "connection-health" -> reportConnectionHealth(true)
+                    "automatic-route" -> {
+                        getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putBoolean("automaticRoute",value.optBoolean("enabled")).apply()
+                        scheduleRouteCheck(0);reportConnectionHealth(true)
+                    }
+                    "route-session" -> {
+                        val owner=value.optBoolean("owner")
+                        if(!owner){routeBinding=null;routeFailures=0}
+                        routeOwner=owner;routeView=value.optString("view","home").take(30)
+                        scheduleRouteCheck(if(routeBinding==null)750 else 6500)
+                    }
+                    "biometric-status" -> {selectedOrigin?.let{val status=biometricSignIn.state(it);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:biometric-state',{detail:$status}))",null)}}
+                    "biometric-enable" -> {selectedOrigin?.let{biometricSignIn.enable(it)}}
+                    "biometric-disable" -> {selectedOrigin?.let{biometricSignIn.disable(it)}}
                     "transfer-ready" -> transferReady()
                     "app-update" -> {
                         val origin=selectedOrigin?:return@addWebMessageListener
@@ -310,7 +361,7 @@ class MainActivity : Activity() {
                         if(AppUpdatePolicy.valid(version,size,sha))startForegroundService(Intent(this,AppUpdateService::class.java).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("sha256",sha).putExtra("size",size).putExtra("version",version))
                     }
                     "app-update-install" -> {selectedOrigin?.let{origin->AppUpdateService.ready(origin)?.let{file->startActivity(Intent(this,AppUpdateActivity::class.java).putExtra("file",file.absolutePath))}}}
-                    "second-screen-preferences" -> {val side=value.optString("side");val orientation=value.optString("orientation");val quality=value.optString("quality");if(side in listOf("left","right","top","bottom")&&orientation in listOf("portrait","landscape")&&quality in listOf("auto","hd","smooth","low")){val saved=JSONObject().put("side",side).put("orientation",orientation).put("quality",quality).put("fast",value.optBoolean("fast",true));getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("secondScreenPreferences",saved.toString()).apply()}}
+                    "second-screen-preferences" -> {val side=value.optString("side");val orientation=value.optString("orientation");val quality=value.optString("quality");if(side in listOf("left","right","top","bottom")&&orientation in listOf("portrait","landscape")&&quality in listOf("auto","hd","smooth","low")){val saved=JSONObject().put("side",side).put("orientation",orientation).put("quality",quality).put("fast",value.optBoolean("fast",true)).put("alignment",value.optInt("alignment").coerceIn(-100,100));getSharedPreferences("pc_remote_android",MODE_PRIVATE).edit().putString("secondScreenPreferences",saved.toString()).apply()}}
                     "second-screen-route" -> chooseFastLocalConnection()
                     "second-screen-route-cancel" -> {fastRouteGeneration++;fastLocalPending=false;nearby?.stop()}
                     "second-screen-orientation" -> {val active=value.optBoolean("active");requestedOrientation=if(!active)android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED else if(value.optString("orientation")=="portrait")android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;if(active)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
@@ -320,13 +371,13 @@ class MainActivity : Activity() {
                         try{startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),509)}catch(_:Exception){Toast.makeText(this,"Enable Android's Files app to choose documents.",Toast.LENGTH_LONG).show()}
                     }
                     "transfer-shared" -> { val items=org.json.JSONArray();sharedUris.forEach{items.put(JSONObject().put("direction","upload").put("uri",it.toString()).put("destination",value.optString("destination").take(700)))};if(items.length()>0){enqueueTransfers(items);sharedUris.clear();sharedText="";transferReady()} }
-                    "transfer-control" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("pause","resume","cancel","replace"))startForegroundService(Intent(this,TransferService::class.java).setAction(TransferService.CONTROL).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("id",value.optString("id")).putExtra("command",command))}
+                    "transfer-control" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("pause","resume","cancel","replace","keep-both"))startForegroundService(Intent(this,TransferService::class.java).setAction(TransferService.CONTROL).putExtra("origin",origin).putExtra("cookie",CookieManager.getInstance().getCookie(origin)).putExtra("id",value.optString("id")).putExtra("command",command))}
                     "transfer-file-action" -> {val origin=selectedOrigin?:return@addWebMessageListener;val command=value.optString("command");if(command in listOf("open","share")&&TransferService.completedDownload(this,origin,value.optString("id"))!=null)startActivity(Intent(this,TransferActionActivity::class.java).putExtra("origin",origin).putExtra("id",value.optString("id")).putExtra("command",command))}
                     "transfer-signout" -> {DeviceCompanion.disconnect();selectedOrigin?.let{TransferService.stopOrigin(this,it);FolderSync.disconnect(this,it)}}
                     "companion-connect" -> {val origin=selectedOrigin?:return@addWebMessageListener;DeviceCompanion.connect(this,origin,CookieManager.getInstance().getCookie(origin).orEmpty(),value.optString("account"),value.optString("deviceId"),value.optString("name"))}
                     "companion-disconnect" -> DeviceCompanion.disconnect()
                     "companion-context" -> DeviceCompanion.context(value.optString("page"),value.optBoolean("pcInput"))
-                    "keyboard-settings" -> startActivity(Intent(this,za.co.pcremote.controller.keyboard.KeyboardSettingsActivity::class.java))
+                    "keyboard-settings" -> startActivity(Intent().setClassName(this,"za.co.pcremote.controller.keyboard.KeyboardSettingsActivity"))
                     "phone-audio-start" -> {phoneAudioOutput=if(value.optString("output")=="virtual-mic")"virtual-mic" else "speakers";compressedPhoneAudio=value.optBoolean("compressed",true);requestPhoneAudio(value.optString("source"),value.optDouble("volume",.6))}
                     "phone-audio-stop" -> {pendingPhoneAudio=null;PhoneAudioService.stop()}
                     "phone-audio-control" -> PhoneAudioService.control(value.optDouble("volume",.6),value.optBoolean("muted",false))
@@ -403,6 +454,84 @@ class MainActivity : Activity() {
         error.text = ""; connectScreen.visibility = View.GONE; web.visibility = View.VISIBLE; web.requestFocus(); web.loadUrl("$selectedOrigin/$suffix")
     }
 
+    private fun automaticRoute() = getSharedPreferences("pc_remote_android",MODE_PRIVATE).getBoolean("automaticRoute",true)
+
+    private fun scheduleRouteCheck(delay:Long=6500) {
+        routeHandler.removeCallbacks(routeTick)
+        if(appForeground&&routeOwner&&automaticRoute())routeHandler.postDelayed(routeTick,delay)
+    }
+
+    private fun reportConnectionHealth(fromWeb:Boolean) {
+        val origin=selectedOrigin?.takeIf{fromWeb}
+        val generation=connectionGeneration
+        val savedLocal=TrustedOrigin.localTarget(address.text.toString(),portField.text.toString().toIntOrNull()?:7666)?.let{(ip,port)->"http://$ip:$port"}
+        val cookie=origin?.let{CookieManager.getInstance().getCookie(it)}
+        val cached=routeBinding
+        if(!fromWeb)error.text="Checking the PC and connection routes…"
+        Thread {
+            val binding=cached ?: if(origin!=null&&!cookie.isNullOrEmpty())ConnectionRoutes.bind(origin,cookie) else null
+            val local=if(origin?.startsWith("http://")==true)origin else binding?.local?.firstOrNull()?:savedLocal
+            val website=if(origin?.startsWith("https://")==true)origin else binding?.website
+                ?:if(fromWeb) null else "https://remote.teamtrader.co.za"
+            val localPing=ConnectionRoutes.ping(local)
+            val webPing=ConnectionRoutes.ping(website)
+            val localAdvice=ConnectionRoutes.advice(local,localPing,true)
+            val webAdvice=ConnectionRoutes.advice(website,webPing,false)
+            val any=localPing.reachable||webPing.reachable
+            val host=if(any)"Reachable" else "Unreachable. Make sure the PC is awake and Elleson Connect Host is running."
+            runOnUiThread {
+                if(isDestroyed||isFinishing||generation!=connectionGeneration)return@runOnUiThread
+                if(fromWeb&&origin==selectedOrigin&&isAllowed(web.url?:"")){
+                    val detail=JSONObject().put("host",host).put("local",localAdvice).put("website",webAdvice)
+                        .put("automatic",automaticRoute()).put("message","Connection checks complete.")
+                    web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:connection-health',{detail:$detail}))",null)
+                }else if(!fromWeb)error.text="Windows host: $host\nLocal Wi-Fi: $localAdvice\nWebsite route: $webAdvice"
+            }
+        }.start()
+    }
+
+    private fun checkAutomaticRoute() {
+        if(!appForeground||!routeOwner||!automaticRoute())return
+        val current=selectedOrigin?:return
+        if(routeBusy||fastLocalPending||biometricSignIn.locked||externalActivity||isInPictureInPictureMode){scheduleRouteCheck();return}
+        val cookie=CookieManager.getInstance().getCookie(current).orEmpty()
+        if(!cookie.contains("pc_remote_session=")){scheduleRouteCheck();return}
+        val generation=connectionGeneration
+        val cached=routeBinding
+        val failures=routeFailures
+        val preferLocal=routeView in listOf("home","filesDialog","workspaceSettings")&&SystemClock.elapsedRealtime()-lastRouteChange>20000
+        routeBusy=true
+        Thread {
+            val ping=ConnectionRoutes.ping(current,cookie)
+            val reported=if(ping.paired&&ping.owner&&(cached==null||System.currentTimeMillis()-cached.checkedAt>=60000))ConnectionRoutes.bind(current,cookie)else null
+            val binding=if(cached==null||reported?.key==cached.key)reported?:cached else cached
+            val candidates=when {
+                binding==null||binding.expiresAt<=System.currentTimeMillis()->emptyList()
+                ping.reachable&&ping.paired&&current.startsWith("https://")&&preferLocal->binding.local.take(3)
+                !ping.reachable&&failures>=1&&current.startsWith("http://")->listOfNotNull(binding.website)
+                !ping.reachable&&failures>=1->binding.local.take(3)
+                else->emptyList()
+            }
+            val chosen=candidates.filter{it!=current}.firstNotNullOfOrNull{ConnectionRoutes.authorize(binding!!,it,cookie)}
+            runOnUiThread {
+                routeBusy=false
+                if(isDestroyed||isFinishing||generation!=connectionGeneration||!appForeground||!routeOwner||!automaticRoute())return@runOnUiThread
+                routeBinding=binding
+                routeFailures=if(ping.reachable)0 else failures+1
+                if(chosen==null||!biometricSignIn.inheritVerifiedRoute(current,chosen.origin)){scheduleRouteCheck();return@runOnUiThread}
+                CookieManager.getInstance().setCookie(chosen.origin,chosen.cookie){accepted->
+                    if(accepted&&appForeground&&generation==connectionGeneration&&routeOwner&&automaticRoute()&&!biometricSignIn.locked){
+                        CookieManager.getInstance().flush()
+                        val suffix=when(routeView){"filesDialog"->"#route-files";"rs"->"#route-remote";"privacy"->"#route-privacy";else->"#route-home"}
+                        TransferService.handoff(this,current,chosen.origin,chosen.cookie.substringBefore(';'))
+                        lastRouteChange=SystemClock.elapsedRealtime()
+                        connectTo(chosen.origin,suffix)
+                    }else scheduleRouteCheck()
+                }
+            }
+        }.start()
+    }
+
     private fun chooseFastLocalConnection(){
         if(fastLocalPending)return
         val origin=selectedOrigin?:return;val serial=connectionGeneration;val routeSerial=++fastRouteGeneration
@@ -424,7 +553,7 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION")
     private fun requestProjection() {
-        if (!pendingProjection || !isAllowed(web.url ?: "")) return
+        if (!BuildConfig.PHONE_ACCESS || !pendingProjection || !isAllowed(web.url ?: "")) return
         val manager = getSystemService(MediaProjectionManager::class.java)
         // Android 14 otherwise defaults to an app-only chooser. Request the
         // complete display so Home, other apps and rotation remain in the stream.
@@ -490,6 +619,7 @@ class MainActivity : Activity() {
     }
 
     private fun showConnect(message: String) {
+        routeOwner=false;routeBinding=null;routeHandler.removeCallbacks(routeTick)
         hideFullscreen()
         homeMiniReady=false;updateHomeMini(false);setRemoteFullscreen(false)
         volumeControlEnabled=false;
@@ -530,7 +660,7 @@ class MainActivity : Activity() {
         var attempts=0
         fun show(){
             if(generation!=keyboardGeneration||isFinishing||isDestroyed||isInPictureInPictureMode||!isAllowed(web.url?:""))return
-            web.evaluateJavascript("!!(document.activeElement?.id==='typeText'&&!document.activeElement.readOnly)"){focused->
+            web.evaluateJavascript("!!(['typeText','secondScreenText'].includes(document.activeElement?.id)&&!document.activeElement.readOnly)"){focused->
                 if(focused!="true"||generation!=keyboardGeneration||!web.hasWindowFocus())return@evaluateJavascript
                 if(Build.VERSION.SDK_INT>=30&&web.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime())==true)return@evaluateJavascript
                 val manager=getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
@@ -551,7 +681,7 @@ class MainActivity : Activity() {
         if(Build.VERSION.SDK_INT>=31)builder.setAutoEnterEnabled(auto)
         return builder.build()
     }
-    private fun canHomeMini()=homeMiniReady&&!externalActivity&&web.visibility==View.VISIBLE&&isAllowed(web.url?:"")&&!isFinishing&&filesResult==null&&downloadRequest==null&&pendingSyncFolder==null&&!pendingProjection
+    private fun canHomeMini()=homeMiniReady&&!externalActivity&&!biometricSignIn.protects(selectedOrigin)&&web.visibility==View.VISIBLE&&isAllowed(web.url?:"")&&!isFinishing&&filesResult==null&&downloadRequest==null&&pendingSyncFolder==null&&!pendingProjection
     private fun updateHomeMini(enabled:Boolean=canHomeMini()){
         if(Build.VERSION.SDK_INT>=31&&packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE))runCatching{setPictureInPictureParams(miniParams(homeMiniWidth,homeMiniHeight,enabled))}
     }
@@ -561,7 +691,7 @@ class MainActivity : Activity() {
         web.evaluateJavascript("window.PCRMiniWindow?.prepare()",null)
         if(Build.VERSION.SDK_INT<31)minimisePc(homeMiniWidth,homeMiniHeight,false)
     }
-    override fun startActivityForResult(intent:Intent,requestCode:Int,options:Bundle?){externalActivity=true;updateHomeMini(false);super.startActivityForResult(intent,requestCode,options)}
+    override fun startActivityForResult(intent:Intent,requestCode:Int,options:Bundle?){externalActivity=true;biometricPickerFlow=intent.action in listOf(Intent.ACTION_OPEN_DOCUMENT,Intent.ACTION_OPEN_DOCUMENT_TREE,Intent.ACTION_CREATE_DOCUMENT,Intent.ACTION_GET_CONTENT,Intent.ACTION_CHOOSER);updateHomeMini(false);super.startActivityForResult(intent,requestCode,options)}
     override fun startActivity(intent:Intent,options:Bundle?){externalActivity=true;updateHomeMini(false);super.startActivity(intent,options)}
     private fun setRemoteFullscreen(enabled:Boolean){
         remoteFullscreenActive=enabled
@@ -602,6 +732,8 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        routeHandler.removeCallbacks(routeTick)
+        biometricSignIn.close()
         FolderSync.events=null
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).removePrimaryClipChangedListener(clipboardListener)
         nearby?.stop()
@@ -623,6 +755,7 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         appForeground=true
+        scheduleRouteCheck(500)
         DeviceCompanion.foreground(this,true)
         companionObserver?.invoke()
         companionObserver=DeviceCompanion.observe{if(isAllowed(web.url?:"")){val value=JSONObject().put("state",DeviceCompanion.state).put("connected",DeviceCompanion.connected);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('pcr:companion-state',{detail:$value}))",null)}}
@@ -630,6 +763,8 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        routeHandler.removeCallbacks(routeTick)
+        biometricSignIn.background(biometricPickerFlow||isChangingConfigurations)
         appForeground=false
         fastRouteGeneration++;fastLocalPending=false
         DeviceCompanion.foreground(this,false)
@@ -713,7 +848,7 @@ class MainActivity : Activity() {
     private fun showControlRequest() {
         val id=ScreenShareService.pendingControl()?:return
         if(!hasWindowFocus() || isFinishing || controlDialog?.isShowing==true)return
-        val enabled=PhoneControlService.instance!=null
+        val enabled=PhoneAccess.controlEnabled
         controlDialog=AlertDialog.Builder(this).setTitle("Allow Elleson Connect to control this phone?")
             .setMessage(if(enabled)"Allow PC mouse control, clicks, scrolling, Back, Home and replacing text in selected fields for this session (up to 10 minutes). Stop control anytime from the sharing notification." else "Enable Elleson Connect phone control in Android Accessibility settings, then return here and approve this request. This lets your PC mouse control other apps on your phone.")
             .setNegativeButton("Decline"){_,_->ScreenShareService.respondControl(id,false);controlDialog=null}
@@ -723,7 +858,7 @@ class MainActivity : Activity() {
             }.setOnCancelListener{ScreenShareService.respondControl(id,false);controlDialog=null}.create()
         controlDialog?.show()
     }
-    override fun onResume() { super.onResume();externalActivity=false;if(!isInPictureInPictureMode){miniWindowEvent(false);if(remoteFullscreenActive)setRemoteFullscreen(true);web.postDelayed({showControlRequest()},400)};updateHomeMini();if(connectScreen.visibility==View.VISIBLE)nearby?.start() }
+    override fun onResume() { super.onResume();biometricSignIn.resume();biometricPickerFlow=false;externalActivity=false;if(!isInPictureInPictureMode){miniWindowEvent(false);if(remoteFullscreenActive)setRemoteFullscreen(true);web.postDelayed({showControlRequest()},400)};updateHomeMini();if(connectScreen.visibility==View.VISIBLE)nearby?.start() }
 
     private fun nearbyEvent(value:JSONObject){
         if(isFinishing||isDestroyed)return

@@ -30,11 +30,19 @@ class TransferService : Service() {
         var events: ((JSONObject) -> Unit)? = null
         const val ADD = "pcr.transfer.ADD"
         const val CONTROL = "pcr.transfer.CONTROL"
+        private const val HANDOFF = "pcr.transfer.HANDOFF"
+        fun handoff(context:Context,from:String,to:String,cookie:String) {
+            if(from==to||TrustedOrigin.normalize(from)!=from||TrustedOrigin.normalize(to)!=to)return
+            if(snapshot(context,from).getJSONArray("tasks").length()==0)return
+            val intent=Intent(context,TransferService::class.java).setAction(HANDOFF)
+                .putExtra("origin",to).putExtra("previousOrigin",from).putExtra("cookie",cookie)
+            runCatching{context.startForegroundService(intent)}
+        }
         fun snapshot(context: Context, origin: String): JSONObject {
             val source=live?.synchronizedSnapshot() ?: runCatching { JSONArray(File(context.filesDir,"transfer-queue.json").readText()) }.getOrDefault(JSONArray())
             val rows=JSONArray()
             for(i in 0 until source.length()) { val row=source.getJSONObject(i);if(row.optString("origin")==origin) {
-                rows.put(JSONObject().put("id",row.optString("id")).put("name",row.optString("name")).put("direction",row.optString("direction")).put("state",if(live==null&&row.optString("state") in listOf("queued","running","saving"))"paused" else row.optString("state")).put("received",row.optLong("transferred",row.optLong("received"))).put("size",row.optLong("size")).put("message",row.optString("message")).put("pcName",row.optString("pcName")).put("conflictingETag",row.optString("conflictingETag")))
+                rows.put(JSONObject().put("id",row.optString("id")).put("name",row.optString("name")).put("direction",row.optString("direction")).put("state",if(live==null&&row.optString("state") in listOf("queued","running","saving"))"paused" else row.optString("state")).put("received",row.optLong("transferred",row.optLong("received"))).put("size",row.optLong("size")).put("message",row.optString("message")).put("pcName",row.optString("pcName")).put("conflictingETag",row.optString("conflictingETag")).put("filenameConflict",row.optBoolean("filenameConflict")||row.optString("conflictingETag").isNotEmpty()))
             }}
             return JSONObject().put("origin",origin).put("tasks",rows)
         }
@@ -63,8 +71,12 @@ class TransferService : Service() {
         // Called immediately, including notification actions, before starting any disk/network work.
         if(Build.VERSION.SDK_INT>=29)startForeground(119,notification(null),ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)else startForeground(119,notification(null))
         val origin=TrustedOrigin.normalize(intent?.getStringExtra("origin").orEmpty())
-        if(origin!=null)intent?.getStringExtra("cookie")?.takeIf{it.contains("pc_remote_session=")}?.let{cookies[origin]=it}
         synchronized(lock) {
+            if(origin!=null)intent?.getStringExtra("cookie")?.takeIf{it.contains("pc_remote_session=")}?.let{cookies[origin]=it}
+            if(intent?.action==HANDOFF&&origin!=null&&cookies.containsKey(origin)){
+                val previous=TrustedOrigin.normalize(intent.getStringExtra("previousOrigin").orEmpty())
+                if(previous!=null&&previous!=origin)moveRoute(previous,origin)
+            }
             if(intent?.action==ADD&&origin!=null&&cookies.containsKey(origin)) {
                 val items=runCatching{JSONArray(intent.getStringExtra("items"))}.getOrDefault(JSONArray())
                 // Keep completed rows bounded; do not discard paused/running transfers.
@@ -83,15 +95,20 @@ class TransferService : Service() {
                 tasks.find{it.optString("id")==id&&(origin==null||it.optString("origin")==origin)}?.let { row ->
                     val savedOrigin=row.optString("origin");val currentCookie=android.webkit.CookieManager.getInstance().getCookie(savedOrigin).orEmpty();if(currentCookie.contains("pc_remote_session="))cookies[savedOrigin]=currentCookie
                     if(row.optString("state") !in listOf("complete","cancelled"))when(action) {
-                        "pause"->{row.put("state","paused");if(id==activeId)activeCall?.cancel()}
+                        "pause"->{row.put("state","paused");row.remove("routeRetry");row.remove("resumeRequested");if(id==activeId)activeCall?.cancel()}
                         "resume"->{val target=row.optString("origin");val current=android.webkit.CookieManager.getInstance().getCookie(target).orEmpty();if(current.contains("pc_remote_session="))cookies[target]=current;if(cookies.containsKey(target)){if(id==activeId)row.put("resumeRequested",true)else row.put("state","queued")}else row.put("message","Open Elleson Connect and sign in before resuming.")}
-                        "replace"->{
+                        "replace","keep-both"->{
                             val etag=row.optString("conflictingETag")
-                            if(row.optString("direction")=="upload"&&row.optString("state")=="paused"&&etag.matches(Regex("\"[a-f0-9]{64}\""))){
+                            val keepBoth=action=="keep-both"
+                            val canReplace=etag.matches(Regex("\"[a-f0-9]{64}\""))
+                            val filenameConflict=row.optBoolean("filenameConflict")||canReplace
+                            if(row.optString("direction")=="upload"&&row.optString("state")=="paused"&&(if(keepBoth)filenameConflict else canReplace)){
                                 if(cookies.containsKey(savedOrigin)){
-                                    row.put("replaceETag",etag);row.remove("conflictingETag")
+                                    if(keepBoth){row.put("conflictPolicy","rename");row.remove("replaceETag")}
+                                    else{row.put("replaceETag",etag);row.remove("conflictPolicy")}
+                                    row.remove("conflictingETag");row.remove("filenameConflict")
                                     if(id==activeId)row.put("resumeRequested",true)else row.put("state","queued")
-                                }else row.put("message","Open Elleson Connect and sign in before replacing this file.")
+                                }else row.put("message","Open Elleson Connect and sign in before continuing this upload.")
                             }
                         }
                         "cancel"->{row.put("state","cancelled");if(id==activeId)activeCall?.cancel();cleanup(row)}
@@ -101,6 +118,22 @@ class TransferService : Service() {
             persist();publish();if(!working){working=true;Thread{drain()}.start()}
         }
         return START_NOT_STICKY
+    }
+    private fun moveRoute(from:String,to:String){
+        for(row in tasks.filter{it.optString("nextRoute",it.optString("origin"))==from}){
+            val state=row.optString("state")
+            if(row.optString("id")==activeId&&state=="saving"){
+                row.put("nextRoute",to)
+                continue
+            }
+            row.put("origin",to)
+            if(row.optString("id")==activeId&&state=="running"){
+                row.put("state","paused").put("resumeRequested",true)
+                activeCall?.cancel()
+            }else if(state=="paused"&&row.optBoolean("routeRetry")){
+                row.put("state","queued");row.remove("routeRetry")
+            }
+        }
     }
     private fun synchronizedSnapshot():JSONArray=synchronized(lock){JSONArray(tasks.map{JSONObject(it.toString())})}
     private fun persist() {
@@ -115,8 +148,8 @@ class TransferService : Service() {
             discardCancelled()
             val row=synchronized(lock){val next=tasks.find{it.optString("state")=="queued"&&cookies.containsKey(it.optString("origin"))};if(next==null){working=false;null}else{next.put("state","running").put("message","");activeId=next.getString("id");next}}?:break
             try { if(row.optString("direction")=="upload")upload(row)else download(row);synchronized(lock){if(row.optString("state")=="running"||row.optString("state")=="saving")row.put("state","complete")} }
-            catch(e:Exception) { synchronized(lock){if(row.optString("state") !in listOf("paused","cancelled"))row.put("state","paused").put("message",if(e is IOException)"Connection interrupted. Resume to continue." else e.message?.take(180)?:"Transfer paused.")} }
-            finally { activeCall=null;activeId="";synchronized(lock){if(row.optBoolean("resumeRequested")&&row.optString("state")=="paused"){row.remove("resumeRequested");row.put("state","queued")};persist();publish()} }
+            catch(e:Exception) { synchronized(lock){if(row.optString("state") !in listOf("paused","cancelled"))row.put("state","paused").put("routeRetry",e is IOException).put("message",if(e is IOException)"Connection interrupted. Resume to continue." else e.message?.take(180)?:"Transfer paused.")} }
+            finally { synchronized(lock){activeCall=null;activeId="";if(row.has("nextRoute"))row.put("origin",row.remove("nextRoute"));if(row.optBoolean("resumeRequested")&&row.optString("state")=="paused"){row.remove("resumeRequested");row.put("state","queued")};persist();publish()} }
         }} finally {
             if(ownedWake.isHeld)ownedWake.release();if(wake===ownedWake)wake=null
             Handler(mainLooper).post { synchronized(lock){if(!working){val unfinished=tasks.lastOrNull();getSystemService(NotificationManager::class.java).notify(119,notification(unfinished));stopForeground(STOP_FOREGROUND_DETACH);stopSelf()}} }
@@ -125,9 +158,12 @@ class TransferService : Service() {
     private fun check(row:JSONObject) { synchronized(lock){if(row.optString("state") !in listOf("running","saving"))throw IOException("Transfer paused")} }
     private fun request(row:JSONObject,path:String):Request.Builder {
         if(!path.startsWith("/api/files/"))throw IllegalArgumentException("Invalid transfer action")
-        return Request.Builder().url(row.getString("origin")+path).header("Cookie",cookies[row.getString("origin")].orEmpty()).header("X-PCR","1").header("X-PCR-Transfer",row.getString("id"))
+        return synchronized(lock){
+            val origin=row.getString("origin")
+            Request.Builder().url(origin+path).header("Cookie",cookies[origin].orEmpty()).header("X-PCR","1").header("X-PCR-Transfer",row.getString("id"))
+        }
     }
-    private fun execute(row:JSONObject,builder:Request.Builder):Response {check(row);val call=client.newCall(builder.build());activeCall=call;return call.execute().also{if(it.code==401||it.code==403){it.close();throw IllegalStateException("Sign in again, then resume this transfer.")}}}
+    private fun execute(row:JSONObject,builder:Request.Builder):Response {val call=synchronized(lock){check(row);client.newCall(builder.build()).also{activeCall=it}};return call.execute().also{if(it.code==401||it.code==403){it.close();throw IllegalStateException("Sign in again, then resume this transfer.")}}}
     private fun json(row:JSONObject,path:String,body:JSONObject?=null):JSONObject {
         val builder=request(row,path);if(body!=null)builder.post(body.toString().toRequestBody("application/json".toMediaType()))
         execute(row,builder).use { response -> return metadata(row,response) }
@@ -142,12 +178,15 @@ class TransferService : Service() {
         if(!response.isSuccessful||!value.optBoolean("ok")){
             val etag=value.optJSONObject("existing")?.optString("etag").orEmpty()
             synchronized(lock){
-                row.remove("conflictingETag")
-                if(response.code==409&&value.optString("code")=="filename_conflict"&&etag.matches(Regex("\"[a-f0-9]{64}\"")))row.put("conflictingETag",etag)
+                row.remove("conflictingETag");row.remove("filenameConflict")
+                if(response.code==409&&value.optString("code")=="filename_conflict"){
+                    row.put("filenameConflict",true)
+                    if(etag.matches(Regex("\"[a-f0-9]{64}\"")))row.put("conflictingETag",etag)
+                }
             }
             throw IllegalStateException(value.optString("error","The host rejected this transfer."))
         }
-        synchronized(lock){row.remove("conflictingETag");row.remove("replaceETag")}
+        synchronized(lock){row.remove("conflictingETag");row.remove("filenameConflict");row.remove("replaceETag");row.remove("conflictPolicy")}
         return value
     }
     private fun upload(row:JSONObject) {
@@ -157,9 +196,10 @@ class TransferService : Service() {
         val name=TransferFileNames.upload(displayName,row.optString("name"),row.has("uploadId"))
         row.put("name",name).put("size",size)
         val replaceETag=synchronized(lock){row.optString("replaceETag").takeIf{it.matches(Regex("\"[a-f0-9]{64}\""))}}
-        var state=if(row.has("uploadId"))json(row,"/api/files/uploads/"+row.getString("uploadId")+"/resume",JSONObject().put("resumeSecret",row.getString("resumeSecret")).apply{if(replaceETag!=null)put("replaceETag",replaceETag)})else{
+        val keepBoth=synchronized(lock){row.optString("conflictPolicy")=="rename"}
+        var state=if(row.has("uploadId"))json(row,"/api/files/uploads/"+row.getString("uploadId")+"/resume",JSONObject().put("resumeSecret",row.getString("resumeSecret")).apply{if(keepBoth)put("conflict","rename")else if(replaceETag!=null)put("replaceETag",replaceETag)})else{
             val destination=row.optString("destination").trim('/')
-            json(row,"/api/files/uploads",JSONObject().put("name",name).put("size",size).put("relativePath",if(destination.isBlank())name else "$destination/$name").apply{if(replaceETag!=null)put("replaceETag",replaceETag)}).also{row.put("uploadId",it.getString("id")).put("resumeSecret",it.getString("resumeSecret"))}
+            json(row,"/api/files/uploads",JSONObject().put("name",name).put("size",size).put("relativePath",if(destination.isBlank())name else "$destination/$name").apply{if(keepBoth)put("conflict","rename")else if(replaceETag!=null)put("replaceETag",replaceETag)}).also{row.put("uploadId",it.getString("id")).put("resumeSecret",it.getString("resumeSecret"))}
         }
         var offset=state.getLong("received");val chunk=state.optInt("chunkBytes",1048576).coerceIn(1,8388608)
         synchronized(lock){row.put("received",offset);persist()}

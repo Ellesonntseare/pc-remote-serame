@@ -22,7 +22,7 @@ const {saveDeviceName}=require('./host-settings');
 const {createNetworkDevices}=require('./network-devices');
 const nativeClipboard=require('./native-clipboard');
 const {createNativeFeatures}=require('./native-features');
-const {createAppUpdates}=require('./app-updates');
+const {createAppUpdates,sendUpdatePackage}=require('./app-updates');
 const {createLocalRouteProof}=require('./local-route-proof');
 const {createSecondScreen}=require('./second-screen');
 const {createNativeVideo,PROFILES:NATIVE_VIDEO_PROFILES}=require('./native-video');
@@ -67,7 +67,12 @@ const PWA_ASSETS = new Map([
   ['/google-signin.js',['google-signin.js','text/javascript; charset=utf-8']],
   ['/native-media.js',['native-media.js','text/javascript; charset=utf-8']],
   ['/device-companion.js',['device-companion.js','text/javascript; charset=utf-8']],
-  ...['mission-control','camera-sharing','local-connection','sculpted-flow'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
+  ...['mission-control','camera-sharing','local-connection','sculpted-flow','interaction-motion','second-screen-design','settings-design','audio-suite-design'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
+  ['/login-design.css',['login-design.css','text/css; charset=utf-8']],
+  ['/biometric-signin.js',['biometric-signin.js','text/javascript; charset=utf-8']],
+  ['/navigation-bar.js',['navigation-bar.js','text/javascript; charset=utf-8']],
+  ['/navigation-bar.css',['navigation-bar.css','text/css; charset=utf-8']],
+  ['/connection-health.js',['connection-health.js','text/javascript; charset=utf-8']],
   ['/media-recording.js',['media-recording.js','text/javascript; charset=utf-8']],
   ...['workspace-scene.webp','login-scene.webp'].map(name=>['/'+name,[name,'image/webp']]),
   ...['workspace-settings','device-links','device-input','typing-controls','home-panels','native-window','window-presentation','touch-trail','explorer-workspace','account-workspace'].flatMap(name=>[['/'+name+'.js',[name+'.js','text/javascript; charset=utf-8']],['/'+name+'.css',[name+'.css','text/css; charset=utf-8']]]),
@@ -219,7 +224,8 @@ function createApp(options={}) {
   const sharedClipboard=createSharedClipboard({store:accountData,directory:options.sharedClipboardDirectory,apply:async value=>{if(options.sharedClipboardProvider?.apply)return options.sharedClipboardProvider.apply(value);if(options.clipboardProvider?.set&&['text','empty'].includes(value.kind))return options.clipboardProvider.set(value.text||'');if(!clipboardObserver?.active)throw Error('The Windows clipboard connection is starting.');return clipboardObserver.set(value);}});
   const nativeFeatures=options.nativeFeatures||createNativeFeatures({root:ROOT});
   const appUpdates=options.appUpdates||createAppUpdates({root:ROOT,currentVersion:require('./package.json').version});
-  const localRouteProof=createLocalRouteProof();
+  const localRouteProof=createLocalRouteProof(options.routeIdentityFile);
+  const hostRunId=crypto.randomBytes(16).toString('hex');
   const displayPrivacy=options.displayPrivacy||createDisplayPrivacy({root:ROOT});
   const audioSockets=new Set();
   const accountContext=requirePassword?crypto.createHash('sha256').update('pc-remote-owner-v1\0'+options.password).digest('hex'):undefined;
@@ -229,8 +235,9 @@ function createApp(options={}) {
   const smart=createSmartQuality();
   const hostIdentity=os.hostname()+'|'+os.homedir();
   const locationProvider=options.useWindowsLocations&&nativeFeatures.fileLocations?createLocationProvider({native:()=>nativeFeatures.fileLocations(),fallback:options.fileLocationsProvider||(()=>options.fileLocations||[])}):options.fileLocationsProvider;
-  const fileTransfers=createFileTransfers({onActivity:(actor,event)=>{if(actor?.accountKey)accountData.record(actor.accountKey,{...event,device:actor.device||'Elleson Connect'});},directory:options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers'),maxBytes:options.maxFileBytes,watch:options.discovery===true,locations:pcLocations(options.fileLocations),locationsProvider:locationProvider,thumbnailProvider:options.thumbnailProvider||(!options.disableAgent&&nativeFeatures.fileThumbnail?file=>nativeFeatures.fileThumbnail(file):undefined)});
-  const syncHub=createSyncHub({identity:hostIdentity,onActivity:(scope,event)=>{if(event.action==='clipboard.sent')clipboardEcho={text:event.text,at:Date.now()};try{accountData.record(scope,event);}catch{console.error('Account activity could not be saved.');}},onRegister:(scope,token,device)=>{const session=sessions.get(token);if(session&&(session.clientId!==device.id||session.deviceName!==device.name)){session.clientId=device.id;session.deviceName=device.name;saveSessions();}},file:options.syncFile,stageFiles:fileTransfers.stageFromPC,getFileRevision:()=>fileTransfers.revision,getHostName:()=>hostname,setHostName:async name=>{try{await options.setDeviceName?.(name);}catch{throw Object.assign(Error('The PC name could not be saved. Check the host configuration file.'),{status:500});}hostname=name;discovery?.rename(name);},clipboard:options.clipboardProvider||{get:()=>nativeClipboard(ROOT,'get'),set:text=>nativeClipboard(ROOT,'set',text)}});
+  const transferDirectory=options.transferDirectory||path.join(os.homedir(),'Downloads','PC Remote Transfers');
+  const fileTransfers=createFileTransfers({onActivity:(actor,event)=>{if(actor?.accountKey)accountData.record(actor.accountKey,{...event,device:actor.device||'Elleson Connect'});},directory:transferDirectory,journalDirectory:options.transferJournalDirectory||path.join(ROOT,'.transfer-journal',crypto.createHash('sha256').update(path.resolve(transferDirectory)).digest('hex').slice(0,24)),maxBytes:options.maxFileBytes,watch:options.discovery===true,locations:pcLocations(options.fileLocations),locationsProvider:locationProvider,thumbnailProvider:options.thumbnailProvider||(!options.disableAgent&&nativeFeatures.fileThumbnail?file=>nativeFeatures.fileThumbnail(file):undefined)});
+  const syncHub=createSyncHub({identity:hostIdentity,onRemove:removeSyncDevice,onActivity:(scope,event)=>{if(event.action==='clipboard.sent')clipboardEcho={text:event.text,at:Date.now()};try{accountData.record(scope,event);}catch{console.error('Account activity could not be saved.');}},onRegister:(scope,token,device)=>{const session=sessions.get(token);if(session&&(session.clientId!==device.id||session.deviceName!==device.name)){session.clientId=device.id;session.deviceName=device.name;saveSessions();}},file:options.syncFile,stageFiles:fileTransfers.stageFromPC,getFileRevision:()=>fileTransfers.revision,getHostName:()=>hostname,setHostName:async name=>{try{await options.setDeviceName?.(name);}catch{throw Object.assign(Error('The PC name could not be saved. Check the host configuration file.'),{status:500});}hostname=name;discovery?.rename(name);},clipboard:options.clipboardProvider||{get:()=>nativeClipboard(ROOT,'get'),set:text=>nativeClipboard(ROOT,'set',text)}});
   const networkDevices=createNetworkDevices({enabled:options.discovery===true&&allowLan});
   const sessionKey=token=>crypto.createHash('sha256').update(token).digest('hex');
   if(options.sessionFile)try{
@@ -242,6 +249,11 @@ function createApp(options={}) {
     fs.writeFileSync(options.sessionFile+'.tmp',JSON.stringify(data),{mode:0o600});fs.renameSync(options.sessionFile+'.tmp',options.sessionFile);
   }
   const sessionAdmin=createSessionAdmin({sessions,accountKey:session=>accountScope(session,identity=>google.isOwner(identity)),file:options.historyFile||(options.sessionFile?path.join(path.dirname(options.sessionFile),'.session-history.json'):undefined)});
+  async function removeSyncDevice(scope,actorToken,deviceId,registeredTokens){
+    const keys=new Set(registeredTokens),selected=[...sessions].filter(([key,session])=>key!==actorToken&&(session.clientId===deviceId||keys.has(key))&&(workspaceScope(key)||'owner')===scope);
+    for(const [key]of selected){sessionAdmin.end(key,'Connected device removed');sessions.delete(key);syncHub.revoke(key);deviceLinks.revoke(key);guestScreens.revoke(key);webRtcVideo.revoke(key);nativeVideo.revoke(key);cameraRevoke(key);collaboration.revoke(key);companions.revoke(key);closeInputSockets(key);closeAudioSockets(key);displayPrivacy.revoke(key);secondScreen.revoke?.(key);for(const viewer of [...viewers])if(viewer.token===key){viewer.res.end();viewers.delete(viewer);}}
+    saveSessions();await Promise.allSettled(selected.map(([key])=>fileTransfers.revoke(key)));updateVideoDemand();if(!viewers.size)endAgent();
+  }
   const viewers = new Set();
   let videoSequence=0,captureDemand=false,captureRequested=false,baseQuality=50,currentQuality=50,lastQualityChange=0;
   let regionMode=false,regionBase=null,refreshPending=false;
@@ -385,7 +397,12 @@ function createApp(options={}) {
           return;
         } else if(pkt[0]===4){captureRequested=false;requestVideoFrame();return;}
         else if(pkt[0]===6){
-          for(const v of viewers)if(v.regions&&v.res.writable&&!v.busy)v.busy=!v.res.write(pkt);
+          for(const v of viewers)if(v.regions){
+            const ws=v.feedbackSocket;
+            if(ws?.cursorReports&&ws.readyState===WebSocket.OPEN){
+              if(ws.bufferedAmount<4096)ws.send('{"type":"cursor","state":'+pkt.subarray(5).toString('utf8')+'}');
+            }else if(v.res.writable&&!v.busy)v.busy=!v.res.write(pkt);
+          }
           return;
         }else if(pkt[0]!==0&&pkt[0]!==5) return;
         if(pkt[0]===1){applySmartQuality();for(const v of viewers)if(v.res.writable)v.res.write(viewerMetadata(v));return;}
@@ -542,9 +559,16 @@ function createApp(options={}) {
       if(req.method==='GET'&&pathname==='/api/local-proof'){
         try{const address=(req.socket.localAddress||'').replace(/^::ffff:/,''),port=req.socket.localPort,nonce=new URL(req.url,'http://localhost').searchParams.get('nonce')||'';return respond(res,200,{ok:true,...localRouteProof.proof(nonce,'http://'+address+':'+port)});}catch{return respond(res,409,{error:'Start this connection check from the signed-in app.'});}
       }
+      if(req.method==='GET'&&pathname==='/api/route-proof'){
+        if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
+        const address=(req.socket.localAddress||'').replace(/^::ffff:/,'');
+        const origin=viaTunnel?'https://'+tunnelHostname:'http://'+address+':'+req.socket.localPort;
+        try{const nonce=new URL(req.url,'http://localhost').searchParams.get('nonce')||'';return respond(res,200,{ok:true,...localRouteProof.proof(nonce,origin,{allowInit:true})});}
+        catch{return respond(res,400,{error:'This route could not be verified.'});}
+      }
       if(req.method==='GET'&&pathname==='/api/ping'){
         const token=auth(req),paired=!!token&&sessions.get(token).role!=='account';
-        return respond(res,200,{ok:true,paired,requirePin,requirePassword,guestEnabled:requirePassword,...(paired?{name:sessions.get(token).role==='guest'?'Shared PC':hostname,...accessInfo(token),screen:enabled&&process.platform==='win32'&&permits(token,'screen')}:token?accessInfo(token):{})});
+        return respond(res,200,{ok:true,paired,requirePin,requirePassword,hostRunId,guestEnabled:requirePassword,...(paired?{name:sessions.get(token).role==='guest'?'Shared PC':hostname,...accessInfo(token),screen:enabled&&process.platform==='win32'&&permits(token,'screen')}:token?accessInfo(token):{})});
       }
       if(req.method==='GET'&&pathname==='/api/app-version')return respond(res,200,{version:require('./package.json').version});
       if(pathname.startsWith('/api/auth/google/')){
@@ -613,12 +637,15 @@ function createApp(options={}) {
         sessions.set(sessionKey(token),{ip,until:Date.now()+seconds*1000,persistent,role:'owner',pairContext:pairingContext,...account&&{identity:previous.identity,account,pairContext:pairingContext}});sessionAdmin.login(sessionKey(token),req,account?'google':'password');if(persistent)saveSessions();record(ip,account?'Google account paired with this PC':requirePassword?'Signed in':'Phone paired',undefined,sessionKey(token));
         return respond(res,200,{ok:true}, {'Set-Cookie':[`${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict${persistent||!requirePassword?'; Max-Age='+seconds:''}${viaTunnel?'; Secure':''}`,`pc_remote_guest_request=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${viaTunnel?'; Secure':''}`]});
       }
+      if(pathname.startsWith('/alderwick/token/'))return await require('./alderwick-host').relay(req,res,pathname);
       const token=auth(req);
       if(!token)return respond(res,401,{error:'Pair your phone first'});
+      if(pathname==='/alderwick/')return await require('./alderwick-host').page(req,res,sessions.get(token),(viaTunnel?'https://':'http://')+req.headers.host);
       if(await socials.handle(req,res,{pathname,session:sessions.get(token),scope:workspaceScope(token),origin:(viaTunnel?'https://':'http://')+req.headers.host,respond}))return;
       if(pathname==='/api/local-route-key'&&req.method==='GET'){
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required to choose a faster connection.'});
-        return respond(res,200,{ok:true,...localRouteProof.key(),persistent:!!sessions.get(token)?.persistent,expiresAt:sessions.get(token).until});
+        const localOrigins=allowLan?Object.values(os.networkInterfaces()).flat().filter(entry=>entry?.family==='IPv4'&&!entry.internal&&privateIP(entry.address)).slice(0,12).map(entry=>'http://'+entry.address+':'+req.socket.localPort):[];
+        return respond(res,200,{ok:true,...localRouteProof.key(),localOrigins,website:tunnelHostname?'https://'+tunnelHostname:null,persistent:!!sessions.get(token)?.persistent,expiresAt:sessions.get(token).until});
       }
       if(pathname==='/api/second-screen'&&req.method==='GET'){
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required for Second screen.'});
@@ -628,14 +655,16 @@ function createApp(options={}) {
         if(!requiresHeader(req)||sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Owner access is required to set up Second screen.'});
         try{await nativeFeatures.openLink('https://github.com/VirtualDrivers/Virtual-Display-Driver#-installation');return respond(res,200,{ok:true});}catch{return respond(res,503,{error:'Open the Virtual Display Driver installation page on your PC.'});}
       }
-      if(pathname==='/api/updates'||/^\/api\/updates\/(android|windows)\/download$/.test(pathname)){
+      const updateFile=pathname==='/api/files/download'&&new URL(req.url,'http://localhost').searchParams.has('appUpdate');
+      if(updateFile||pathname==='/api/updates'||/^\/api\/updates\/(android|windows)\/download$/.test(pathname)){
         if(sessions.get(token)?.role!=='owner')return respond(res,403,{error:'Only the PC owner can install app updates.'});
         if(req.method!=='GET')return respond(res,405,{error:'Use GET for app updates.'});
         if(pathname==='/api/updates'){
           if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
-          try{return respond(res,200,await appUpdates.status());}catch(error){return respond(res,503,{error:error.message});}
+          const query=new URL(req.url,'http://localhost').searchParams;
+          try{return respond(res,200,await appUpdates.status({force:query.get('refresh')==='1',edition:query.get('edition')==='phoneAccess'?'phoneAccess':'standard'}));}catch(error){return respond(res,503,{error:error.message});}
         }
-        try{const item=await appUpdates.getPackage(pathname.includes('/android/')?'android':'windows');res.writeHead(200,{'Content-Type':pathname.includes('/android/')?'application/vnd.android.package-archive':'application/vnd.microsoft.portable-executable','Content-Length':item.size,'Content-Disposition':'attachment; filename="'+item.name+'"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Content-SHA256':item.sha256});fs.createReadStream(item.file).on('error',()=>res.destroy()).pipe(res);return;}catch(error){return respond(res,503,{error:error.message});}
+        try{const query=new URL(req.url,'http://localhost').searchParams,kind=updateFile||pathname.includes('/android/')?(query.get('edition')==='phoneAccess'?'phoneAccess':'android'):'windows',item=await appUpdates.getPackage(kind);if(updateFile&&(query.get('appUpdate')!==item.sha256||query.get('name')!==item.name))return respond(res,409,{error:'The published update changed. Check for updates again.'});sendUpdatePackage(req,res,item);return;}catch(error){return respond(res,503,{error:error.message});}
       }
       if(req.method==='POST'&&pathname==='/api/presence'){
         if(!requiresHeader(req))return respond(res,403,{error:'Request header missing'});
@@ -872,7 +901,7 @@ function createApp(options={}) {
         const b=await jsonBody(req);if(!commands.has(b.action))return respond(res,400,{error:'Unknown action'});
         if(!permits(token,['volup','voldown','mute','playpause','next','prev'].includes(b.action)?'media':'power'))return respond(res,403,{error:'This control was not approved.'});
         record(ip,`Requested ${b.action}`,undefined,token);
-        return act(b.action,(e,result)=>respond(res,e?500:200,e?{error:`Action failed: ${e.message}`}:{ok:true,...result,msg:result?.msg||`${b.action} requested`}));
+        return act(b.action,(e,result)=>respond(res,e?500:200,e?{error:`Action failed: ${e.message}`}:{ok:true,...result,...b.action==='restart'&&{hostRunId},msg:result?.msg||`${b.action} requested`}));
       }
       return respond(res,404,{error:'Not found'});
     }catch(err){if(res.headersSent){res.destroy();return;}return respond(res,err.message==='Request too large'?413:400,{error:err.message});}
@@ -969,6 +998,7 @@ function createApp(options={}) {
     if(screenId&&!viewer)return rejectUpgrade(socket,409,'Screen session changed');
     inputStream.handleUpgrade(req,socket,head,ws=>{
       const entry={ws,token};inputSockets.add(entry);
+      ws.cursorReports=new URL(req.url,'http://localhost').searchParams.get('cursor')==='1';
       if(viewer){viewer.feedbackSocket=ws;viewer.inFlight.clear();updateVideoDemand();}
       const expiry=sessionExpiry(()=>sessions.get(token)?.until||0,()=>disconnectInput(ws,1008,'Session expired'));
       const activeIds=new Set();
@@ -1041,7 +1071,7 @@ if(require.main===module){
   catch(e) { if(e.code!=='ENOENT'){console.error('Cannot load config.json:',e.message);process.exit(1);} }
   const allowLan=config.allowLan!==false;
   if(typeof config.password!=='string'||!config.password||['serame','admin'].includes(config.password)){console.error('Set your owner password in local config.json, or use the Windows host setup. The old default sign-ins are disabled.');process.exit(1);}
-  const app=createApp({socialsDirectory:config.socialsDirectory,socialsDataDirectory:config.socialsDataDirectory,workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),sharedClipboardDirectory:path.join(ROOT,'.shared-clipboard'),observeClipboard:true,useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
+  const app=createApp({routeIdentityFile:path.join(ROOT,'.route-identity.pem'),socialsDirectory:config.socialsDirectory,socialsDataDirectory:config.socialsDataDirectory,workspaceFile:path.join(ROOT,'.account-workspace.sqlite'),sharedClipboardDirectory:path.join(ROOT,'.shared-clipboard'),observeClipboard:true,useWindowsLocations:true,discovery:allowLan,fileLocations:config.fileLocations,fileLocationsProvider:()=>pcLocations(JSON.parse(fs.readFileSync(path.join(ROOT,'config.json'),'utf8')).fileLocations),syncFile:path.join(ROOT,'.shared-device-state.json'),screen:config.screen!==false,delaySeconds:config.delaySeconds,requirePin:config.requirePin===true,tunnelHostname:config.tunnelHostname,allowLan,password:config.password,sessionFile:path.join(ROOT,'.remembered-sessions.json'),transferDirectory:config.transferDirectory,maxFileBytes:config.maxFileBytes,webRtcIceServers:config.webRtcIceServers,deviceName:config.deviceName||"SERAME'S PC",setDeviceName:name=>saveDeviceName(ROOT,name),googleSignIn:{...config.googleSignIn,clientId:process.env.PCR_GOOGLE_CLIENT_ID||config.googleSignIn?.clientId,clientSecret:process.env.PCR_GOOGLE_CLIENT_SECRET||config.googleSignIn?.clientSecret}});
   app.server.listen(app.port,allowLan?'0.0.0.0':'127.0.0.1',()=>{
     const actual=app.server.address().port;
     const ip=app.addresses.find(a=>a.startsWith('192.168.'))||app.addresses[0]||'127.0.0.1';

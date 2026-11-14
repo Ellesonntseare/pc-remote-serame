@@ -14,6 +14,27 @@ const {createApp}=require('../server');
    const context=await browser.newContext({viewport:{width,height},isMobile:width<1000,hasTouch:width<1000}),page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));await context.request.post(base+'/api/pair',{headers:{'X-PCR':'1'},data:{password:'preview'}});await page.goto(base);await page.waitForFunction(()=>window.EllesonFlow&&window.PCRExplorerControls&&window.PCRAuth?.signedIn);await page.evaluate(()=>{window.EllesonFlow.navigate('home');window.dispatchEvent(new CustomEvent('pcr:status',{detail:{name:'Preview PC',system:{os:'Windows 11'}}}));});await page.waitForTimeout(450);await page.screenshot({path:path.join(out,width+'-home.png')});console.log('Home '+JSON.stringify(await page.evaluate(()=>({footer:document.querySelector('.ecHomeFoot').getBoundingClientRect().toJSON(),navigation:document.querySelector('.ecNavigation').getBoundingClientRect().toJSON(),height:document.documentElement.scrollHeight,app:getComputedStyle(document.querySelector('.missionApp')).height}))));await page.evaluate(()=>window.EllesonFlow.navigate('files'));await page.evaluate(()=>window.PCRFileManager.go(''));await page.locator('.fmFile').first().waitFor();
    if(width<1000){await page.evaluate(()=>window.EllesonFlow.navigate('home'));await page.waitForTimeout(450);const gap=await page.evaluate(()=>document.querySelector('.ecNavigation').getBoundingClientRect().top-document.querySelector('.ecHomeFoot').getBoundingClientRect().bottom);assert.ok(gap>=10,'Windows 11 and Devices must remain above navigation');await page.evaluate(()=>window.EllesonFlow.navigate('files'));}
    const commands=await page.locator('.explorerCommands').evaluate(node=>({client:node.clientWidth,scroll:node.scrollWidth}));assert.ok(commands.scroll<=commands.client,'file commands must fit at '+width);
+   const bar=page.locator('.explorerTransferBar');
+   assert.equal(await bar.locator('[data-destination]').textContent(),'PC / Transfers');
+   assert.ok(await bar.evaluate(node=>node.scrollWidth<=node.clientWidth),'transfer bar must fit at '+width);
+   if(width===320){
+    await fs.mkdir(path.join(root,'Notes'));
+    await page.evaluate(()=>window.PCRFileManager.go('Notes'));
+    await page.waitForFunction(()=>document.querySelector('[data-destination]').textContent==='PC / Transfers / Notes'&&!document.querySelector('.fmSendBar').inert);
+    await bar.locator('#filesInput').setInputFiles({name:'from-phone.txt',mimeType:'text/plain',buffer:Buffer.from('Uploaded into Notes')});
+    await page.waitForFunction(()=>document.querySelector('#uploadProgressScreen').dataset.state==='complete');
+    assert.equal(await fs.readFile(path.join(root,'Notes','from-phone.txt'),'utf8'),'Uploaded into Notes');
+    await page.locator('[data-upload-done]').click();
+    await page.locator('.fmFile[data-file="Notes/from-phone.txt"]').waitFor();
+    await page.evaluate(()=>window.PCRFileManager.select(['Notes/from-phone.txt']));
+    const saved=page.waitForEvent('download');
+    await bar.locator('.explorerDownload').click();
+    const download=await saved;
+    assert.equal(download.suggestedFilename(),'from-phone.txt');
+    assert.equal(await fs.readFile(await download.path(),'utf8'),'Uploaded into Notes');
+    await bar.locator('select').selectOption({label:'Transfers'});
+    await page.locator('.fmFile[data-file="Preview photo.txt"]').waitFor();
+   }
    await page.evaluate(()=>{window.PCRFileManager.select(['Preview photo.txt']);return window.PCRExplorerControls.openPhoneSend();});await page.locator('#phoneSendDialog').waitFor();await page.locator('#phoneSendDialog select').selectOption('preview-phone-123456');const sendBox=await page.locator('#phoneSendDialog').boundingBox();assert.ok(sendBox.x>=0&&sendBox.x+sendBox.width<=width&&sendBox.y>=0&&sendBox.y+sendBox.height<=height);await page.screenshot({path:path.join(out,width+'-send-phone.png')});
    if(width===1280){await page.locator('[data-phone-send]').click();await page.waitForFunction(()=>document.querySelector('[data-phone-done]').hidden===false);assert.match(await page.locator('[data-phone-send-status]').textContent(),/1 file queued for Preview phone/);const response=await phone.request.get(base+'/api/phone/inbox',{headers:{'X-PCR':'1'}}),pending=(await response.json()).inbox;assert.equal(pending.length,1);assert.equal(pending[0].label,'Preview photo.txt');const download=await phone.request.get(base+'/api/files/download?name='+encodeURIComponent(pending[0].name),{headers:{'X-PCR':'1'}});assert.equal((await download.body()).toString(),'Synthetic transfer preview');await page.screenshot({path:path.join(out,'1280-queued.png')});}
    await page.locator('[data-phone-close]').click();

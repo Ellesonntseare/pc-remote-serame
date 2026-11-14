@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
   const dialog=document.createElement('dialog');dialog.id='uploadProgressScreen';dialog.className='uploadProgressScreen';dialog.setAttribute('aria-labelledby','uploadProgressTitle');dialog.setAttribute('aria-describedby','uploadProgressDetail');
-  dialog.innerHTML='<div class="uploadProgressCard"><span class="uploadProgressEyebrow">ELLESON CONNECT</span><div class="uploadProgressRing" aria-hidden="true"><svg viewBox="0 0 120 120"><circle class="uploadRingTrack" cx="60" cy="60" r="52"/><circle class="uploadRingFill" cx="60" cy="60" r="52"/></svg><strong data-upload-percent>…</strong></div><h2 id="uploadProgressTitle">Sending to your PC</h2><p data-upload-name></p><p id="uploadProgressDetail" role="status" aria-live="polite">Preparing your files…</p><progress data-upload-bar max="100" aria-label="Upload progress"></progress><p class="uploadProgressHint" data-upload-hint>The file saves directly on your PC when sending finishes.</p><div class="uploadProgressActions"><button type="button" data-upload-pause>Pause</button><button type="button" data-upload-cancel>Cancel upload</button><button type="button" data-upload-replace hidden>Replace existing file</button><button type="button" data-upload-done hidden>Done</button></div><button type="button" class="uploadProgressBackground" data-upload-background>Continue in background</button></div>';
+  dialog.innerHTML='<div class="uploadProgressCard"><span class="uploadProgressEyebrow">ELLESON CONNECT</span><div class="uploadProgressRing" aria-hidden="true"><svg viewBox="0 0 120 120"><circle class="uploadRingTrack" cx="60" cy="60" r="52"/><circle class="uploadRingFill" cx="60" cy="60" r="52"/></svg><strong data-upload-percent>…</strong></div><h2 id="uploadProgressTitle">Sending to your PC</h2><p data-upload-name></p><p id="uploadProgressDetail" role="status" aria-live="polite">Preparing your files…</p><progress data-upload-bar max="100" aria-label="Upload progress"></progress><p class="uploadProgressHint" data-upload-hint>The file saves directly on your PC when sending finishes.</p><div class="uploadProgressActions"><button type="button" data-upload-pause>Pause</button><button type="button" data-upload-cancel>Cancel upload</button><button type="button" data-upload-keep-both hidden>Keep both</button><button type="button" data-upload-replace hidden>Replace existing file</button><button type="button" data-upload-done hidden>Done</button></div><button type="button" class="uploadProgressBackground" data-upload-background>Continue in background</button></div>';
   document.body.append(dialog);const q=selector=>dialog.querySelector(selector),terminal=state=>['complete','cancelled'].includes(state);
   let source='',view=null,suppressed=false,preparing=false,seen=new Set(),tracked=new Set(),nativeRows=[],previousFocus=null;
   const post=value=>{try{window.PCRAndroid?.postMessage(JSON.stringify(value));}catch{}};
@@ -11,13 +11,13 @@
   function render(value){
     view=value;const done=terminal(value.state),paused=value.state==='paused',pending=value.state==='preparing',percent=done&&value.state==='complete'?100:Math.min(99,Math.max(0,Number(value.percent)||0));
     dialog.dataset.state=value.state;dialog.style.setProperty('--upload-progress',String(percent));dialog.setAttribute('aria-busy',String(!done&&!paused));
-    q('#uploadProgressTitle').textContent=value.state==='complete'?'Saved on your PC':value.state==='cancelled'?'Upload cancelled':paused?'Upload paused':'Sending to your PC';
+    q('#uploadProgressTitle').textContent=value.state==='complete'?'Saved on your PC':value.state==='cancelled'?'Upload cancelled':paused?(value.keepBoth?'File already exists':'Upload paused'):'Sending to your PC';
     q('[data-upload-name]').textContent=value.name||'Your files';q('[data-upload-percent]').textContent=done?(value.state==='complete'?'✓':'×'):pending?'…':Math.floor(percent)+'%';
     const detail=value.message||(pending?'Preparing your files…':done?value.completed+' '+(value.completed===1?'file saved':'files saved')+(value.cancelled?' · '+value.cancelled+' cancelled':''):paused?'Sending is paused. Resume when you are ready.':'File '+Math.min(value.total,(value.completed||0)+1)+' of '+value.total+' · '+Math.floor(percent)+'%');
     q('#uploadProgressDetail').textContent=detail;const bar=q('[data-upload-bar]');if(pending)bar.removeAttribute('value');else bar.value=percent;
     q('[data-upload-hint]').textContent=done?(value.state==='complete'?'Your files are on the PC. There is no extra download step.':'Files that finished sending stay on your PC.'):'The file saves directly on your PC when sending finishes.';
-    q('[data-upload-pause]').hidden=done||pending;q('[data-upload-pause]').textContent=paused?'Resume':'Pause';q('[data-upload-cancel]').hidden=done;q('[data-upload-cancel]').disabled=pending;
-    q('[data-upload-replace]').hidden=!value.replace;q('[data-upload-done]').hidden=!done;q('[data-upload-background]').hidden=done;q('[data-upload-background]').textContent=source==='browser'?'Keep using the app':'Continue in background';open();
+    q('[data-upload-pause]').hidden=done||pending||!!value.keepBoth;q('[data-upload-pause]').textContent=paused?'Resume':'Pause';q('[data-upload-cancel]').hidden=done;q('[data-upload-cancel]').disabled=pending;
+    q('[data-upload-keep-both]').hidden=!value.keepBoth;q('[data-upload-replace]').hidden=!value.replace;q('[data-upload-done]').hidden=!done;q('[data-upload-background]').hidden=done;q('[data-upload-background]').textContent=source==='browser'?'Keep using the app':'Continue in background';open();
   }
   function native(tasks){
     const rows=tasks.filter(row=>row.direction==='upload'&&typeof row.id==='string'),fresh=rows.filter(row=>!seen.has(row.id)),active=rows.filter(row=>!terminal(row.state));nativeRows=rows;
@@ -27,15 +27,15 @@
     if(!view&&active.length){source='native';tracked=new Set(active.map(row=>row.id));}
     seen=new Set(rows.map(row=>row.id));if(source!=='native'||!tracked.size)return;
     const batch=rows.filter(row=>tracked.has(row.id));if(!batch.length)return;preparing=false;
-    const unfinished=batch.filter(row=>!terminal(row.state)),current=unfinished.find(row=>['running','saving'].includes(row.state))||unfinished[0]||batch.at(-1),completed=batch.filter(row=>row.state==='complete').length,cancelled=batch.filter(row=>row.state==='cancelled').length;
+    const unfinished=batch.filter(row=>!terminal(row.state)),current=unfinished.find(row=>['running','saving'].includes(row.state))||unfinished.find(row=>row.filenameConflict)||unfinished[0]||batch.at(-1),completed=batch.filter(row=>row.state==='complete').length,cancelled=batch.filter(row=>row.state==='cancelled').length;
     const state=!unfinished.length?(cancelled?'cancelled':'complete'):unfinished.every(row=>row.state==='paused')?'paused':current.state==='queued'?'preparing':'sending';
-    render({state,name:current.name||'Preparing your file…',percent:current.size>0?100*current.received/current.size:0,total:batch.length,completed,cancelled,message:state==='paused'?current.message:'',replace:state==='paused'&&!!current.conflictingETag&&window.PCRAuth?.role==='owner'});
+    render({state,id:current.id,name:(state==='complete'?current.pcName?.split('/').at(-1):null)||current.name||'Preparing your file…',percent:current.size>0?100*current.received/current.size:0,total:batch.length,completed,cancelled,message:state==='paused'?current.message:'',keepBoth:state==='paused'&&!!current.filenameConflict,replace:state==='paused'&&!!current.conflictingETag&&window.PCRAuth?.role==='owner'});
   }
   function control(command){
-    if(source==='native'){for(const row of nativeRows.filter(row=>tracked.has(row.id)&&!terminal(row.state))){if(command==='resume'&&row.state!=='paused'||command==='pause'&&row.state==='paused'||command==='replace'&&!row.conflictingETag)continue;post({type:'transfer-control',id:row.id,command});}}
-    else document.getElementById(command==='cancel'?'filesCancel':command==='replace'?'filesReplaceExisting':'filesPause')?.click();
+    if(source==='native'){for(const row of nativeRows.filter(row=>tracked.has(row.id)&&!terminal(row.state))){if(command==='keep-both'&&(row.id!==view?.id||!row.filenameConflict)||command==='resume'&&row.state!=='paused'||command==='pause'&&row.state==='paused'||command==='replace'&&!row.conflictingETag)continue;post({type:'transfer-control',id:row.id,command});}}
+    else document.getElementById(command==='cancel'?'filesCancel':command==='replace'?'filesReplaceExisting':command==='keep-both'?'filesKeepBoth':'filesPause')?.click();
   }
-  q('[data-upload-pause]').onclick=()=>control(view?.state==='paused'?'resume':'pause');q('[data-upload-cancel]').onclick=()=>control('cancel');q('[data-upload-replace]').onclick=()=>control('replace');q('[data-upload-done]').onclick=()=>{suppressed=true;close();};q('[data-upload-background]').onclick=()=>{suppressed=true;close();};dialog.addEventListener('cancel',event=>{event.preventDefault();suppressed=true;close();});
+  q('[data-upload-pause]').onclick=()=>control(view?.state==='paused'?'resume':'pause');q('[data-upload-cancel]').onclick=()=>control('cancel');q('[data-upload-keep-both]').onclick=()=>control('keep-both');q('[data-upload-replace]').onclick=()=>control('replace');q('[data-upload-done]').onclick=()=>{suppressed=true;close();};q('[data-upload-background]').onclick=()=>{suppressed=true;close();};dialog.addEventListener('cancel',event=>{event.preventDefault();suppressed=true;close();});
   function reset(){close();source='';view=null;preparing=false;suppressed=false;seen.clear();tracked.clear();nativeRows=[];}
   window.addEventListener('pcr:upload-start',()=>begin('browser'));
   window.addEventListener('pcr:upload-progress',event=>{if(source==='browser'&&event.detail)render(event.detail);});
@@ -50,13 +50,42 @@
   const section=document.createElement('section');section.className='nativeTransfers';section.hidden=true;section.innerHTML='<div class="fmSectionHead"><h3>Transfer queue</h3><span>Continues when you switch apps</span></div><div data-native-queue></div>';pane.prepend(section);
   const inbox=document.createElement('section');inbox.className='fmShareInbox';inbox.hidden=true;inbox.setAttribute('role','status');inbox.innerHTML='<div><strong data-share-count></strong><p>Shared files save automatically in the PC transfer folder.</p></div><button type="button" class="filesPrimary" hidden>Retry sending</button>';pane.prepend(inbox);inbox.querySelector('button').onclick=()=>{sharing=false;sendShared();};
   function status(message,error=false){const target=document.getElementById('filesStatus');if(target){target.textContent=message;target.dataset.error=String(error);}}
-  function sendShared(){
+  function sendShared(destination=''){
     if(!native()||!sharedCount||sharing)return;
+    if(destinationPicker.open)destinationPicker.close();
     sharing=true;inbox.hidden=false;inbox.querySelector('[data-share-count]').textContent='Sending '+sharedCount+' shared '+(sharedCount===1?'file':'files')+' to your PC…';
-    // Android shares always use the PC inbox, independent of the folder/tab
-    // being browsed. The native service owns the bytes and background transfer.
-    window.PCRUploadProgress?.begin('native');const sent=send({type:'transfer-shared',destination:''});inbox.querySelector('button').hidden=sent;
-    if(!sent){sharing=false;status('Could not start sending. Tap Retry sending.',true);window.PCRUploadProgress?.failed('Could not start sending. Close this screen and tap Retry sending.');}
+    inbox.querySelector('p').textContent='You can keep using the app while your files are sent.';
+    window.PCRUploadProgress?.begin('native');
+    const sent=send({type:'transfer-shared',destination}),retry=inbox.querySelector('button');
+    retry.hidden=sent;
+    if(!sent){
+      sharing=false;retry.textContent='Retry sending';retry.onclick=()=>sendShared(destination);
+      status('Could not start sending. Tap Retry sending.',true);window.PCRUploadProgress?.failed('Could not start sending. Close this screen and tap Retry sending.');
+    }
+  }
+  const destinationPicker=document.createElement('dialog');
+  destinationPicker.className='nativeDialog';destinationPicker.setAttribute('aria-labelledby','shareDestinationTitle');
+  destinationPicker.innerHTML='<h2 id="shareDestinationTitle">Save on your PC</h2><p>Choose Transfers or a folder you starred in Files.</p><div data-share-folders></div><button type="button" data-share-back>Back</button>';
+  document.body.append(destinationPicker);
+  const folderChoices=destinationPicker.querySelector('[data-share-folders]');
+  destinationPicker.querySelector('[data-share-back]').onclick=()=>destinationPicker.close();
+  function chooseShareDestination(){
+    if(!native()||!sharedCount||sharing)return;
+    const manager=window.PCRFileManager?.state;
+    const favourites=window.PCRAuth?.role==='owner'?(manager?.favourites||[]).filter(path=>typeof path==='string'&&path.length>0&&path.length<=700&&path!=='@this-pc'):[];
+    if(!favourites.length){sendShared();return;}
+    inbox.hidden=false;inbox.querySelector('[data-share-count]').textContent=sharedCount+' shared '+(sharedCount===1?'file':'files');
+    inbox.querySelector('p').textContent='Choose where to save on your PC.';
+    const choose=inbox.querySelector('button');choose.hidden=false;choose.textContent='Choose folder';choose.onclick=chooseShareDestination;
+    folderChoices.replaceChildren();
+    for(const destination of ['',...new Set(favourites)]){
+      const [root,...parts]=destination.split('/');
+      const rootName=manager?.locations?.find(location=>location.id===root)?.label||root;
+      const button=document.createElement('button');button.type='button';button.className='filesSmallButton';
+      button.textContent=destination?(rootName+' / '+parts.join(' / ')).replace(/ \/ $/,''):'Transfers';
+      button.onclick=()=>sendShared(destination);folderChoices.append(button);
+    }
+    if(!destinationPicker.open)destinationPicker.showModal();
   }
   async function receiveFiles(){
     if(!autoReceive()||document.hidden||receiveController)return;
@@ -95,11 +124,11 @@
   }
   document.addEventListener('click',event=>{if(native()&&event.target.closest('#filesInput,#filesChoose,[data-phone-pick]')){event.preventDefault();event.stopImmediatePropagation();send({type:'transfer-pick',destination:window.PCRFileManager?.destination||''});}},true);
   window.addEventListener('pcr:transfer-queue',event=>{if(!native()||event.detail?.origin!==location.origin)return;const completed=new Set(queue.filter(item=>item.state==='complete').map(item=>item.id));queue=Array.isArray(event.detail.tasks)?event.detail.tasks:[];draw();if(queue.some(item=>item.state==='complete'&&!completed.has(item.id)))window.PCRFileManager?.refresh?.();});
-  window.addEventListener('pcr:share-inbox',event=>{if(!native())return;const value=event.detail||{};sharedCount=Math.max(0,Math.min(200,Number(value.count)||0));if(!sharedCount){sharing=false;inbox.hidden=true;}if(value.open){document.querySelector('.filesHome')?.click();if(value.text){if(!sharedCount)document.getElementById('textTab')?.click();const note=document.getElementById('filesNote');if(note)note.value=value.text;}}sendShared();});
+  window.addEventListener('pcr:share-inbox',event=>{if(!native())return;const value=event.detail||{};sharedCount=Math.max(0,Math.min(200,Number(value.count)||0));if(!sharedCount){sharing=false;inbox.hidden=true;if(destinationPicker.open)destinationPicker.close();}if(value.open){document.querySelector('.filesHome')?.click();if(value.text){if(!sharedCount)document.getElementById('textTab')?.click();const note=document.getElementById('filesNote');if(note)note.value=value.text;}}chooseShareDestination();});
   window.addEventListener('pcr:sync',()=>void receiveFiles());
   window.addEventListener('pcr:second-screen-files',event=>{if(autoReceive()&&event.detail?.message)status(event.detail.message,true);});
   document.addEventListener('visibilitychange',updateReceiver);
   window.addEventListener('pagehide',()=>{clearInterval(receiveTimer);receiveTimer=null;receiveEpoch++;receiveController?.abort();receiveController=null;});
   window.addEventListener('pcr:native-ready',ready);window.addEventListener('pcr:page',event=>{if(event.detail?.id==='filesDialog')ready();});
-  window.addEventListener('pcr:auth',()=>{receiveEpoch++;registeredAt=0;receiveController?.abort();receiveController=null;if(!window.PCRAuth?.signedIn){if(hadSession&&window.PCRNativeCapabilities?.nativeTransfers)send({type:'transfer-signout'});hadSession=false;queue=[];sharedCount=0;sharing=false;inbox.hidden=true;draw();updateReceiver();}else{hadSession=true;ready();}});window.PCRNativeTransfers={ready,receiveFiles,get autoReceive(){return autoReceive();}};ready();
+  window.addEventListener('pcr:auth',()=>{receiveEpoch++;registeredAt=0;receiveController?.abort();receiveController=null;if(!window.PCRAuth?.signedIn){if(hadSession&&window.PCRNativeCapabilities?.nativeTransfers)send({type:'transfer-signout'});hadSession=false;queue=[];sharedCount=0;sharing=false;inbox.hidden=true;if(destinationPicker.open)destinationPicker.close();draw();updateReceiver();}else{hadSession=true;ready();}});window.PCRNativeTransfers={ready,receiveFiles,get autoReceive(){return autoReceive();}};ready();
 })();

@@ -73,6 +73,7 @@
             <TextView android:id="@+id/error" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:textColor="#FF9AA7"
                 android:textSize="13sp" android:layout_marginTop="16dp" />
+            <Button android:id="@+id/connectionHealth" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:text="Check connection" android:textAllCaps="false" android:textColor="#EBAD82" android:background="@drawable/field_background" />
             <Button android:id="@+id/wakeOptions" android:layout_width="match_parent" android:layout_height="48dp" android:text="Wake-on-LAN  +" android:textColor="#EBAD82" android:textAllCaps="false" android:background="@drawable/field_background" android:layout_marginTop="20dp" />
             <LinearLayout android:id="@+id/wakeOptionsPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
             <EditText android:id="@+id/wakeMac" android:layout_width="match_parent" android:layout_height="56dp" android:singleLine="true" android:hint="PC MAC · AA:BB:CC:DD:EE:FF" android:inputType="textNoSuggestions" android:textColor="#FFFFFF" android:textColorHint="#9A8F7D" android:textSize="14sp" android:padding="12dp" android:background="@drawable/field_background" android:layout_marginTop="14dp" />
@@ -84,6 +85,7 @@
                 android:textColor="#BBAA92" android:textSize="12sp" android:lineSpacingExtra="3dp"
                 android:layout_marginTop="20dp" />
             <TextView android:id="@+id/appVersion" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Elleson Connect" android:textColor="#947F64" android:textSize="10sp" android:gravity="center" android:layout_marginTop="20dp" />
+            <Button android:id="@+id/biometricQuickConnect" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="16dp" android:text="Fingerprint / face sign-in" android:textAllCaps="false" android:textColor="#FFB085" android:background="@drawable/field_background" android:visibility="gone" />
         </LinearLayout>
     </ScrollView>
 

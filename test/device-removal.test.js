@@ -1,0 +1,14 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),{createApp}=require('../server');
+test('removing another device persists, revokes its saved sessions and preserves the host and current connection',async t=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'ec-device-remove-'));let app,base;
+ async function stop(){if(app){app.stop();await new Promise(resolve=>app.server.close(resolve));app=null;}}
+ async function start(){app=createApp({password:'device-test',disableAgent:true,disableActions:true,syncFile:path.join(root,'sync.json'),sessionFile:path.join(root,'sessions.json'),transferDirectory:path.join(root,'Files'),clipboardProvider:{get:async()=>'',set:async()=>{}}});await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));base='http://127.0.0.1:'+app.server.address().port;}
+ t.after(async()=>{await stop();assert.equal(path.dirname(root),os.tmpdir());assert.ok(path.basename(root).startsWith('ec-device-remove-'));await fs.rm(root,{recursive:true,force:true});});
+ async function call(route,cookie,body){const response=await fetch(base+route,{headers:{'X-PCR':'1',...(cookie?{Cookie:cookie}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{method:'POST',body:JSON.stringify(body)}:{})});return {status:response.status,body:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};}
+ const login=async()=>(await call('/api/pair',null,{password:'device-test',remember:true})).cookie;
+ await start();const current=await login(),old=await login(),register=(cookie,id)=>call('/api/sync/register',cookie,{id,name:id,platform:'android'});await register(current,'current-phone-123456');await register(old,'old-phone-123456');const before=(await call('/api/sync/devices',current)).body;
+ assert.equal((await call('/api/sync/devices/remove',current,{id:before.host.id})).status,400);assert.equal((await call('/api/sync/devices/remove',current,{id:'current-phone-123456'})).status,409);assert.equal((await call('/api/sync/devices/remove',null,{id:'old-phone-123456'})).status,401);
+ const removed=await call('/api/sync/devices/remove',current,{id:'old-phone-123456'});assert.equal(removed.status,200);assert.deepEqual(removed.body.devices.map(device=>device.id),['current-phone-123456']);assert.equal((await call('/api/status',old)).status,401);assert.equal((await register(old,'old-phone-123456')).status,401);assert.equal((await call('/api/status',current)).status,200);
+ await stop();await start();assert.equal((await call('/api/status',old)).status,401);assert.equal((await call('/api/sync/devices',current)).body.devices.length,1);const fresh=await login();assert.equal((await register(fresh,'old-phone-123456')).status,200,'a removed device may return after a new password sign-in');
+});

@@ -20,7 +20,7 @@ internal static class Program
     private static volatile bool running = true;
     private static volatile bool demandFrames;
     private static int frameBudget, jpegQuality, refreshRequested, requestedScale, requestedFps;
-    private static volatile bool regions;
+    private static volatile bool regions, cursorEmbedded;
     private static Rectangle primary;
 
     [STAThread]
@@ -124,6 +124,8 @@ internal static class Program
             var inputThread = new Thread(() => ProcessInput(stdout)) { IsBackground = true };
             inputThread.SetApartmentState(ApartmentState.STA);
             inputThread.Start();
+            var cursorThread = new Thread(() => ReportCursor(stdout)) { IsBackground = true };
+            cursorThread.Start();
             using var memory = new MemoryStream();
             bool wasRegions = false;
             while (running)
@@ -164,7 +166,7 @@ internal static class Program
                     bool needsPixels=!regionMode||!wasRegions||compressionChanged||Volatile.Read(ref refreshRequested)!=0;
                     if(!desktopCapture.Capture(source,needsPixels,out bool pixelsChanged)){Send(stdout,4,"{}"u8);Thread.Sleep(msPerFrame);continue;}
                     if (!regionMode && !desktopCapture.CursorEmbedded) DrawCursor(capture);
-                    else if (regionMode) SendCursor(stdout,desktopCapture.CursorEmbedded);
+                    cursorEmbedded = desktopCapture.CursorEmbedded;
                     if(regionMode&&!pixelsChanged&&!needsPixels){Send(stdout,4,"{}"u8);int idleRemaining=msPerFrame-(int)(Environment.TickCount64-start);if(idleRemaining>0)Thread.Sleep(idleRemaining);continue;}
                     Bitmap image = source;
                     if (outW != primary.Width || outH != primary.Height)
@@ -228,7 +230,7 @@ internal static class Program
     private static void DrawCursor(Graphics g)
     {
         var cursor = new Native.CURSORINFO { cbSize = Marshal.SizeOf<Native.CURSORINFO>() };
-        if (!Native.GetCursorInfo(ref cursor) || (cursor.flags & 1) == 0) return;
+        if (!Native.GetCursorInfo(ref cursor) || (cursor.flags & 1) == 0&&!PrivacyDisplay.CaptureRequested) return;
         int hotX = 0, hotY = 0;
         if (Native.GetIconInfo(cursor.hCursor, out var info))
         {
@@ -243,11 +245,33 @@ internal static class Program
         finally { g.ReleaseHdc(hdc); }
     }
 
-    private static void SendCursor(Stream output,bool embedded)
+    // Cursor sampling must not wait for capture, JPEG encoding or frame credits.
+    // Heartbeats recover a dropped report when the viewer was backpressured.
+    private static void ReportCursor(Stream output)
     {
-        var cursor = new Native.CURSORINFO { cbSize = Marshal.SizeOf<Native.CURSORINFO>() };
-        if (Native.GetCursorInfo(ref cursor))
-            Send(output, 6, JsonSerializer.SerializeToUtf8Bytes(new { x = cursor.pt.X - primary.Left, y = cursor.pt.Y - primary.Top, visible = (cursor.flags & 1) != 0, embedded }));
+        (int x, int y, bool visible, bool embedded)? previous = null;
+        long sentAt = 0;
+        try
+        {
+            while (running)
+            {
+                var cursor = new Native.CURSORINFO { cbSize = Marshal.SizeOf<Native.CURSORINFO>() };
+                if (regions && Native.GetCursorInfo(ref cursor))
+                {
+                    var state = (x: cursor.pt.X - primary.Left, y: cursor.pt.Y - primary.Top,
+                        visible: (cursor.flags & 1) != 0||PrivacyDisplay.CaptureRequested, embedded: cursorEmbedded);
+                    long now = Environment.TickCount64;
+                    if (previous != state || now - sentAt >= 250)
+                    {
+                        Send(output, 6, JsonSerializer.SerializeToUtf8Bytes(new { state.x, state.y, state.visible, state.embedded }));
+                        previous = state; sentAt = now;
+                    }
+                }
+                Thread.Sleep(16);
+            }
+        }
+        catch (IOException) { running = false; }
+        catch (ObjectDisposedException) { running = false; }
     }
 
     private static void ProcessInput(Stream output)
@@ -402,7 +426,7 @@ internal static class Program
         }
     }
 
-    private static void SendMouse(uint flags,int x=0,int y=0,uint data=0)
+    internal static void SendMouse(uint flags,int x=0,int y=0,uint data=0)
     {
         var inputs=new[]{new Native.INPUT{type=0,U=new Native.INPUTUNION{mi=new Native.MOUSEINPUT{dx=x,dy=y,mouseData=data,dwFlags=flags}}}};
         if(Native.SendInput(1,inputs,Marshal.SizeOf<Native.INPUT>())!=1)
@@ -423,7 +447,7 @@ internal static class Program
             if (kind != "down") { SendMouse(up); HeldMouseButtons.Remove(button); }
         }
     }
-    private static void PressKey(int value, string kind)
+    internal static void PressKey(int value, string kind)
     {
         if (value < 0 || value > 255) return;
         lock (HeldInputLock)
@@ -459,7 +483,7 @@ internal static class Program
         // Do not restore the old clipboard: the target handles paste asynchronously.
     }
 
-    private static void SendEdit(int remove, string text)
+    internal static void SendEdit(int remove, string text)
     {
         var inputs = new List<Native.INPUT>();
         void Add(ushort value, bool unicode)

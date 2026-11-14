@@ -18,12 +18,23 @@ async function fixture(t,options={}){
   if(options.layout!==undefined)window.localStorage.setItem('pcr_home_layout_v1',typeof options.layout==='string'?options.layout:JSON.stringify(options.layout));
   if(options.split!==undefined)window.localStorage.setItem('pcr_remote_split_v1',JSON.stringify(options.split));
   const screen=doc.getElementById('rs');screen.getBoundingClientRect=()=>{layouts++;return{top:0,left:0,bottom:window.innerHeight,right:window.innerWidth,width:window.innerWidth,height:window.innerHeight};};
-  window.eval(source('workspace-ui.js'));window.eval(source('workspace-settings.js'));doc.dispatchEvent(new window.Event('DOMContentLoaded'));
+  window.eval(source('workspace-ui.js'));window.eval(source('workspace-settings.js'));if(options.design)window.eval(source('settings-design.js'));doc.dispatchEvent(new window.Event('DOMContentLoaded'));
   const flush=()=>{const queued=Array.from(frames.values());frames.clear();for(const callback of queued)callback(0);};
   const settle=async()=>{await Promise.resolve();flush();await Promise.resolve();flush();await Promise.resolve();};for(let n=0;n<50&&!window.PCRWorkspaceSettings?.ready;n++)await new Promise(r=>setTimeout(r,1));await settle();
   const pointer=(target,type,id,x,y)=>{const event=new window.MouseEvent(type,{button:0,clientX:x,clientY:y,bubbles:true,cancelable:true});Object.defineProperty(event,'pointerId',{value:id});target.dispatchEvent(event);};
   return{window,doc,screen,flush,settle,pointer,frames,layouts:()=>layouts,observed:()=>observed};
 }
+
+test('redesigned categories and search retain original input handlers, account controls and capability visibility',async t=>{
+ const f=await fixture(t,{design:true});f.window.PCRWorkspaceSettings.open();const page=f.doc.getElementById('workspaceSettings'),input=f.doc.getElementById('sensitivity');let changed=0;input.addEventListener('input',()=>changed++);input.hidden=true;
+ assert.equal(page.dataset.settingsTabs,'true');page.querySelector('[data-section=controls]').click();assert.equal(f.doc.getElementById('sensitivity'),input);input.dispatchEvent(new f.window.Event('input',{bubbles:true}));assert.equal(changed,1);
+ const collapsed=input.closest('[data-settings-collapse]');assert.ok(collapsed);assert.equal(collapsed.open,false,'Settings headings begin collapsed');
+ const devices=f.doc.createElement('section');devices.className='workspaceSettingsCard sharedSync';devices.innerHTML='<h3>Connected devices</h3><button>Rename</button>';page.append(devices);await f.settle();assert.equal(devices.parentElement.closest('[data-settings-section]').dataset.settingsSection,'connection');assert.equal(devices.querySelector('[data-settings-collapse]').open,false,'late device controls are grouped and expandable');
+ assert.equal(page.querySelector('[data-settings-section=controls]').hidden,false);assert.equal(page.querySelector('[data-settings-section=privacy]').hidden,true);
+ const search=page.querySelector('input[type=search]');search.value='pointer';search.dispatchEvent(new f.window.Event('input'));assert.equal(page.querySelector('[data-settings-section=controls]').hidden,false);assert.equal(input.hidden,true,'search never reveals a capability-hidden input');
+ search.value='no-such-setting-123';search.dispatchEvent(new f.window.Event('input'));assert.equal(page.querySelector('.suiteSettingsEmpty').hidden,false);
+ f.window.PCRWorkspaceSettings.open('privacy');await f.settle();assert.equal(page.querySelector('[data-settings-section=privacy]').hidden,false);assert.equal(search.value,'','category launch clears a previous search');assert.ok(page.querySelector('#workspaceSignOut'));
+});
 
 test('home defaults prioritize screen and files; settings reorder, hide, add and reset the real controls',async t=>{
   const f=await fixture(t),api=f.window.PCRWorkspace;assert.deepEqual(plain(api.getLayout().order.slice(0,4)),['screen','file','keyboard','apps']);

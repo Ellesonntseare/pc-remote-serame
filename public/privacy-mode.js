@@ -7,6 +7,18 @@
   const failure=document.createElement('dialog');failure.id='privacyFailure';failure.className='privacyFailure';failure.setAttribute('aria-labelledby','privacyFailureTitle');failure.setAttribute('aria-describedby','privacyFailureReason');
   failure.innerHTML='<h2 id="privacyFailureTitle">Privacy mode could not start</h2><p id="privacyFailureReason"></p><p data-stage></p><p data-observed></p><p data-restored></p><p data-limit></p><label for="privacyFailureDetails">Diagnostic details</label><textarea id="privacyFailureDetails" readonly rows="7" spellcheck="false"></textarea><p data-copy-status role="status"></p><div class="privacyFailureActions"><button type="button" data-copy>Copy details</button><button type="button" data-close autofocus>Close</button></div>';
   document.body.append(failure);
+  const alert=document.createElement('dialog');alert.className='privacyFailure';alert.setAttribute('aria-labelledby','privacyEndedTitle');
+  alert.innerHTML='<h2 id="privacyEndedTitle">Privacy mode ended</h2><p data-privacy-ended></p><div class="privacyFailureActions"><button type="button">OK</button></div>';
+  document.body.append(alert);alert.querySelector('button').onclick=()=>alert.close();
+  let reconnectWarning=false;
+  function warn(message,ended=false){
+    alert.querySelector('h2').textContent=ended?'Privacy mode ended':'Check Privacy mode';
+    alert.querySelector('[data-privacy-ended]').textContent=message;
+    const parent=document.fullscreenElement||document.body;
+    if(alert.parentElement!==parent)parent.append(alert);
+    if(!alert.open)alert.showModal();
+    window.PCRDeviceInput?.haptic?.();
+  }
   failure.querySelector('[data-close]').onclick=()=>failure.close();
   failure.querySelector('[data-copy]').onclick=async()=>{
     const field=failure.querySelector('textarea'),status=failure.querySelector('[data-copy-status]');
@@ -26,16 +38,29 @@
     const parent=document.fullscreenElement||document.body;if(failure.parentElement!==parent)parent.append(failure);
     if(!failure.open)failure.showModal();
   }
-  function draw(data){active=data.active===true;owned=data.owned===true;button.setAttribute('aria-pressed',String(active));button.textContent=active?'Privacy on':'Privacy';button.hidden=window.PCRAuth?.role!=='owner'||data.available===false;note.hidden=!active;document.getElementById('rs').classList.toggle('privacyActive',active);clearTimeout(timer);if(active&&window.PCRAuth?.signedIn)timer=setTimeout(refresh,8000);}
+  function draw(data){const before=active;active=data.active===true;owned=data.owned===true;button.setAttribute('aria-pressed',String(active));button.textContent=active?'Privacy on':'Privacy';button.hidden=window.PCRAuth?.role!=='owner'||data.available===false;note.hidden=!active;document.getElementById('rs').classList.toggle('privacyActive',active);clearTimeout(timer);if(active&&window.PCRAuth?.signedIn)timer=setTimeout(refresh,8000);if(before!==active)window.dispatchEvent(new Event('pcr:privacy-state'));}
   async function refresh(){
     if(busy){clearTimeout(timer);timer=setTimeout(refresh,1000);return;}
     const epoch=generation,controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),6000);
-    try{const result=await api('/api/privacy',{...(active&&owned?{method:'POST',body:JSON.stringify({action:'heartbeat'})}:{}),signal:controller.signal});if(epoch===generation&&result.ok)draw(result);}
-    catch{}finally{clearTimeout(timeout);if(epoch===generation&&active&&window.PCRAuth?.signedIn){clearTimeout(timer);timer=setTimeout(refresh,3000);}}
+    try{
+      const result=await api('/api/privacy',{...(active&&owned?{method:'POST',body:JSON.stringify({action:'heartbeat'})}:{}),signal:controller.signal});
+      if(!result.ok)throw Error('Privacy status unavailable');
+      if(epoch===generation){
+        const ended=active&&owned&&!result.active;
+        draw(result);reconnectWarning=false;
+        if(ended)warn('The PC screen may be visible again. Turn Privacy on when you are ready to continue.',true);
+      }
+    }catch{
+      if(epoch===generation&&active&&owned&&!reconnectWarning){
+        reconnectWarning=true;
+        warn('The connection to your PC was lost. The app cannot confirm that its screen is still covered.');
+      }
+    }finally{clearTimeout(timeout);if(epoch===generation&&active&&window.PCRAuth?.signedIn){clearTimeout(timer);timer=setTimeout(refresh,3000);}}
   }
   button.onclick=async()=>{if(busy)return;busy=true;button.disabled=true;const epoch=++generation;try{const result=await api('/api/privacy',{method:'POST',body:JSON.stringify({action:active?'stop':'start'})});if(epoch!==generation)return;if(!result.ok){showFailure(result.error||'Privacy mode is unavailable.',result.diagnostic);return;}draw(result);window.msg?.(result.active?'Privacy on · PC displays covered':'Privacy off · PC displays restored');}catch(error){if(epoch===generation)showFailure(error.message);}finally{busy=false;button.disabled=false;}};
-  window.addEventListener('pcr:auth',()=>{generation++;clearTimeout(timer);if(window.PCRAuth?.role==='owner')void refresh();else{if(failure.open)failure.close();draw({available:false,active:false});}});
+  window.addEventListener('pcr:auth',()=>{generation++;clearTimeout(timer);if(window.PCRAuth?.role==='owner')void refresh();else{if(failure.open)failure.close();if(alert.open)alert.close();reconnectWarning=false;draw({available:false,active:false});}});
   window.addEventListener('pcr:page',event=>{if(event.detail?.id==='rs'&&window.PCRAuth?.role==='owner')void refresh();});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&active&&owned)void refresh();});
   window.addEventListener('pagehide',()=>{clearTimeout(timer);if(active&&owned)void fetch('/api/privacy',{method:'POST',headers:{'Content-Type':'application/json','X-PCR':'1'},body:JSON.stringify({action:'stop'}),keepalive:true}).catch(()=>{});});
-  window.PCRPrivacy={get active(){return active;},refresh};
+  window.PCRPrivacy={get active(){return active;},refresh,routeInterrupted(){warn('The connection route changed. Check Privacy mode before continuing.');}};
 })();

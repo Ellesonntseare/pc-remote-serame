@@ -36,3 +36,22 @@ test('multiple phones require a specific choice and guest accounts cannot open t
 test('Send to phone cancels pending discovery on sign-out and ignores its late response',async t=>{
  const f=fixture(t);await f.fm.refresh();f.fm.select(['report.txt']);let release,signal;f.w.fetch=async(url,options)=>{signal=options.signal;return new Promise(resolve=>release=()=>resolve({ok:true,json:async()=>({devices:[{id:'phone-test-111111',name:'Private phone',platform:'android'}]})}));};const opened=f.controls.openPhoneSend();await tick();f.w.PCRAuth={signedIn:false};f.w.dispatchEvent(new f.w.Event('pcr:auth'));assert.equal(signal.aborted,true);release();await opened;assert.equal(f.d.getElementById('phoneSendDialog').open,false);assert.ok(!f.d.getElementById('phoneSendDialog').textContent.includes('Private phone'));
 });
+
+test('quick locations update the upload destination and keep Save outside More',async t=>{
+  const {w,d,fm}=fixture(t);
+  await fm.refresh();
+  const jump=d.querySelector('.explorerQuickLocations'),bar=d.querySelector('.explorerTransferBar');
+  jump.value='@downloads';jump.dispatchEvent(new w.Event('change'));await fm.refresh();
+  assert.equal(fm.path,'@downloads');
+  assert.equal(bar.querySelector('[data-destination]').textContent,'PC / Downloads');
+  const save=bar.querySelector('.explorerDownload');
+  assert.equal(save.disabled,true);
+  const downloads=[];
+  d.addEventListener('click',event=>{if(event.target.matches('a[download]')){event.preventDefault();downloads.push(new URL(event.target.href).searchParams.get('name'));}});
+  fm.select(['@downloads/report.txt']);
+  assert.equal(save.disabled,false);
+  save.click();
+  assert.deepEqual(downloads,['@downloads/report.txt']);
+  jump.value='@this-pc';jump.dispatchEvent(new w.Event('change'));await fm.refresh();
+  assert.equal(bar.querySelector('.fmSendBar').hidden,true);
+});

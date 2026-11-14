@@ -15,17 +15,15 @@
   const cut=button('Cut (Ctrl+X)','cut',()=>take('cut')),copy=button('Copy (Ctrl+C)','copy',()=>take('copy')),pasteButton=button('Paste (Ctrl+V)','paste',()=>void paste()),rename=button('Rename (F2)','rename',()=>q('[data-rename]').click());
   const more=document.createElement('details');more.className='explorerMore';more.innerHTML='<summary aria-label="More file commands" title="More">'+svg('more')+'</summary><div class="explorerMorePanel"></div>';
   const folders=q('.phoneFoldersToggle');if(folders)crumbs.prepend(folders);
-  const panel=more.firstElementChild.nextElementSibling,sort=q('.explorerSort'),views=q('.explorerViewMenu'),selection=q('.fmSelection'),send=q('.fmSendBar'),download=q('.explorerDownload'),favourite=q('[data-favourite]'),create=q('[data-new]');
-  download.innerHTML=svg('download')+'<span>Download to phone</span>';favourite.innerHTML=svg('pin')+'<span>Pin / unpin folder</span>';
+  const panel=more.firstElementChild.nextElementSibling,sort=q('.explorerSort'),views=q('.explorerViewMenu'),selection=q('.fmSelection'),download=q('.explorerDownload'),favourite=q('[data-favourite]'),create=q('[data-new]');
+  favourite.innerHTML=svg('pin')+'<span>Pin / unpin folder</span>';
   const propertyButton=button('Properties','properties',()=>properties());propertyButton.append(document.createTextNode(' Properties'));
   const sendPhoneButton=button('Send selected files to phone','download',()=>void openPhoneSend());sendPhoneButton.classList.add('explorerSendPhone');sendPhoneButton.append(document.createTextNode(' Send to phone'));
   const detailsButton=button('Show file details','properties',()=>properties());detailsButton.classList.add('explorerDetailsToggle');
   const addressCommand=button('Enter folder address','folder',()=>{more.open=false;showAddress();});addressCommand.append(document.createTextNode(' Go to folder…'));
-  panel.append(selection,download,send,favourite,propertyButton,addressCommand);commands.replaceChildren(create,cut,copy,pasteButton,rename,sort,views,sendPhoneButton,more,detailsButton);
+  panel.append(selection,favourite,propertyButton,addressCommand);commands.replaceChildren(create,cut,copy,pasteButton,rename,sort,views,sendPhoneButton,more,detailsButton);
   // Keep the actual picker, sort and view handlers when commands move into More.
   const narrow=matchMedia('(max-width:600px)');function arrange(){if(narrow.matches){panel.prepend(sort,views,sendPhoneButton);}else{commands.insertBefore(sort,more);commands.insertBefore(views,more);commands.insertBefore(sendPhoneButton,more);}}narrow.addEventListener?.('change',arrange);arrange();
-  // Sending is distinct from downloading the PC file back onto this browser.
-  download.querySelector('span').textContent='Save to this device';
   const phoneSend=document.createElement('dialog');phoneSend.id='phoneSendDialog';phoneSend.className='phoneSendDialog';phoneSend.setAttribute('aria-labelledby','phoneSendTitle');phoneSend.innerHTML='<header><h2 id="phoneSendTitle">Send to phone</h2><button type="button" data-phone-close aria-label="Close send to phone">×</button></header><p>Files save automatically on your phone. Keep Elleson Connect connected there.</p><ul data-phone-files aria-label="Selected files"></ul><label>Receiving phone<select data-phone-target aria-label="Receiving phone"></select></label><button type="button" data-phone-refresh>Refresh phones</button><progress data-phone-preparing aria-label="Preparing delivery" hidden></progress><p data-phone-send-status role="status" aria-live="polite"></p><footer><button type="button" data-phone-send>Send to phone</button><button type="button" data-phone-done hidden>Done</button></footer>';document.body.append(phoneSend);
   const pq=s=>phoneSend.querySelector(s);let phoneFiles=[],phoneDevices=[],phoneBusy=false,phoneEpoch=0,phoneController=null,phoneFocus=null;
   const phonePreference=()=> 'pcr_send_phone:'+location.origin+':'+(window.PCRAuth?.workspaceId||'owner');

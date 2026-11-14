@@ -27,4 +27,4 @@ const streams=[];let privacy;
   for(let i=0;i<10;i++){privacy.heartbeat('test');await wait(5000);assert.equal(privacy.status('test').active,true);if(i===4)console.log('Keepalive check: active at 25 seconds');}
   console.log('PASS: privacy stays active for 50 seconds with keepalive');
  }finally{privacy?.close();for(const {child}of streams){child.stdin.end('stop\n');child.kill();}}
-})().catch(error=>{console.error(error);process.exitCode=1;});
+})().catch(error=>{console.error(error);if(error.diagnostic)console.error(JSON.stringify(error.diagnostic,null,2));process.exitCode=1;});

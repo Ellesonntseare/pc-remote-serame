@@ -124,3 +124,13 @@ html[data-appearance=light].ecFlow :is(.ecNavLiquid,.ecNavRipple){display:none}
 .ecFlow #rs #remoteSwipeDock .contextControls #rsFullscreen{display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;width:32px;min-width:32px;height:32px;min-height:32px;padding:6px;background:transparent!important;border:0!important;border-radius:0;box-shadow:none!important}
 .ecFlow #rs #remoteSwipeDock .contextControls #rsFullscreen>span{display:none}
 .ecFlow #rs #remoteSwipeDock .contextControls #rsFullscreen>svg{display:block;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+
+.ecFlow #rs #remoteSwipeDock .remoteSwipeSurfaces{height:var(--ec-pad-height,155px)!important;max-height:50dvh!important;flex:none!important}
+/* Keep the existing action rail available; panels appear only on request. */
+.ecFlow #rs.screenClean>.ecRemoteRail:not(#rsv){display:flex!important;z-index:95;opacity:.65}
+.ecFlow #rs.screenClean>.ecRemoteRail:hover,.ecFlow #rs.screenClean>.ecRemoteRail:focus-within{opacity:1}
+.ecFlow #rs.screenClean .ecRemoteRail [data-ec-rail=files],.ecFlow #rs.screenClean .ecRemoteRail [data-ec-rail=tools]{display:none!important}
+.ecFlow #rs.screenClean.fullscreenMouse>#remoteSwipeDock{display:flex!important;position:absolute!important;bottom:max(8px,env(safe-area-inset-bottom));left:0;right:0;margin-inline:auto!important;max-height:70dvh!important;overflow:auto;z-index:90}
+.ecFlow #rs.screenClean.typing>#typePanel:not(.hide){display:block!important}
+.ecFlow #rs #remoteSwipeDock.ecShelfFloating{position:absolute!important;left:var(--ec-shelf-x,0px)!important;top:var(--ec-shelf-y,0px)!important;right:auto!important;bottom:auto!important;margin:0!important;z-index:90}

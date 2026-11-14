@@ -1,45 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
-    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>
 
     <application
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
-        android:label="Elleson Connect"
+        android:label="${appLabel}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.PCRemote">
-        <activity android:name=".keyboard.KeyboardSettingsActivity" android:exported="true" android:label="Elleson Keyboard" />
-        <service android:name=".keyboard.SerameKeyboardService" android:label="Elleson Keyboard · Elleson Connect" android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true"><intent-filter><action android:name="android.view.InputMethod" /></intent-filter><meta-data android:name="android.view.im" android:resource="@xml/serame_input_method" /></service>
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.clipfiles" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/serame_clip_paths" /></provider>
         <service android:name="androidx.work.impl.foreground.SystemForegroundService" android:foregroundServiceType="dataSync" tools:node="merge" />
         <receiver android:name=".FolderSyncControl" android:exported="false" />
         <receiver android:name=".RemoteWidget" android:exported="false"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/remote_widget_info" /></receiver>
         <activity android:name=".TransferActionActivity" android:exported="false" android:excludeFromRecents="true" />
-        <service android:name=".ScreenShareService" android:exported="false" android:foregroundServiceType="mediaProjection" />
-        <service android:name=".PhoneAudioService" android:exported="false" android:foregroundServiceType="microphone|mediaProjection" />
         <service android:name=".TransferService" android:exported="false" android:foregroundServiceType="dataSync" />
-        <service android:name=".AppUpdateService" android:exported="false" android:foregroundServiceType="dataSync" />
-        <activity android:name=".AppUpdateActivity" android:exported="false" android:excludeFromRecents="true" />
-        <service android:name=".PhoneControlService" android:exported="true" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:label="@string/phone_control_name">
-            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
-            <meta-data android:name="android.accessibilityservice" android:resource="@xml/phone_control_accessibility" />
-        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"

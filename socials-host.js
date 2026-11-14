@@ -21,7 +21,7 @@ function createSocialsIntegration({directory,dataDirectory}={}){
   if(!scope||session?.role==='guest'){respond(res,403,{error:'Sign in with your account to open projects.'});return true;}
   if(pathname==='/api/projects'){
    if(req.method!=='GET'){respond(res,405,{error:'Use GET for projects.'});return true;}
-   respond(res,200,{projects:[{id:'socials',name:'Elleson Socials',description:'Manage social posts',path:'/socials/',available:available(),repository:'https://github.com/Ellesonntseare/Elleson-Socials'}]});return true;
+   respond(res,200,{projects:[...(session?.role==='owner'&&require('./alderwick-host').available()?[{id:'alderwick',name:'Alderwick AI',description:'Connect town conversations and voices',path:'/alderwick/',available:true}]:[]),{id:'socials',name:'Elleson Socials',description:'Manage social posts',path:'/socials/',available:available(),repository:'https://github.com/Ellesonntseare/Elleson-Socials'}]});return true;
   }
   if(!available()){respond(res,503,{error:'Elleson Socials is not installed on this server.'});return true;}
   try{

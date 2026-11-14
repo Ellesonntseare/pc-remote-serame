@@ -182,6 +182,19 @@ html.appBooting .app{visibility:hidden}html.appBooting #pairGate{visibility:hidd
 <link rel="stylesheet" href="/phone-workspaces.css">
 <link rel="stylesheet" href="/explorer-windows.css">
 <script src="/explorer-controls.js" defer></script>
+<link rel="stylesheet" href="/second-screen-design.css">
+<script src="/second-screen-design.js" defer></script>
+<link rel="stylesheet" href="/settings-design.css">
+<script src="/settings-design.js" defer></script>
+<link rel="stylesheet" href="/audio-suite-design.css">
+<script src="/audio-suite-design.js" defer></script>
+<link rel="stylesheet" href="/login-design.css">
+<script src="/biometric-signin.js" defer></script>
+<link rel="stylesheet" href="/interaction-motion.css">
+<script src="/interaction-motion.js" defer></script>
+<link rel="stylesheet" href="/navigation-bar.css">
+<script src="/navigation-bar.js" defer></script>
+<script src="/connection-health.js" defer></script>
 </head>
 <body>
 <div id="appBoot" role="status" aria-live="polite"><span aria-hidden="true"></span>Connecting to your workspace…</div>
@@ -288,7 +301,7 @@ function showConnected(d){paired=true;authGeneration++;$('pin').blur();window.PC
 async function init(){try{const d=await api('/api/ping');configureLogin(d);if(d.paired)showConnected(d);else if(d.account){showPair();window.PCRAccount=d.account;window.dispatchEvent(new CustomEvent('pcr:account',{detail:d.account}));connectionLight('Account signed in');}else if(!d.requirePin&&!d.requirePassword){const connected=await api('/api/pair',{method:'POST',body:'{}'});if(!connected.ok)throw new Error(connected.error);return init();}else showPair();}catch{showPair('PC is not reachable. Check that the Windows host is running.');}}
 $('pairForm').addEventListener('submit',async e=>{e.preventDefault();const b=$('pairSubmit');b.disabled=true;$('pairError').textContent='Connecting…';try{const body=passwordMode?{password:$('pin').value,remember:$('rememberMe').checked}:{pin:$('pin').value};const d=await api('/api/pair',{method:'POST',body:JSON.stringify(body)});if(d.pending){$('pin').value='';window.PCRGuestAccess?.wait();}else if(d.ok){$('pin').value='';init();}else $('pairError').textContent=d.error||'Sign-in failed';}catch{$('pairError').textContent='Cannot reach this PC';}finally{b.disabled=false;}});
 async function unpair(){rsClose();try{await api('/api/unpair',{method:'POST',body:'{}'});}catch{}showPair();}
-async function send(action,button){if(button){button.disabled=true;button.setAttribute('aria-busy','true');}msg('Sending command…');try{const d=await api('/api/cmd',{method:'POST',body:JSON.stringify({action})});if(d.status===401){showPair('Your session has expired. Pair again.');return;}msg(d.msg||d.error||'Command sent');poll()}catch{msg('PC not reachable')}finally{if(button){button.disabled=false;button.removeAttribute('aria-busy');}}}
+async function send(action,button){if(button){button.disabled=true;button.setAttribute('aria-busy','true');}msg('Sending command…');try{const d=await api('/api/cmd',{method:'POST',body:JSON.stringify({action})});if(d.status===401){showPair('Your session has expired. Pair again.');return;}msg(d.msg||d.error||'Command sent');if(action==='restart'&&d.ok&&d.hostRunId)window.dispatchEvent(new CustomEvent('pcr:restart-requested',{detail:{hostRunId:d.hostRunId}}));poll()}catch{msg('PC not reachable')}finally{if(button){button.disabled=false;button.removeAttribute('aria-busy');}}}
 const fmtUp=s=>{const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`};
 async function poll(){
   if(document.hidden||!paired||document.body.classList.contains('pcrPageOpen')||statusPollGeneration===authGeneration)return;
@@ -608,7 +621,7 @@ $('typeText').addEventListener('beforeinput',e=>{
   if(liveTyping&&!live.paused&&!composing&&e.inputType==='deleteContentBackward'&&!$('typeText').value){e.preventDefault();rsTypeKey(8);}
 });
 function rsKb(){
-  window.PCRScreenTools?.restoreControls();
+  // Opening the keyboard must not exit the user's full-screen session.
   typingPanelOpen=true;$('typeText').readOnly=false;$('typeText').inputMode='text';
   $('rsKeyboard').setAttribute('aria-expanded','true');
   $('rs').classList.add('typing');$('typePanel').classList.remove('hide');rsUpdateTypingUI();
@@ -735,3 +748,4 @@ window.addEventListener('resize',fitRemoteViewport);fitRemoteViewport();
 })();
 </script>
 </body></html>
+

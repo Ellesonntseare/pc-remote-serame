@@ -50,6 +50,26 @@ test('phone shares wait for connection and bridge failures retain an explicit re
  f.w.PCRAndroid.postMessage=value=>f.messages.push(JSON.parse(value));f.d.querySelector('.fmShareInbox button').click();assert.equal(f.messages.at(-1).type,'transfer-shared');
 });
 
+test('Android Share offers starred PC folders and retries the chosen destination',async t=>{
+ const f=await fixture(t);
+ f.w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+ f.w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+ f.w.PCRFileManager.state={favourites:['@downloads/Photos','@this-pc'],locations:[{id:'@downloads',label:'Downloads'}]};
+ const send=f.w.PCRAndroid.postMessage;
+ f.w.PCRAndroid.postMessage=()=>{throw Error('bridge unavailable');};
+ f.emit('pcr:share-inbox',{count:1,open:true});
+ const options=[...f.d.querySelectorAll('[data-share-folders] button')];
+ assert.equal(options[0].closest('dialog').open,true);
+ assert.deepEqual(options.map(button=>button.textContent),['Transfers','Downloads / Photos']);
+ options[1].click();
+ assert.equal(options[0].closest('dialog').open,false);
+ const retry=f.d.querySelector('.fmShareInbox button');
+ assert.equal(retry.textContent,'Retry sending');
+ f.w.PCRAndroid.postMessage=send;
+ retry.click();
+ assert.deepEqual(f.messages.at(-1),{type:'transfer-shared',destination:'@downloads/Photos'});
+});
+
 test('incoming PC deliveries start the native saver even with settings sync disabled, without acknowledging early',async t=>{
  const f=await fixture(t,{settingsSync:false,fetcher:async url=>({ok:true,json:async()=>url==='/api/phone/inbox'?{inbox:[{id,kind:'file',name:'From PC/photo + résumé.png',label:'photo + résumé.png'},{id:'bad',kind:'file',name:'bad',label:'bad'},{id,kind:'link',text:'https://example.com'}]}:{}})});
  await until(()=>f.messages.some(row=>row.type==='phone-file-offer'));

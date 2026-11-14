@@ -28,8 +28,8 @@ function byteRange(header,size){
   else{start=Number(m[1]);end=m[2]?Number(m[2]):size-1;if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=size||start>end)throw problem(416,'Requested range is unavailable.');end=Math.min(end,size-1);}
   return {start,end};
 }
-function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],watch=false,locationsProvider,thumbnailProvider,onActivity}={}){
-  const root=path.resolve(directory),uploads=new Map(),thumbnails=require('./file-thumbnails').createThumbnails(thumbnailProvider);let diskReady;
+function createFileTransfers({directory,journalDirectory,maxBytes=2*1024*1024*1024,locations=[],watch=false,locationsProvider,thumbnailProvider,onActivity}={}){
+  const root=path.resolve(directory),journal=path.resolve(journalDirectory||root),uploads=new Map(),thumbnails=require('./file-thumbnails').createThumbnails(thumbnailProvider);let diskReady;
   let mutation=Promise.resolve();function commit(change){const next=mutation.then(change);mutation=next.catch(()=>{});return next;}
   let revision=Date.now();const watched=new Map();
   function watchFolder(directory){if(!watch||watched.has(directory)||!fs.existsSync(directory))return;try{const watcher=fs.watch(directory,{recursive:true,persistent:false},(event,name)=>{if(name&&String(name).split(/[\\/]/).some(part=>/^\.pcr-/i.test(part)))return;revision=Date.now();});watcher.on('error',()=>{watcher.close();watched.delete(directory);});watched.set(directory,watcher);}catch{}}
@@ -50,7 +50,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
   }
   function activity(actor,event){if(!actor||!onActivity)return;try{onActivity(actor,event);}catch{console.error('File activity could not be saved.');}}
   function completed(u){if(!u.complete||!u.file)return;activity(u.activityContext,{id:'upload:'+u.id+':complete',type:'transfer',action:'transfer.uploaded',label:'Uploaded '+u.name,payload:{direction:'upload',name:u.file.name,label:u.name,size:u.file.size,status:'complete',transferId:u.id}});}
-  const partial=id=>path.join(root,'.pcr-upload-'+id+'.part'),metadata=id=>path.join(root,'.pcr-upload-'+id+'.json');
+  const partial=id=>path.join(root,'.pcr-upload-'+id+'.part'),metadata=id=>path.join(journal,'.pcr-upload-'+id+'.json');
   async function availableLocations(allowed){const available=[{id:'',label:'Transfers'}];if(allowed)for(const item of roots.values()){try{const stat=await fsp.lstat(item.directory);if(stat.isDirectory()&&!stat.isSymbolicLink())available.push({id:item.id,label:item.label,...item.kind&&{kind:item.kind},...item.capacity&&{capacity:item.capacity}});}catch{}}return available;}
   const record=u=>({version:1,...u.activityContext&&{activityContext:u.activityContext},...u.syncETag&&{syncETag:u.syncETag},...u.conflict==='rename'&&{conflict:'rename'},id:u.id,token:u.token,account:u.account,secretHash:u.secretHash,name:u.name,...u.relativePath&&{relativePath:u.relativePath},size:u.size,received:u.received,until:u.until,complete:!!u.complete,...u.publishName&&{publishName:u.publishName},...u.file&&{file:u.file}});
   async function persist(u){const file=metadata(u.id),temp=file+'.tmp';await fsp.unlink(temp).catch(e=>{if(e.code!=='ENOENT')throw e;});const handle=await fsp.open(temp,'wx',0o600);try{await handle.writeFile(JSON.stringify(record(u)));await handle.sync();}finally{await handle.close();}await fsp.rename(temp,file);}
@@ -58,8 +58,19 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
   async function ensure(){
     if(!diskReady)diskReady=(async()=>{
       await fsp.mkdir(root,{recursive:true});const rootStat=await fsp.lstat(root);if(!rootStat.isDirectory()||rootStat.isSymbolicLink())throw Error('Transfer folder must be a real directory.');const entries=await fsp.readdir(root,{withFileTypes:true});
+      await fsp.mkdir(journal,{recursive:true,mode:0o700});const journalStat=await fsp.lstat(journal);if(!journalStat.isDirectory()||journalStat.isSymbolicLink())throw Error('Transfer recovery storage must be a real directory.');
+      if(journal!==root)for(const entry of entries){
+        const match=/^\.pcr-upload-([a-f0-9]{32})\.json$/.exec(entry.name);if(!match||!entry.isFile())continue;
+        const old=path.join(root,entry.name),stat=await fsp.lstat(old);if(stat.isSymbolicLink()||stat.size>8192)continue;
+        let bytes,value;try{bytes=await fsp.readFile(old);value=JSON.parse(bytes);}catch{continue;}
+        if(value.version!==1||value.id!==match[1]||typeof value.secretHash!=='string'||!/^[a-f0-9]{64}$/.test(value.secretHash))continue;
+        // Migrate only identified application receipts. Keep the payload and any
+        // partial bytes on their existing volume for fast publication/resume.
+        const target=metadata(match[1]);try{const saved=await fsp.open(target,'wx',0o600);try{await saved.writeFile(bytes);await saved.sync();}finally{await saved.close();}}catch(error){if(error.code!=='EEXIST')throw error;const existing=await fsp.readFile(target);if(!existing.equals(bytes))await fsp.writeFile(path.join(journal,match[1]+'.legacy.json'),bytes,{flag:'wx',mode:0o600}).catch(e=>{if(e.code!=='EEXIST')throw e;});}
+        await fsp.unlink(old);
+      }
       watchFolder(root);
-      for(const entry of entries){
+      for(const entry of await fsp.readdir(journal,{withFileTypes:true})){
         const match=/^\.pcr-upload-([a-f0-9]{32})\.json$/.exec(entry.name);if(!match)continue;const id=match[1];
         try{
           const stat=await fsp.lstat(metadata(id));if(!stat.isFile()||stat.isSymbolicLink()||stat.size>8192)throw Error('Invalid metadata');
@@ -83,7 +94,7 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
   const fileETag=(name,stat)=>'"'+digest(name+':'+stat.size+':'+stat.mtimeMs+':'+stat.ctimeMs)+'"';
   async function filenameConflict(name,file){
     let existing;try{const stat=await fsp.lstat(file);existing={name,size:stat.size,directory:stat.isDirectory(),...stat.isFile()&&!stat.isSymbolicLink()&&{etag:fileETag(name,stat)}};}catch(error){if(error.code!=='ENOENT')throw error;}
-    return Object.assign(problem(409,'An item named '+name.split('/').at(-1)+' already exists. Choose Replace or another destination to keep the original filename.'),{code:'filename_conflict',fileName:name,...existing&&{existing}});
+    return Object.assign(problem(409,'An item named '+name.split('/').at(-1)+' already exists. Choose Keep both to save a separate copy, or choose another destination.'),{code:'filename_conflict',fileName:name,...existing&&{existing}});
   }
   async function requireAvailable(name){const file=await safeTarget(name,true);try{await fsp.lstat(file);}catch(error){if(error.code==='ENOENT')return;throw error;}throw await filenameConflict(name,file);}
   function replacementETag(value,allowed){if(value!==undefined&&(!allowed||typeof value!=='string'||!/^new$|^\"[a-f0-9]{64}\"$/.test(value)))throw problem(400,'Refresh the destination before replacing a file.');return value;}
@@ -293,13 +304,14 @@ function createFileTransfers({directory,maxBytes=2*1024*1024*1024,locations=[],w
               // Recover a lost final acknowledgement before considering a new
               // destination; an already-published file must never be duplicated.
               if(!u.complete&&u.publishName){try{const [source,stored]=await Promise.all([fsp.stat(u.temp),safeTarget(u.publishName).then(file=>fsp.lstat(file))]);if(stored.isFile()&&!stored.isSymbolicLink()&&source.ino!==0&&source.ino===stored.ino&&source.dev===stored.dev)await finish(u);}catch(error){if(error.code!=='ENOENT')throw error;}}
-              if(u.complete)throw problem(409,'This upload has already finished. Its saved filename has not changed.');
+              if(u.complete&&!(body.conflict==='rename'&&u.conflict==='rename'&&body.replaceETag===undefined&&body.relativePath===undefined))throw problem(409,'This upload has already finished. Its saved filename has not changed.');
               const destination=body.relativePath===undefined?(u.relativePath||u.name):relativePath(allowedName(body.relativePath));
               if(destination.split('/').at(-1)!==u.name)throw problem(400,'Choose a destination folder while keeping the original filename.');
-              const syncETag=body.replaceETag===undefined?(destination===(u.relativePath||u.name)?u.syncETag:undefined):replacementETag(body.replaceETag,allowLocations);
+              const keepReplacement=body.conflict!=='rename'&&destination===(u.relativePath||u.name);
+              const syncETag=body.replaceETag===undefined?(keepReplacement?u.syncETag:undefined):replacementETag(body.replaceETag,allowLocations);
               const conflict=body.conflict===undefined?u.conflict:conflictPolicy(body.conflict);
               if(!syncETag&&conflict!=='rename')await requireAvailable(destination);
-              u.relativePath=destination;u.syncETag=syncETag;u.conflict=conflict;delete u.publishName;
+              if(!u.complete){u.relativePath=destination;u.syncETag=syncETag;u.conflict=conflict;delete u.publishName;}
             }
             u.token=token;u.until=Date.now()+RETENTION_MS;await persist(u);
             // Complete an upload whose last chunk committed before a process stop.

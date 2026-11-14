@@ -76,7 +76,7 @@ internal object PhoneFileReceiver {
             val actual=resolver.query(destination,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{if(it.moveToFirst())it.getString(0)else null};TransferFileNames.destination(name,actual)
             val row=JSONObject().put("direction","download").put("name",name).put("uri",destination.toString()).put("path",path).put("inboxId",id).put("mediaStorePending",pending)
             val intent=Intent(context,TransferService::class.java).setAction(TransferService.ADD).putExtra("origin",origin).putExtra("cookie",cookie).putExtra("items",JSONArray().put(row).toString())
-            (PhoneControlService.instance?:context).startForegroundService(intent);remember(context,"accepted",id)
+            PhoneAccess.transferContext(context).startForegroundService(intent);remember(context,"accepted",id)
         }catch(error:Exception){if(pending)runCatching{resolver.delete(destination,null,null)};throw error}
     }
 }

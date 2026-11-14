@@ -9,4 +9,21 @@ foreach(var side in new[]{"left","right","top","bottom"}){
     if(!PhoneDeskGeometry.Returns(x,y,side))throw new Exception("Cannot return from phone "+side);
 }
 if(PhoneDeskGeometry.ValidSide("anything"))throw new Exception("Unknown position accepted");
+var phone=new Size(800,600);
+foreach(var side in new[]{"left","right","top","bottom"})
+{
+    var start=PhoneDeskGeometry.PlaceDisplay(monitor,phone,side,-100);
+    var center=PhoneDeskGeometry.PlaceDisplay(monitor,phone,side,0);
+    var end=PhoneDeskGeometry.PlaceDisplay(monitor,phone,side,100);
+    bool vertical=side is "left" or "right";
+    if(vertical ? !(start.Y<center.Y&&center.Y<end.Y) : !(start.X<center.X&&center.X<end.X))
+        throw new Exception("Phone cannot slide along the "+side+" edge");
+    foreach(var point in new[]{start,center,end})
+    {
+        var display=new Rectangle(point,phone);
+        bool adjacent=side switch{"left"=>display.Right==monitor.Left,"right"=>display.Left==monitor.Right,"top"=>display.Bottom==monitor.Top,_=>display.Top==monitor.Bottom};
+        int overlap=vertical?Math.Min(monitor.Bottom,display.Bottom)-Math.Max(monitor.Top,display.Top):Math.Min(monitor.Right,display.Right)-Math.Max(monitor.Left,display.Left);
+        if(!adjacent||overlap<80)throw new Exception("Phone lost its shared screen edge "+side);
+    }
+}
 Console.WriteLine("Phone arrangement: four edges, negative monitor coordinates, entry and return positions passed. No mouse hooks installed.");
