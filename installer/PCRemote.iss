@@ -1,4 +1,4 @@
-#define AppVersion "2.3.0"
+#define AppVersion "2.3.1"
 [Setup]
 AppId={{C9EF8E11-66AA-43CB-B017-25F799BDA175}
 AppName=Elleson Connect Personal Host
@@ -10,7 +10,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=Elleson-Connect-Host-Setup-2.3.0
+OutputBaseFilename=Elleson-Connect-Host-Setup-2.3.1
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -33,3 +33,4 @@ Type: files; Name: "{userprograms}\PC Remote\PC Remote Host.lnk"
 Type: files; Name: "{userprograms}\PC Remote\Uninstall PC Remote.lnk"
 [Run]
 Filename: "{app}\PCRemoteHost.exe"; Description: "Start Elleson Connect Host"; Flags: nowait postinstall skipifsilent
+

@@ -600,7 +600,7 @@ $('typeText').addEventListener('beforeinput',e=>{
   if(liveTyping&&!live.paused&&!composing&&e.inputType==='deleteContentBackward'&&!$('typeText').value){e.preventDefault();rsTypeKey(8);}
 });
 function rsKb(){
-  window.PCRScreenTools?.restoreControls();
+  // Opening the keyboard must not exit the user's full-screen session.
   typingPanelOpen=true;$('typeText').readOnly=false;$('typeText').inputMode='text';
   $('rsKeyboard').setAttribute('aria-expanded','true');
   $('rs').classList.add('typing');$('typePanel').classList.remove('hide');rsUpdateTypingUI();
@@ -727,3 +727,4 @@ window.addEventListener('resize',fitRemoteViewport);fitRemoteViewport();
 })();
 </script>
 </body></html>
+

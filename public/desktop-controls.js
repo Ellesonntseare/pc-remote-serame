@@ -17,6 +17,9 @@
   const punctuation={Semicolon:186,Equal:187,Comma:188,Minus:189,Period:190,Slash:191,Backquote:192,BracketLeft:219,Backslash:220,BracketRight:221,Quote:222};
   function virtualKey(event){
     if(special[event.key])return special[event.key];
+    const extra={CapsLock:20,NumLock:144,ContextMenu:93,MetaLeft:91,MetaRight:92,NumpadMultiply:106,NumpadAdd:107,NumpadSubtract:109,NumpadDecimal:110,NumpadDivide:111,NumpadEnter:13};
+    if(extra[event.code]||extra[event.key])return extra[event.code]||extra[event.key];
+    if(/^Numpad[0-9]$/.test(event.code))return 96+Number(event.code.slice(6));
     if(/^F([1-9]|1\d|2[0-4])$/.test(event.key))return 111+Number(event.key.slice(1));
     if(/^Key[A-Z]$/.test(event.code))return event.code.charCodeAt(3);
     if(/^Digit[0-9]$/.test(event.code))return event.code.charCodeAt(5);
@@ -33,10 +36,17 @@
       !document.getElementById('modal').classList.contains('on')&&
       !document.querySelector('dialog[open]');
   }
-  function typeCharacter(character){
-    if(!liveTyping||live.paused||!rs.m){
-      msg('Open Keyboard, turn on live typing and select New field to continue.');return;
+  function ensureHardwareContext(){
+    if(!rs.m)return;
+    // A deliberate hardware key starts a fresh context, without replaying a
+    // paused draft whose delivery may be uncertain.
+    if(!liveTyping||live.paused){
+      if(input.value)window.PCRAccountWorkspace?.set('drafts.compose',input.value);
+      rsResetTypingContext(false);liveTyping=true;
     }
+  }
+  function typeCharacter(character){
+    if(!rs.m)return;ensureHardwareContext();
     if(input.value.length+character.length>16000){
       msg('Start a new field or use compose mode for a longer message.');return;
     }
@@ -46,15 +56,18 @@
   }
   canvas.addEventListener('keydown',event=>{
     if(!mayControl())return;
-    if(['Control','Alt','Meta','Shift','CapsLock','NumLock'].includes(event.key))return;
+    if(['Control','Alt','Shift'].includes(event.key))return;
+    if(event.key==='Meta'){event.preventDefault();if(!event.repeat)metaKey=virtualKey(event)||91;return;}
     if(event.isComposing||event.key==='Process'||event.key==='Dead'){
       event.preventDefault();rsKb();
       rsTypeStatus('Use this typing field for language input and composition.');return;
     }
     const altGraph=event.getModifierState?.('AltGraph');
+    ensureHardwareContext();
     const chord=(event.ctrlKey||event.altKey||event.metaKey)&&!altGraph;
     const vk=virtualKey(event);
     if(chord){
+      metaKey=null;
       if(vk===null)return;
       event.preventDefault();
       const keys=[];
@@ -72,13 +85,16 @@
       // Keep hardware keys on the canvas without touching the phone editor.
       return;
     }
-    if((vk!==null&&special[event.key])||/^F([1-9]|1\d|2[0-4])$/.test(event.key)){
+    if((vk!==null&&(special[event.key]||['CapsLock','NumLock','ContextMenu'].includes(event.key)))||/^F([1-9]|1\d|2[0-4])$/.test(event.key)){
       event.preventDefault();
       const command=event.shiftKey?'combo 16,'+vk:'key '+vk;
       void rsQueueRemoteCommand(command);return;
     }
     if(Array.from(event.key).length===1){event.preventDefault();typeCharacter(event.key);}
   });
+  let metaKey=null;
+  canvas.addEventListener('keyup',event=>{if(event.key!=='Meta')return;const key=metaKey;metaKey=null;if(key&&mayControl()){event.preventDefault();qc('key '+key);}});
+  canvas.addEventListener('blur',()=>{metaKey=null;});
   window.PCRDesktopControls={virtualKey};
 })();
 
@@ -240,3 +256,4 @@
   const installDialog=document.getElementById('installHelp');if(installDialog)new MutationObserver(install).observe(installDialog,{childList:true});install();new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1&&node.matches('dialog'))decorate(node);}).observe(document.body,{childList:true});
   const bar=document.querySelector('.rsbot');function menu(){if(!bar)return;if(!bar.querySelector('.menuGroupTitle'))for(const [order,label]of [[9,'Pointer & keyboard'],[19,'System & presentation'],[29,'External actions & files']]){const title=document.createElement('div');title.className='menuGroupTitle';title.style.order=order;title.dataset.group=order<29?'controls':'tools';title.textContent=label;bar.append(title);}for(const button of bar.querySelectorAll(':scope>button')){const label=button.textContent.trim();button.style.order=/Trackpad|Touch/i.test(label)?10:/Keyboard/i.test(label)?11:/Lens/i.test(label)?12:/keys/i.test(label)?20:/Controls/i.test(label)?21:/Present/i.test(label)?22:/Audio/i.test(label)?30:/Apps/i.test(label)?31:/Devices/i.test(label)?32:/Files/i.test(label)?33:34;if(button.querySelector('.menuTileIcon'))continue;const name=/keyboard/i.test(label)?'keyboard':/keys/i.test(label)?'key':/control/i.test(label)?'gear':/trackpad|touch|lens/i.test(label)?'pointer':/audio/i.test(label)?'audio':/files|text/i.test(label)?'file':/devices|apps/i.test(label)?'devices':'screen';const copy=document.createElement('span');copy.className='menuTileLabel';copy.textContent=label;button.replaceChildren(badge(name,'menuTileIcon'),copy);}bar.classList.add('workspaceMenuGrid');}menu();if(bar)new MutationObserver(menu).observe(bar,{childList:true,subtree:true});
 })();
+
