@@ -93,12 +93,12 @@ test('reference dashboard keeps its feature actions, power toggle and live statu
 
 test('Android guest sharing asks the native app for consent, accepts a live preview and stops on sign-out',async t=>{
   const f=await fixture(t),owner=await f.page(),messages=[],phone=await f.page({android:messages});await login(owner,'serame');await until(()=>owner.PCRAuth?.signedIn);await login(phone,'guest');await until(()=>owner.document.querySelector('.guestRequestCard'));owner.document.querySelector('.guestApprove').click();await until(()=>phone.PCRAuth?.role==='guest');
-  phone.document.querySelector('.guestScreenHome').click();phone.document.querySelector('#guestScreenDialog [data-share]').click();assert.deepEqual(messages,[{type:'start'}]);assert.equal(phone.document.querySelector('#guestScreenDialog [data-stop]').hidden,false);
+  phone.document.querySelector('.guestScreenHome').click();phone.document.querySelector('#guestScreenDialog [data-share]').click();assert.deepEqual(messages.filter(value=>value.type!=='keyboard-hide'),[{type:'start'}]);assert.equal(phone.document.querySelector('#guestScreenDialog [data-stop]').hidden,false);
   phone.PCRAndroid.onmessage({data:JSON.stringify({type:'sharing'})});phone.PCRAndroid.onmessage({data:JSON.stringify({type:'frame',data:'AAAA',width:540,height:960})});assert.equal(phone.document.querySelector('#guestScreenDialog img').hidden,false);
-  Object.defineProperty(phone.document,'hidden',{configurable:true,value:true});phone.document.dispatchEvent(new phone.Event('visibilitychange'));assert.equal(messages.at(-1).type,'start','switching apps must not send a native stop');
+  Object.defineProperty(phone.document,'hidden',{configurable:true,value:true});phone.document.dispatchEvent(new phone.Event('visibilitychange'));assert.equal(messages.filter(value=>value.type!=='keyboard-hide').at(-1).type,'start','switching apps must not send a native stop');
   Object.defineProperty(phone.document,'hidden',{configurable:true,value:false});phone.document.dispatchEvent(new phone.Event('visibilitychange'));assert.match(phone.document.querySelector('.guestScreenStatus').textContent,/entire phone screen is live/);
-  phone.PCRAndroid.onmessage({data:JSON.stringify({type:'control-state',state:'active'})});assert.equal(phone.document.querySelector('[data-phone-stop]').hidden,false);phone.document.querySelector('[data-phone-stop]').click();assert.equal(messages.at(-1).type,'control-stop');
-  phone.eval('showPair()');assert.equal(messages.at(-1).type,'stop');assert.equal(phone.document.querySelector('#guestScreenDialog').open,false);
+  phone.PCRAndroid.onmessage({data:JSON.stringify({type:'control-state',state:'active'})});assert.equal(phone.document.querySelector('[data-phone-stop]').hidden,false);phone.document.querySelector('[data-phone-stop]').click();assert.equal(messages.filter(value=>value.type!=='keyboard-hide').at(-1).type,'control-stop');
+  phone.eval('showPair()');assert.equal(messages.filter(value=>value.type!=='keyboard-hide').at(-1).type,'stop');assert.equal(phone.document.querySelector('#guestScreenDialog').open,false);
 });
 
 test('PC phone controls stay view-only until approval and send one action at a time for the displayed capture',async t=>{
@@ -131,14 +131,14 @@ test('Android owner can share its phone for PC mouse control without changing ac
   phone.dispatchEvent(new phone.Event('pcr:native-ready'));
   assert.equal(tile.querySelector('strong').textContent,'PC mouse on phone');
   assert.equal(phone.PCRWorkspace.getTiles().find(item=>item.id==='guest').title,'PC mouse on phone','Settings exposes the same dedicated phone-control entry');
-  tile.click();assert.deepEqual(messages,[{type:'start'}]);
+  tile.click();assert.deepEqual(messages.filter(value=>value.type!=='keyboard-hide'),[{type:'start'}]);
   assert.match(doc.querySelector('.guestScreenHint').textContent,/Android Home/);
   assert.equal(doc.querySelector('.guestScreenSelect').hidden,true,'native owner publishes its phone instead of watching another screen');
   phone.PCRAndroid.onmessage({data:JSON.stringify({type:'sharing'})});phone.PCRAndroid.onmessage({data:JSON.stringify({type:'frame',data:'AAAA',width:540,height:960})});
   assert.equal(doc.querySelector('#guestScreenDialog img').hidden,false);
   phone.PCRAndroid.onmessage({data:JSON.stringify({type:'control-state',state:'active'})});assert.equal(doc.querySelector('[data-phone-stop]').hidden,false);
-  Object.defineProperty(doc,'hidden',{configurable:true,value:true});doc.dispatchEvent(new phone.Event('visibilitychange'));assert.equal(messages.at(-1).type,'start','other Android apps remain controllable while the WebView is in the background');
-  doc.querySelector('[data-phone-stop]').click();assert.equal(messages.at(-1).type,'control-stop');phone.eval('showPair()');assert.equal(messages.at(-1).type,'stop');
+  Object.defineProperty(doc,'hidden',{configurable:true,value:true});doc.dispatchEvent(new phone.Event('visibilitychange'));assert.equal(messages.filter(value=>value.type!=='keyboard-hide').at(-1).type,'start','other Android apps remain controllable while the WebView is in the background');
+  doc.querySelector('[data-phone-stop]').click();assert.equal(messages.filter(value=>value.type!=='keyboard-hide').at(-1).type,'control-stop');phone.eval('showPair()');assert.equal(messages.filter(value=>value.type!=='keyboard-hide').at(-1).type,'stop');
 });
 
 test('Select all keeps partial selections and owner extensions update the guest ribbon without a new login',async t=>{

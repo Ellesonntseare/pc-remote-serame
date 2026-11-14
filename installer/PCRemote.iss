@@ -1,4 +1,7 @@
 #define AppVersion "2.3.8"
+#ifndef PackageRoot
+#define PackageRoot "..\dist\host-package"
+#endif
 [Setup]
 AppId={{C9EF8E11-66AA-43CB-B017-25F799BDA175}
 AppName=Elleson Connect Personal Host
@@ -20,7 +23,7 @@ CloseApplications=yes
 [Tasks]
 Name: "startup"; Description: "Start Elleson Connect when I sign in"; Flags: unchecked
 [Files]
-Source: "..\dist\host-package\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "config.json,.remembered-sessions.json,.google-accounts.json,.session-history.json,.shared-device-state.json,host.log,transfer-queue.json"
+Source: "{#PackageRoot}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "config.json,.remembered-sessions.json,.google-accounts.json,.session-history.json,.shared-device-state.json,host.log,transfer-queue.json"
 [Icons]
 Name: "{group}\Elleson Connect Host"; Filename: "{app}\PCRemoteHost.exe"
 Name: "{userappdata}\Microsoft\Windows\SendTo\Elleson Connect"; Filename: "{app}\PCRemoteHost.exe"; Parameters: "--send-to-phone"
