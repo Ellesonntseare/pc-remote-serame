@@ -1,4 +1,4 @@
-#define AppVersion "2.3.2"
+#define AppVersion "2.3.8"
 [Setup]
 AppId={{C9EF8E11-66AA-43CB-B017-25F799BDA175}
 AppName=Elleson Connect Personal Host
@@ -10,7 +10,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=Elleson-Connect-Host-Setup-2.3.2
+OutputBaseFilename=Elleson-Connect-Host-Setup-2.3.8
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

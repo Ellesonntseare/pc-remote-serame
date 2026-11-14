@@ -1,5 +1,7 @@
 # Elleson Connect
 
+Current integrated version: **2.3.8** for the Windows host and Android. All November host, Android, connection recovery, privacy, file transfer, interface and remote-control changes are included on `main`. See [2.3.8 release notes](docs/RELEASE-2.3.8.md).
+
 Your devices, together. Version **2.2.0** introduces the Elleson Connect identity across Android, Windows and the web, with a new EC icon family and the included **Elleson Keyboard**. Install it over your existing personal app to keep your settings and paired devices. See [branding and upgrade compatibility](docs/BRANDING.md).
 
 Personal 2.1.4 adds the Windows Explorer file workspace and shared account history, folders, drafts and supported preferences. See [the 2.1.4 guide](docs/USING-2.1.4.md) for use and platform limits.

@@ -265,4 +265,3 @@
   window.PCRScreenTools={connecting,metadata,frame,disconnected,closed,imageBox,reconnect,setZoom,focusPoint,restoreControls,presentation,fitScreen,get zoom(){return zoom;}};
   setZoom(1);updateFullscreen();
 })();
-

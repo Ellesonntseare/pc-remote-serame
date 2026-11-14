@@ -11,8 +11,8 @@ android {
         applicationId = "za.co.pcremote.controller"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "2.3.7"
+        versionCode = 31
+        versionName = "2.3.8"
     }
 
     buildFeatures { buildConfig = true }
