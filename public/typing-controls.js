@@ -46,7 +46,11 @@
    if(!result||!connected()||rs.m!==metadata||!permitted()){updateState();return false;}
    if(result.editable===true)beginTyping(result,position,false);else updateState();return true;
   }
-  function afterPointer(command){if(dispatchingTap||!['click l','up l','dbl'].includes(command))return;clearTimeout(pointerCheck);pointerCheck=setTimeout(()=>{pointerCheck=null;void tap(null,true);},100);}
+  function afterPointer(command){if(dispatchingTap||!['click l','up l','dbl'].includes(command))return;
+   // Hardware typing stays on the remote canvas. Do not steal its focus for
+   // the hidden phone editor after every desktop click.
+   if(window.matchMedia?.('(any-pointer: fine)').matches){document.getElementById('rsc')?.focus({preventScroll:true});return;}
+   clearTimeout(pointerCheck);pointerCheck=setTimeout(()=>{pointerCheck=null;void tap(null,true);},100);}
   const nativeKb=window.rsKb,nativeClose=window.rsTypeClose;
   if(typeof nativeClose==='function')window.rsTypeClose=function(...args){if(open())phoneSelection={value:input.value,start:input.selectionStart,end:input.selectionEnd,direction:input.selectionDirection};return nativeClose.apply(this,args);};
   if(typeof nativeKb==='function')window.rsKb=function(...args){if(!permitted())return;liveTyping=true;const result=nativeKb.apply(this,args);focusKeyboard();if(phoneSelection?.value===input.value)input.setSelectionRange(phoneSelection.start,phoneSelection.end,phoneSelection.direction);return result;};
@@ -60,3 +64,4 @@
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();
+

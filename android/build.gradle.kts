@@ -11,8 +11,8 @@ android {
         applicationId = "za.co.pcremote.controller"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "2.3.0"
+        versionCode = 24
+        versionName = "2.3.1"
     }
 
     compileOptions {
@@ -41,3 +41,4 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
 }
+

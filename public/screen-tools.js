@@ -139,6 +139,7 @@
     finally{reconnecting=false;}
   }
   function setClean(enabled){
+    screen.classList.remove('fullscreenMouse');
     screen.classList.toggle('screenClean',enabled);
     document.body.classList.toggle('screenCleanActive',enabled);
     if(enabled){
@@ -264,3 +265,4 @@
   window.PCRScreenTools={connecting,metadata,frame,disconnected,closed,imageBox,reconnect,setZoom,focusPoint,restoreControls,presentation,fitScreen,get zoom(){return zoom;}};
   setZoom(1);updateFullscreen();
 })();
+

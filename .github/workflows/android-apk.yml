@@ -66,14 +66,14 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/debug/android-debug.apk > apk-metadata.txt
           sed -n '1,8p' apk-metadata.txt
           grep -q "application-label:'Elleson Connect'" apk-metadata.txt
-          grep -q "name='za.co.pcremote.controller' versionCode='23' versionName='2.3.0'" apk-metadata.txt
+          grep -q "name='za.co.pcremote.controller' versionCode='24' versionName='2.3.1'" apk-metadata.txt
           grep -q "android.permission.CAMERA" apk-metadata.txt
           grep -q "android.permission.RECORD_AUDIO" apk-metadata.txt
           grep -q "android.permission.MODIFY_AUDIO_SETTINGS" apk-metadata.txt
           grep -q "android.permission.FOREGROUND_SERVICE_DATA_SYNC" apk-metadata.txt
           sha256sum android/build/outputs/apk/debug/android-debug.apk
       - name: Upload installable APK
-        if: github.event_name == 'workflow_dispatch' && !inputs.publish_release && !inputs.skip_artifact
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.publish_release && !inputs.skip_artifact)
         uses: actions/upload-artifact@v4
         with:
           name: Elleson-Connect-Android-APK
@@ -87,7 +87,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view v2.3.0-preview || gh release create v2.3.0-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.0 Personal Preview" --notes "Control your Android phone using your PC mouse: visible phone pointer, mouse capture with Escape to release, wheel scrolling and main-account phone sharing. Install over the existing personal app."
-          test "$(gh release view v2.3.0-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
-          cp android/build/outputs/apk/debug/android-debug.apk Elleson-Connect-Android-2.3.0.apk
-          gh release upload v2.3.0-preview Elleson-Connect-Android-2.3.0.apk --clobber
+          gh release view v2.3.1-preview || gh release create v2.3.1-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.1 Personal Preview" --notes "Control your Android phone using your PC mouse: visible phone pointer, mouse capture with Escape to release, wheel scrolling and main-account phone sharing. Install over the existing personal app."
+          test "$(gh release view v2.3.1-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
+          cp android/build/outputs/apk/debug/android-debug.apk Elleson-Connect-Android-2.3.1.apk
+          gh release upload v2.3.1-preview Elleson-Connect-Android-2.3.1.apk --clobber
+
