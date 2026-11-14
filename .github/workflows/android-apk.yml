@@ -76,7 +76,7 @@ jobs:
           grep -q "android.permission.FOREGROUND_SERVICE_DATA_SYNC" apk-metadata.txt
           sha256sum android/build/outputs/apk/standard/release/android-standard-release.apk
       - name: Upload installable APK
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.publish_release && !inputs.skip_artifact)
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish_release && !inputs.skip_artifact
         uses: actions/upload-artifact@v4
         with:
           name: Elleson-Connect-Android-APK
