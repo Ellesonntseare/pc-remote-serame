@@ -23,3 +23,9 @@ test('mouse Size controls resize both dimensions without sending PC input',t=>{
  assert.equal(dock.style.getPropertyValue('--ec-pad-width'),'65%');assert.equal(dock.style.getPropertyValue('--ec-pad-height'),'250px');assert.equal(dock.dataset.sizeCustom,'true');
  assert.equal(f.w.localStorage.getItem('ec_trackpad_width'),'65');assert.equal(f.w.localStorage.getItem('ec_trackpad_height'),'250');assert.deepEqual(f.calls,[]);
 });
+
+test('touch opens Size immediately without a compatibility click toggling it closed',t=>{
+ const f=fixture(t),panel=f.d.getElementById('ecPadSizing'),size=Array.from(f.d.querySelectorAll('.ecMouseActions button')).find(button=>button.textContent==='Size');
+ size.onpointerdown({button:0,preventDefault(){},stopPropagation(){}});assert.equal(panel.hidden,false);
+ size.dispatchEvent(new f.w.MouseEvent('click',{detail:1,bubbles:true}));assert.equal(panel.hidden,false);assert.deepEqual(f.calls,[]);
+});
