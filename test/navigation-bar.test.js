@@ -74,3 +74,11 @@ test('idle fade keeps tabs interactive and the hide state survives reload with a
   assert.equal(reloaded.bar.dataset.navCollapsed, 'false');
   assert.equal(JSON.parse(reloaded.saved()).hidden, false);
 });
+
+test('phone Remote keeps bottom tabs visible without changing saved layouts on other pages',t=>{
+ const saved=JSON.stringify({hidden:true,rail:{x:.8,y:.1,width:90,height:320},bottom:{x:.2,y:.2,width:300,height:90}}),f=fixture(t,saved);
+ f.w.innerWidth=844;f.w.innerHeight=390;f.w.matchMedia=()=>({matches:true});f.bar.dataset.environment='remote';f.w.dispatchEvent(new f.w.Event('pcr:page'));
+ assert.equal(f.bar.dataset.navShape,'bottom');assert.equal(f.bar.dataset.navCollapsed,'false');assert.equal(f.bar.dataset.navCustom,undefined);
+ f.bar.querySelector('.ecNavHide').click();assert.equal(f.bar.dataset.navCollapsed,'false');assert.equal(JSON.parse(f.saved()).hidden,true);
+ f.bar.dataset.environment='files';f.w.dispatchEvent(new f.w.Event('pcr:page'));assert.equal(f.bar.dataset.navCollapsed,'true');
+});

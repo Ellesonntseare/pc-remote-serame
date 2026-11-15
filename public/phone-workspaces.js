@@ -118,3 +118,52 @@
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();
+
+/* Keep the PC picture, controls and navigation in separate phone areas. */
+'use strict';
+(()=>{
+ function mount(){
+  const screen=document.getElementById('rs'),view=document.getElementById('rsv'),dock=document.getElementById('remoteSwipeDock');
+  if(!screen||!view||!dock||window.PCRRemoteLayout)return;
+  const slot=document.createElement('section');slot.id='remoteControlsSlot';slot.setAttribute('aria-label','Trackpad panel area');
+  let frame=0,padLimit=500,active=false;
+  const put=(element,key,value)=>{if(element.style.getPropertyValue(key)!==value)element.style.setProperty(key,value);};
+  const clamp=(value,max)=>Math.max(0,Math.min(Math.max(0,max),Number.isFinite(value)?value:0));
+  function layout(){
+   frame=0;
+   const rect=screen.getBoundingClientRect(),coarse=window.matchMedia?.('(any-pointer: coarse)').matches;
+   const wanted=!!coarse&&rect.width>0&&rect.width<=1100&&rect.height>0&&!screen.classList.contains('hide')&&screen.dataset.pcrParked!=='true'&&(!screen.classList.contains('screenClean')||screen.classList.contains('fullscreenMouse')||screen.classList.contains('typing'));
+   active=wanted;
+   if(screen.classList.contains('phoneRemoteLayout')!==wanted)screen.classList.toggle('phoneRemoteLayout',wanted);
+   if(!wanted){if(dock.parentElement===slot){slot.replaceWith(dock);if(!coarse)dock.classList.remove('ecShelfFloating');}return;}
+   if(dock.parentElement!==slot){dock.before(slot);slot.append(dock);}
+   const nav=screen.querySelector('.ecNavigation');if(nav&&!nav.id)nav.id='ecNavigation';
+   const wide=rect.width>rect.height&&rect.height<600&&!screen.classList.contains('typing');
+   if(screen.dataset.remoteArrangement!==(wide?'side':'stack'))screen.dataset.remoteArrangement=wide?'side':'stack';
+   const header=screen.querySelector('#screenTools'),navHeight=nav&&!nav.hidden?nav.getBoundingClientRect().height:0;
+   put(screen,'--remote-nav-height',navHeight+'px');
+   const remaining=Math.max(0,rect.height-(header?.getBoundingClientRect().height||0)-navHeight-(wide?12:18));
+   const minimumPicture=Math.min(remaining*.65,Math.max(96,Math.min(rect.height*.34,rect.width/(16/9))));
+   const budget=wide?remaining:Math.max(0,remaining-minimumPicture);
+   put(screen,'--remote-controls-limit',Math.floor(budget)+'px');
+   const surface=dock.querySelector('.remoteSwipeSurfaces'),surfaceHeight=surface?.getBoundingClientRect().height||0;
+   const fixed=Math.max(0,dock.scrollHeight-surfaceHeight);
+   const next=Math.max(60,Math.floor(budget-fixed-2));
+   if(Math.abs(next-padLimit)>1){padLimit=next;window.PCRTrackpadSizing?.refresh();}
+   const typing=screen.classList.contains('typing'),shown=!typing&&getComputedStyle(dock).display!=='none';
+   const natural=Math.max(0,dock.scrollHeight);
+   const editor=screen.querySelector('#typePanel');put(screen,'--remote-controls-height',(typing?Math.min(budget,editor?.scrollHeight||140):shown?Math.min(budget,natural+24):0)+'px');
+   if(dock.classList.contains('ecShelfFloating')){
+    put(dock,'--ec-shelf-x',clamp(parseFloat(dock.style.getPropertyValue('--ec-shelf-x')),slot.clientWidth-dock.offsetWidth)+'px');
+    put(dock,'--ec-shelf-y',clamp(parseFloat(dock.style.getPropertyValue('--ec-shelf-y')),slot.clientHeight-dock.offsetHeight)+'px');
+   }
+  }
+  function schedule(){if(!frame)frame=requestAnimationFrame(layout);}
+  window.PCRRemoteLayout={schedule,maxPadHeight:()=>active?padLimit:undefined};
+  if(window.ResizeObserver){const observer=new ResizeObserver(schedule);for(const node of [screen,view,dock,dock.querySelector('.remoteSwipeSurfaces'),document.querySelector('.ecNavigation')])if(node)observer.observe(node);}
+  if(window.MutationObserver){new MutationObserver(schedule).observe(screen,{attributes:true,attributeFilter:['class','data-pcr-parked']});new MutationObserver(schedule).observe(dock,{attributes:true,subtree:true,attributeFilter:['class','hidden','data-snap','data-size-custom']});}
+  for(const name of ['resize','pcr:page','pcr:navigation-layout','pcr:native-ready'])window.addEventListener(name,schedule);
+  window.visualViewport?.addEventListener('resize',schedule);window.visualViewport?.addEventListener('scroll',schedule);schedule();
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
+})();

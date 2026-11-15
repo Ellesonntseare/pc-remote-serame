@@ -38,7 +38,9 @@
     const show = control('Show', 'Show navigation tabs', 'm6 15 6-6 6 6', '<span>Show tabs</span>');
     bar.classList.add('ecNavAdjustable');
 
+    const fixedRemote=()=>bar.dataset.environment==='remote'&&innerWidth<=1100&&window.matchMedia?.('(any-pointer: coarse)').matches;
     function mode() {
+      if(fixedRemote())return 'bottom';
       return innerWidth >= 1000 || (bar.dataset.environment === 'remote' && innerWidth > innerHeight && innerHeight <= 520) ? 'rail' : 'bottom';
     }
 
@@ -90,6 +92,7 @@
     function layout() {
       if (drag || Math.abs((viewport?.scale || 1) - 1) > .05) return;
       const kind = mode(), stored = preference[kind];
+      if(fixedRemote()){bar.dataset.navShape='bottom';bar.dataset.navCollapsed='false';delete bar.dataset.navCustom;window.dispatchEvent(new Event('pcr:navigation-layout'));return;}
       bar.dataset.navShape = kind;
       bar.dataset.navCollapsed = String(preference.hidden);
       if (preference.hidden || !stored) delete bar.dataset.navCustom;
@@ -113,7 +116,7 @@
 
     function dragControl(button, sizing) {
       button.addEventListener('pointerdown', event => {
-        if (event.button !== 0 || drag) return;
+        if (fixedRemote() || event.button !== 0 || drag) return;
         event.preventDefault();
         drag = {id: event.pointerId, kind: mode(), box: bar.getBoundingClientRect(), x: event.clientX, y: event.clientY, next: null};
         button.setPointerCapture?.(event.pointerId);
@@ -139,6 +142,7 @@
       for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(name, finish);
       window.addEventListener('pcr:page', () => finish());
       button.addEventListener('keydown', event => {
+        if(fixedRemote())return;
         const kind = mode();
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
@@ -159,6 +163,7 @@
     dragControl(resize, true);
 
     function setHidden(value) {
+      if(fixedRemote())return;
       preference.hidden = value;
       save();layout();wake();
       (value ? show : hide).focus({preventScroll: true});

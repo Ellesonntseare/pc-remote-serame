@@ -29,3 +29,10 @@ test('touch opens Size immediately without a compatibility click toggling it clo
  size.onpointerdown({button:0,preventDefault(){},stopPropagation(){}});assert.equal(panel.hidden,false);
  size.dispatchEvent(new f.w.MouseEvent('click',{detail:1,bubbles:true}));assert.equal(panel.hidden,false);assert.deepEqual(f.calls,[]);
 });
+
+test('Move mode accepts dragging on the panel body and protects PC input until Done',t=>{
+ const f=fixture(t),dock=f.d.getElementById('remoteSwipeDock'),move=Array.from(dock.querySelectorAll('button')).find(button=>button.textContent==='Move'),pad=f.d.createElement('div');pad.className='remoteSwipePad';dock.querySelector('.remoteSwipeSurfaces').append(pad);let pcTouches=0;pad.addEventListener('pointerdown',()=>pcTouches++);
+ const pointer=type=>{const e=new f.w.MouseEvent(type,{bubbles:true,cancelable:true,button:0,clientX:50,clientY:80});Object.defineProperty(e,'pointerId',{value:7});pad.dispatchEvent(e);return e;};
+ move.click();assert.equal(move.textContent,'Done');dock.querySelector('[data-ec-click=l]').click();assert.deepEqual(f.calls,[]);assert.equal(pointer('pointerdown').defaultPrevented,true);pointer('pointerup');assert.equal(pcTouches,0);assert.deepEqual(f.calls,[]);
+ move.click();assert.equal(move.textContent,'Move');pointer('pointerdown');assert.equal(pcTouches,1);
+});
