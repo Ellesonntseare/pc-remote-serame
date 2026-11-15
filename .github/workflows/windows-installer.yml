@@ -73,7 +73,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Upload personal installer to draft release
+      - name: Upload installer without replacing published files
         if: github.event_name == 'workflow_dispatch' && inputs.publish_release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -83,5 +83,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { gh release create v2.3.10-preview --draft --prerelease --target $env:GITHUB_SHA --title "Elleson Connect 2.3.10 Personal Preview" --notes-file docs/RELEASE-2.3.10.md }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $draft = gh release view v2.3.10-preview --json isDraft --jq .isDraft
-          if ($LASTEXITCODE -ne 0 -or $draft -ne 'true') { throw 'Refusing to overwrite a published release.' }
-          gh release upload v2.3.10-preview dist/Elleson-Connect-Host-Setup-2.3.10.exe --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($draft -eq 'true') {
+            gh release upload v2.3.10-preview dist/Elleson-Connect-Host-Setup-2.3.10.exe --clobber
+          } else {
+            $preview = gh release view v2.3.10-preview --json isPrerelease --jq .isPrerelease
+            if ($LASTEXITCODE -ne 0 -or $preview -ne 'true') { throw 'Only a personal preview can receive a missing companion installer.' }
+            # Append a missing Windows companion; never overwrite a published asset.
+            gh release upload v2.3.10-preview dist/Elleson-Connect-Host-Setup-2.3.10.exe
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
