@@ -5,7 +5,7 @@
  const consume=e=>{e.preventDefault();e.stopImmediatePropagation();};
  function cancel(){clearTimeout(hold);hold=null;if(gesture?.drag)window.qc?.('up l');gesture=null;}
  screen.addEventListener('touchstart',e=>{
-  if(!screen.classList.contains('screenClean')||e.target.closest?.('button,dialog'))return;
+  if(!screen.classList.contains('screenClean')||e.target.closest?.('button,input,select,textarea,label,dialog,.ecPadSizing'))return;
   const points=touches(e);if(!gesture){const box=window.PCRScreenTools?.imageBox(),p=points[0];if(!box||!p||typeof rs==='undefined'||!rs.m||!window.rsCanPoint?.())return;const viewport=screen.getBoundingClientRect(),right=viewport.width?viewport.right:window.innerWidth;const scroll=!!e.target.closest?.('.fullscreenScroll')||p.clientX>box.x+box.w||p.clientX>=right-64;if(!scroll&&p.clientX>=box.x&&p.clientX<=box.x+box.w&&p.clientY>=box.y&&p.clientY<=box.y+box.h)return;gesture={scroll,x:p.clientX,y:p.clientY,startX:p.clientX,startY:p.clientY,at:Date.now(),moved:false,multi:false,drag:false,rx:0,ry:0,gain:Math.min(4,rs.m.w/box.w)};hold=setTimeout(()=>{if(gesture&&!gesture.scroll&&!gesture.moved&&!gesture.multi){gesture.drag=true;window.qc?.('down l');}},500);}
   consume(e);if(points.length>=3){cancel();window.PCRScreenTools?.restoreControls();return;}
   if(points.length===2){cancel();}

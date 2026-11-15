@@ -216,7 +216,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
                     val permissions=mediaPermissions(request)
-                    if(!BuildConfig.PHONE_ACCESS||permissions==null||!isAllowed(web.url?:"")){request.deny();return@runOnUiThread}
+                    if(permissions==null||!isAllowed(web.url?:"")){request.deny();return@runOnUiThread}
                     val missing=permissions.filter{checkSelfPermission(it)!=PackageManager.PERMISSION_GRANTED}
                     if(missing.isEmpty())grantWebMedia(request)
                     else {microphoneRequest?.deny();microphoneRequest=request;requestPermissions(missing.toTypedArray(),503)}
@@ -257,7 +257,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 if (url != "about:blank" && !isAllowed(url)) { view.stopLoading(); showConnect("Blocked a non-local URL.") }
             }
             override fun onPageFinished(view: WebView, url: String) {
-                if(isAllowed(url)){val capabilities=JSONObject().put("biometricSignIn",true).put("routeRecovery",true).put("automaticRoute",automaticRoute()).put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",BuildConfig.PHONE_ACCESS).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",BuildConfig.PHONE_ACCESS).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",BuildConfig.PHONE_ACCESS).put("phoneAudio",BuildConfig.PHONE_ACCESS).put("phonePlaybackAudio",BuildConfig.PHONE_ACCESS&&Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",false).put("phoneScreenSharing",BuildConfig.PHONE_ACCESS).put("phoneAccess",BuildConfig.PHONE_ACCESS).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
+                if(isAllowed(url)){val capabilities=JSONObject().put("biometricSignIn",true).put("routeRecovery",true).put("automaticRoute",automaticRoute()).put("localConnection",true).put("localDiscovery",true).put("clipboardSync",true).put("sharedClipboard",true).put("serameKeyboard",true).put("folderSync",true).put("widgets",true).put("homeMiniWindow",true).put("remoteFullscreen",true).put("miniWindow",packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).put("virtualMicOutput",true).put("deviceId",prefs.getString("syncDeviceId","")).put("deviceName",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL).put("localMedia",true).put("phoneAudio",true).put("phonePlaybackAudio",Build.VERSION.SDK_INT>=29).put("nativeTransfers",true).put("transferActions",true).put("appUpdates",true).put("phoneScreenSharing",true).put("secondScreen",true).put("fastLocal",true).put("secondScreenPreferences",runCatching{JSONObject(prefs.getString("secondScreenPreferences","{}")?:"{}")}.getOrDefault(JSONObject())).put("displayWidth",resources.displayMetrics.widthPixels).put("displayHeight",resources.displayMetrics.heightPixels).put("smooth60",SecondScreenDevice.supports60(this@MainActivity)).put("version",packageManager.getPackageInfo(packageName,0).versionName);view.evaluateJavascript("window.PCRNativeCapabilities=$capabilities;window.dispatchEvent(new Event('pcr:native-ready'));",null);PhoneAudioService.status();deliverShortcut()}
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, e: WebResourceError) {
                 if (request.isForMainFrame) showConnect("Can't reach this PC. Keep the phone and PC on the same Wi-Fi, run start.bat on the PC, and allow Elleson Connect through Windows Firewall on the Private network. Check the IP and port shown in the host window.")
@@ -331,14 +331,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             try {
                 val value = JSONObject(message.data ?: "{}")
                 val command = value.optString("type")
-                if (command in listOf("app-update", "app-update-install")) {
-                    reply.postMessage("{\"type\":\"stopped\",\"message\":\"Install updates using Android’s package installer.\"}")
-                    return@addWebMessageListener
-                }
-                if (!AndroidFeaturePolicy.allows(command, BuildConfig.PHONE_ACCESS)) {
-                    reply.postMessage("{\"type\":\"stopped\",\"message\":\"This feature requires the optional Elleson Connect Phone Access app.\"}")
-                    return@addWebMessageListener
-                }
                 when (value.optString("type")) {
                     "connection-health" -> reportConnectionHealth(true)
                     "automatic-route" -> {
@@ -553,7 +545,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     @Suppress("DEPRECATION")
     private fun requestProjection() {
-        if (!BuildConfig.PHONE_ACCESS || !pendingProjection || !isAllowed(web.url ?: "")) return
+        if (!pendingProjection || !isAllowed(web.url ?: "")) return
         val manager = getSystemService(MediaProjectionManager::class.java)
         // Android 14 otherwise defaults to an app-only chooser. Request the
         // complete display so Home, other apps and rotation remain in the stream.

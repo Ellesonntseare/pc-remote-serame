@@ -13,3 +13,13 @@ test('standalone Windows key is emitted on release and chords do not emit an ext
 test('permission denial blocks desktop keyboard input',t=>{const f=fixture(t);f.w.PCRCanAccess=()=>false;f.key('keydown','x',{code:'KeyX'});f.key('keydown','Meta',{code:'MetaLeft'});f.key('keyup','Meta',{code:'MetaLeft'});assert.deepEqual(f.calls,[]);assert.equal(f.d.getElementById('typeText').value,'');});
 test('existing full-screen rail selects mouse or keyboard without leaving fullscreen',t=>{const f=fixture(t),screen=f.d.getElementById('rs');screen.classList.add('screenClean');assert.equal(screen.classList.contains('fullscreenMouse'),false);f.d.querySelector('[data-ec-rail=mouse]').click();assert.equal(screen.classList.contains('fullscreenMouse'),true);assert.equal(f.d.getElementById('remoteSwipeDock').dataset.snap,'2');f.d.querySelector('[data-ec-rail=keyboard]').click();assert.equal(screen.classList.contains('fullscreenMouse'),false);assert.equal(screen.classList.contains('typing'),true);assert.equal(screen.classList.contains('screenClean'),true);f.d.querySelector('[data-ec-rail=keyboard]').click();assert.equal(screen.classList.contains('typing'),false);});
 test('expanded shelf handle changes height continuously and keeps it expanded',t=>{const f=fixture(t);f.d.querySelector('[data-ec-rail=mouse]').click();const h=f.d.querySelector('.ecShelfHandle'),dock=f.d.getElementById('remoteSwipeDock');h.onpointerdown({button:0,pointerId:1,clientY:400,preventDefault(){}});h.onpointermove({pointerId:1,clientY:320,preventDefault(){}});h.onpointerup({pointerId:1});assert.equal(dock.style.getPropertyValue('--ec-pad-height'),'235px');assert.equal(dock.dataset.snap,'2');assert.equal(f.w.localStorage.getItem('ec_trackpad_height'),'235');});
+
+test('mouse Size controls resize both dimensions without sending PC input',t=>{
+ const f=fixture(t),dock=f.d.getElementById('remoteSwipeDock'),panel=f.d.getElementById('ecPadSizing');
+ const size=Array.from(f.d.querySelectorAll('.ecMouseActions button')).find(button=>button.textContent==='Size');
+ size.click();assert.equal(panel.hidden,false);assert.equal(size.getAttribute('aria-expanded'),'true');
+ const width=panel.querySelector('[data-pad-width]'),height=panel.querySelector('[data-pad-height]');
+ width.value='65';width.dispatchEvent(new f.w.Event('input'));height.value='250';height.dispatchEvent(new f.w.Event('input'));
+ assert.equal(dock.style.getPropertyValue('--ec-pad-width'),'65%');assert.equal(dock.style.getPropertyValue('--ec-pad-height'),'250px');assert.equal(dock.dataset.sizeCustom,'true');
+ assert.equal(f.w.localStorage.getItem('ec_trackpad_width'),'65');assert.equal(f.w.localStorage.getItem('ec_trackpad_height'),'250');assert.deepEqual(f.calls,[]);
+});

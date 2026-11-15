@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>PCRemoteHost</AssemblyName><Version>2.3.8</Version><Product>Elleson Connect</Product><Title>Elleson Connect Host</Title><Description>Elleson Connect desktop companion</Description><ApplicationIcon>Assets/remote.ico</ApplicationIcon></PropertyGroup>
+  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>PCRemoteHost</AssemblyName><Version>2.3.10</Version><Product>Elleson Connect</Product><Title>Elleson Connect Host</Title><Description>Elleson Connect desktop companion</Description><ApplicationIcon>Assets/remote.ico</ApplicationIcon></PropertyGroup>
   <ItemGroup><EmbeddedResource Include="Assets/remote.ico" LogicalName="PCRemoteHost.remote.ico" /></ItemGroup>
 </Project>

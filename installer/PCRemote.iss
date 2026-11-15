@@ -1,4 +1,4 @@
-#define AppVersion "2.3.8"
+#define AppVersion "2.3.10"
 #ifndef PackageRoot
 #define PackageRoot "..\dist\host-package"
 #endif
@@ -13,7 +13,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=Elleson-Connect-Host-Setup-2.3.8
+OutputBaseFilename=Elleson-Connect-Host-Setup-2.3.10
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

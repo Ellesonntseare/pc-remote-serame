@@ -1,51 +1,39 @@
 name: Build Android APK
-
 on:
   push:
     branches: [main]
-    paths:
-      - 'android/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - '.github/workflows/android-apk.yml'
+    paths: ['android/**', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', '.github/workflows/android-apk.yml']
   workflow_dispatch:
     inputs:
       publish_release:
-        description: Upload the verified personal preview directly to its draft release
+        description: Upload the verified personal preview to its draft release
         type: boolean
         default: false
       skip_artifact:
-        description: Run validation without keeping a temporary APK artifact
+        description: Validate without temporary APK artifact storage
         type: boolean
         default: false
-
 permissions:
   contents: write
-
 jobs:
   build:
-    name: Android release APKs
+    name: Unified Android release APK
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Install Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Configure Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
-      - name: Install Android platform
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-      - name: Configure Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Load persistent personal preview signing key
+      - name: Load persistent signing key
         env:
           STORE_B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE }}
           STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
@@ -54,51 +42,41 @@ jobs:
           printf '%s' "$STORE_B64" | tr -d '\r\n' | base64 --decode > "$RUNNER_TEMP/pcremote-preview.p12"
           chmod 600 "$RUNNER_TEMP/pcremote-preview.p12"
           printf 'PCR_SIGNING_STORE=%s\n' "$RUNNER_TEMP/pcremote-preview.p12" >> "$GITHUB_ENV"
-      - name: Test both editions and build release APKs
+      - name: Test and build the complete app
         env:
           PCR_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
-        run: gradle :android:testStandardReleaseUnitTest :android:testPhoneAccessReleaseUnitTest :android:assembleStandardRelease :android:assemblePhoneAccessRelease --no-daemon --stacktrace
-      - name: Verify APK signature and version
+        run: gradle :android:testReleaseUnitTest :android:assembleRelease --no-daemon --stacktrace
+      - name: Verify single app identity, features and signature
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs android/build/outputs/apk/standard/release/android-standard-release.apk > apk-signature.txt
-          cat apk-signature.txt
+          APK=android/build/outputs/apk/release/android-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" > apk-signature.txt
           grep -q 'Signer #1 certificate SHA-256 digest: 1803b0080ad05d54df52de3a61fa4a9978244ca51e9df842d0303d42636c11eb' apk-signature.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/build/outputs/apk/standard/release/android-standard-release.apk > apk-metadata.txt
-          sed -n '1,8p' apk-metadata.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > apk-metadata.txt
           grep -q "application-label:'Elleson Connect'" apk-metadata.txt
-          grep -q "name='za.co.pcremote.controller' versionCode='32' versionName='2.3.9'" apk-metadata.txt
-          ! grep -q "application-debuggable" apk-metadata.txt
-          ! grep -Eq "android.permission.(CAMERA|RECORD_AUDIO|REQUEST_INSTALL_PACKAGES|FOREGROUND_SERVICE_MEDIA_PROJECTION)" apk-metadata.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree android/build/outputs/apk/standard/release/android-standard-release.apk AndroidManifest.xml > apk-manifest.txt
-          ! grep -Eq "BIND_ACCESSIBILITY_SERVICE|BIND_INPUT_METHOD|PhoneControlService|SerameKeyboardService|ScreenShareService" apk-manifest.txt
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs android/build/outputs/apk/phoneAccess/release/android-phoneAccess-release.apk > phone-access-signature.txt
-          grep -q "1803b0080ad05d54df52de3a61fa4a9978244ca51e9df842d0303d42636c11eb" phone-access-signature.txt
-          grep -q "android.permission.FOREGROUND_SERVICE_DATA_SYNC" apk-metadata.txt
-          sha256sum android/build/outputs/apk/standard/release/android-standard-release.apk
-      - name: Upload installable APK
+          grep -q "name='za.co.pcremote.controller' versionCode='33' versionName='2.3.10'" apk-metadata.txt
+          ! grep -q 'application-debuggable' apk-metadata.txt
+          for permission in CAMERA RECORD_AUDIO REQUEST_INSTALL_PACKAGES FOREGROUND_SERVICE_MEDIA_PROJECTION FOREGROUND_SERVICE_DATA_SYNC; do grep -q "android.permission.$permission" apk-metadata.txt; done
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > apk-manifest.txt
+          for component in PhoneControlService SerameKeyboardService ScreenShareService PhoneAudioService AppUpdateService AppUpdateActivity; do grep -q "$component" apk-manifest.txt; done
+          test "$(find android/build/outputs/apk -name '*.apk' | wc -l)" -eq 1
+          sha256sum "$APK"
+      - uses: actions/upload-artifact@v4
         if: github.event_name == 'workflow_dispatch' && !inputs.publish_release && !inputs.skip_artifact
-        uses: actions/upload-artifact@v4
         with:
           name: Elleson-Connect-Android-APK
           path: |
-            android/build/outputs/apk/standard/release/android-standard-release.apk
-            android/build/outputs/apk/phoneAccess/release/android-phoneAccess-release.apk
+            android/build/outputs/apk/release/android-release.apk
             apk-signature.txt
             apk-metadata.txt
             apk-manifest.txt
-            phone-access-signature.txt
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload personal APK to draft release
+          retention-days: 7
+      - name: Upload the single APK to draft preview
         if: github.event_name == 'workflow_dispatch' && inputs.publish_release
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
         run: |
-          gh release view v2.3.9-preview || gh release create v2.3.9-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.9 Personal Preview" --notes-file docs/RELEASE-2.3.9.md
-          test "$(gh release view v2.3.9-preview --json isDraft --jq .isDraft)" = true || { echo 'Refusing to overwrite a published release.'; exit 1; }
-          cp android/build/outputs/apk/standard/release/android-standard-release.apk Elleson-Connect-Android-2.3.9.apk
-          cp android/build/outputs/apk/phoneAccess/release/android-phoneAccess-release.apk Elleson-Connect-Phone-Access-2.3.9.apk
-          tar -czf android-test-results-2.3.9.tar.gz android/build/test-results/testStandardReleaseUnitTest android/build/test-results/testPhoneAccessReleaseUnitTest
-          gh release upload v2.3.9-preview Elleson-Connect-Android-2.3.9.apk Elleson-Connect-Phone-Access-2.3.9.apk apk-signature.txt apk-metadata.txt apk-manifest.txt phone-access-signature.txt android-test-results-2.3.9.tar.gz --clobber
+          gh release view v2.3.10-preview || gh release create v2.3.10-preview --draft --prerelease --target "$GITHUB_SHA" --title "Elleson Connect 2.3.10 Personal Preview" --notes-file docs/RELEASE-2.3.10.md
+          test "$(gh release view v2.3.10-preview --json isDraft --jq .isDraft)" = true
+          cp android/build/outputs/apk/release/android-release.apk Elleson-Connect-Android-2.3.10.apk
+          tar -czf android-test-results-2.3.10.tar.gz android/build/test-results/testReleaseUnitTest
+          gh release upload v2.3.10-preview Elleson-Connect-Android-2.3.10.apk apk-signature.txt apk-metadata.txt apk-manifest.txt android-test-results-2.3.10.tar.gz --clobber
